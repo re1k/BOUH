@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1065699977643",
+    "project_id": "bouh-94761",
+    "storage_bucket": "bouh-94761.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1065699977643:android:9f48df8fd3763b0ed34aee",
+        "android_client_info": {
+          "package_name": "com.example.bouh"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDEV8QXtqTdnpFpx3-pzJ9ZzB_GH_ew3nQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
