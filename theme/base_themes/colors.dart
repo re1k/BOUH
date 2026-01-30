@@ -9,7 +9,7 @@ class BColors {
   static const Color accent = Color(0xFFFF844B);
 
   ///Text Colors
-  static const Color texBlack = Color(0xFF000000);
+  static const Color textBlack = Color(0xFF000000);
   static const Color textDarkestBlue = Color(0xFF0D0D29);
 
   ///Neutral Shades
