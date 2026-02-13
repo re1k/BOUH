@@ -61,9 +61,8 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
-  assets: 
-    - assets/images/ProfileBackground.png
-    - assets/images/DoctorDetails.png
+  assets:
+    - assets/images/
 
 
   # An image asset can refer to one or more resolution-specific "variants", see
