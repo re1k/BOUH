@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:bouh/theme/base_themes/colors.dart';
+import 'payment_sheet.dart';
 
 class AppointmentDetailsView extends StatelessWidget {
   const AppointmentDetailsView({
@@ -123,7 +124,14 @@ class AppointmentDetailsView extends StatelessWidget {
                   width: 240,
                   height: 56,
                   child: ElevatedButton(
-                    onPressed: () {}, // TODO later
+                    onPressed: () async {
+                      try {
+                        await PaymentSheet.show(total: total);
+                        print("✅ Payment completed!");
+                      } catch (e) {
+                        print("❌ Payment failed/cancelled: $e");
+                      }
+                    },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: BColors.accent,
                       elevation: 0,
