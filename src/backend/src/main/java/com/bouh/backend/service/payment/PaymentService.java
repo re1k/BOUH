@@ -1,17 +1,15 @@
-package com.bouh.backend.service.serviceImp.payment;
+package com.bouh.backend.service.payment;
 
 import com.bouh.backend.model.Dto.payment.PaymentRequestDto;
 import com.bouh.backend.model.Dto.payment.PaymentResponseDto;
-import com.bouh.backend.service.serviceInterface.payment.PaymentService;
 import com.stripe.exception.StripeException;
 import com.stripe.model.PaymentIntent;
 import com.stripe.param.PaymentIntentCreateParams;
 import org.springframework.stereotype.Service;
 
 @Service
-public class PaymentServiceImpl implements PaymentService {
+public class PaymentService {
 
-    @Override
     public PaymentResponseDto createPaymentIntent(PaymentRequestDto request) {
 
         try {
