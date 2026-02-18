@@ -1,7 +1,7 @@
 package com.bouh.backend.service.serviceImp.payment;
 
-import com.bouh.backend.model.payment.PaymentRequestDto;
-import com.bouh.backend.model.payment.PaymentResponseDto;
+import com.bouh.backend.model.Dto.payment.PaymentRequestDto;
+import com.bouh.backend.model.Dto.payment.PaymentResponseDto;
 import com.bouh.backend.service.serviceInterface.payment.PaymentService;
 import com.stripe.exception.StripeException;
 import com.stripe.model.PaymentIntent;
