@@ -15,7 +15,7 @@ class PaymentSheet {
     _initialized = true;
   }
 
-  static Future<String> show({required double total}) async {
+  static Future<void> show({required double total}) async {
     await _ensureInitialized();
 
     final amountInHalalah = (total * 100).round();
@@ -36,6 +36,5 @@ class PaymentSheet {
     );
 
     await Stripe.instance.presentPaymentSheet();
-    return resp.paymentIntentId;
   }
 }

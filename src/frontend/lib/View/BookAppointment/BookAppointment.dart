@@ -297,19 +297,13 @@ class _BookingViewState extends State<BookingView> {
               Navigator.of(context, rootNavigator: true).push(
                 MaterialPageRoute(
                   builder: (_) => const AppointmentDetailsView(
+                    //DUMMY LATER SEND THE CURRNET DOCOTOR'S DATA
                     doctorName: "د. علي آل يحيى",
                     timeRange: "10:30 - 11:00 PM",
-                    dateText: "2026-10-10",
+                    dateText: "10 أكتوبر",
                     childName: "بسّام",
                     price: 130,
                     total: 149.5,
-
-                    // for testing
-                    caregiverId: "TEST_CG_001",
-                    doctorId: "DOC_ALI_001",
-                    childId: "CHILD_BASSAM_001",
-
-                    timeSlotId: "1",
                   ),
                 ),
               );

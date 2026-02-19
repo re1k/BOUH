@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:bouh/theme/base_themes/colors.dart';
 import 'payment_sheet.dart';
-import 'package:bouh/dto/appointmentCreationDto.dart';
-import 'package:bouh/services/AppointmentCreationService .dart';
 
 class AppointmentDetailsView extends StatelessWidget {
   const AppointmentDetailsView({
@@ -13,12 +11,6 @@ class AppointmentDetailsView extends StatelessWidget {
     required this.childName,
     required this.price,
     required this.total,
-
-    required this.doctorId,
-    required this.childId,
-
-    required this.timeSlotId,
-    required this.caregiverId,
   });
 
   final String doctorName;
@@ -27,12 +19,6 @@ class AppointmentDetailsView extends StatelessWidget {
   final String childName;
   final double price;
   final double total;
-
-  final String doctorId;
-  final String childId;
-
-  final String timeSlotId;
-  final String caregiverId; // later will use the session
 
   @override
   Widget build(BuildContext context) {
@@ -140,23 +126,8 @@ class AppointmentDetailsView extends StatelessWidget {
                   child: ElevatedButton(
                     onPressed: () async {
                       try {
-                        final paymentIntentId = await PaymentSheet.show(
-                          total: total,
-                        );
-                        final appointment = AppointmentDto(
-                          caregiverId: caregiverId,
-                          doctorId: doctorId,
-                          childId: childId,
-                          date: dateText,
-                          timeSlotId: timeSlotId,
-                          amount: (total * 100).round(),
-                          paymentIntentId: paymentIntentId,
-                        );
-
-                        final appointmentId = await AppointmentCreationService()
-                            .createAppointment(appointment);
-
-                        print("✅ Appointment saved: $appointmentId");
+                        await PaymentSheet.show(total: total);
+                        print("Payment completed!");
                       } catch (e) {
                         print("Payment failed/cancelled: $e");
                       }

@@ -1,18 +1,5 @@
 package com.bouh.backend.controller;
 
-import com.bouh.backend.model.Dto.appointmentDto;
-import com.bouh.backend.model.Dto.upcomingAppointmentDto;
-import com.bouh.backend.service.appointments.AppointmentsService;
-import com.bouh.backend.service.appointments.AppointmentCreationService;
-import jakarta.validation.Valid;
-
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import com.bouh.backend.model.Dto.upcomingAppointmentDto;
 import com.bouh.backend.service.appointments.AppointmentsService;
 import org.springframework.http.MediaType;
@@ -33,18 +20,6 @@ import java.util.concurrent.ExecutionException;
 public class appointmentsController {
 
     private final AppointmentsService appointmentsService;
-    private final AppointmentCreationService appointmentCreationService;
-
-    public appointmentsController(AppointmentsService appointmentsService,
-            AppointmentCreationService appointmentCreationService) {
-        this.appointmentsService = appointmentsService;
-        this.appointmentCreationService = appointmentCreationService;
-
-    }
-
-    /**
-     * GET /api/appointments/upcoming/{caregiverId} — returns list of upcoming
-     * booked appointments for the caregiver.
 
     public appointmentsController(AppointmentsService appointmentsService) {
         this.appointmentsService = appointmentsService;
@@ -59,17 +34,5 @@ public class appointmentsController {
             throws ExecutionException, InterruptedException {
         List<upcomingAppointmentDto> list = appointmentsService.getUpcomingAppointments(caregiverId);
         return ResponseEntity.ok(list);
-    }
-
-    @PostMapping
-    public ResponseEntity<String> create(@Valid @RequestBody appointmentDto dto) {
-        String id = appointmentCreationService.create(dto);
-        return ResponseEntity.ok(id);
-    }
-
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable String id) {
-        appointmentCreationService.delete(id);
-        return ResponseEntity.noContent().build();
     }
 }
