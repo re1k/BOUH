@@ -11,6 +11,7 @@ class UpcomingAppointmentDto {
   final String? childName;
   final String? status;
   final String? meetingLink;
+  final String? paymentIntentId;
 
   UpcomingAppointmentDto({
     required this.appointmentId,
@@ -23,6 +24,7 @@ class UpcomingAppointmentDto {
     this.childName,
     this.status,
     this.meetingLink,
+    this.paymentIntentId,
   });
 
   /// Parse one list element from backend JSON (raw response is List<Map>).
@@ -38,6 +40,7 @@ class UpcomingAppointmentDto {
       childName: json['childName'] as String?,
       status: json['status'] as String?,
       meetingLink: json['meetingLink'] as String?,
+      paymentIntentId: json['paymentIntentId'] as String?,
     );
   }
 }

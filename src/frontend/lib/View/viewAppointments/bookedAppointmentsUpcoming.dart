@@ -349,6 +349,8 @@ class _BookedAppointmentsUpcomingState
       final link = dto.meetingLink!.trim();
       onActionTap = () => _openMeetingLink(link);
     }
+    // When actionLabel is "الغاء" (cancel), the appointment's paymentIntentId uniquely
+    // identifies the payment for this appointment. It can later be used for refund
     return AppointmentCard(
       doctorName: dto.doctorName ?? '',
       specialty: dto.doctorAreaOfKnowledge ?? '',

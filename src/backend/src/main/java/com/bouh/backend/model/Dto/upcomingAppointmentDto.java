@@ -22,4 +22,5 @@ public class upcomingAppointmentDto {
     private String childName;
     private String status;
     private String meetingLink;
+    private String paymentIntentId;
 }

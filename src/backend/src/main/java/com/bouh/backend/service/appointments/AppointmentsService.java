@@ -59,6 +59,7 @@ public class AppointmentsService {
             dto.setChildName(childName);
             dto.setStatus(doc.getStatus());
             dto.setMeetingLink(doc.getMeetingLink());
+            dto.setPaymentIntentId(doc.getPaymentIntentId());
             result.add(dto);
         }
         return result;

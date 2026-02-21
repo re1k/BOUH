@@ -57,6 +57,7 @@ public class AppointmentRepo {
             dto.setStatus(getString(doc, "status"));
             dto.setMeetingLink(getString(doc, "meetingLink"));
             dto.setAmount(doc.getLong("amount"));
+            dto.setPaymentIntentId(getString(doc, "paymentIntentId"));
             list.add(dto);
         }
 
@@ -97,6 +98,7 @@ public class AppointmentRepo {
             dto.setStatus(getString(doc, "status"));
             dto.setMeetingLink(getString(doc, "meetingLink"));
             dto.setAmount(doc.getLong("amount"));
+            dto.setPaymentIntentId(getString(doc, "paymentIntentId"));
             list.add(dto);
         }
         return list;
