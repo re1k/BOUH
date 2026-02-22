@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../theme/base_themes/colors.dart';
 import 'package:bouh/View/caregiverHomepage/widgets/suggestedDoctorCard.dart';
 import 'package:bouh/View/caregiverHomepage/widgets/caregiverBottomNav.dart';
+import 'package:bouh/services/doctorsService.dart';
+import 'package:bouh/dto/doctorSummaryDto.dart';
 
 /// Appointments screen
 ///
@@ -32,6 +34,12 @@ class AppointmentsPage extends StatefulWidget {
 
 class _AppointmentsPageState extends State<AppointmentsPage> {
   final TextEditingController _searchController = TextEditingController();
+  late Future<List<DoctorSummaryDto>> _doctorsFuture;
+  @override
+  void initState() {
+    super.initState();
+    _doctorsFuture = DoctorsService.getDoctorsForCaregiver();
+  }
 
   @override
   void dispose() {
@@ -256,41 +264,36 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
   }
 
   Widget _buildDoctorList() {
-    const mockDoctors = [
-      (
-        name: 'د. علي آل يحيى',
-        specialty: 'خبير في علاج القلق والتوتر',
-        rating: 5,
-      ),
-      (
-        name: 'د. عبد العزيز الناصر',
-        specialty: 'خبير في التعامل مع نوبات الغضب',
-        rating: 4,
-      ),
-      (
-        name: 'د. أحمد القحطاني',
-        specialty: 'خبير في التعامل مع الصدمات',
-        rating: 5,
-      ),
-      (
-        name: 'د. موسى السبيعي',
-        specialty: 'خبير في التعامل مع العزلة',
-        rating: 4,
-      ),
-    ];
+    return FutureBuilder<List<DoctorSummaryDto>>(
+      future: _doctorsFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (int i = 0; i < mockDoctors.length; i++) ...[
-          SuggestedDoctorCard(
-            name: mockDoctors[i].name,
-            specialty: mockDoctors[i].specialty,
-            rating: mockDoctors[i].rating,
-          ),
-          if (i < mockDoctors.length - 1) const SizedBox(height: _cardGap),
-        ],
-      ],
+        if (snapshot.hasError) {
+          return Center(child: Text("Error: ${snapshot.error}"));
+        }
+
+        final doctors = snapshot.data ?? [];
+        if (doctors.isEmpty) {
+          return const Center(child: Text("لا يوجد أطباء حالياً"));
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (int i = 0; i < doctors.length; i++) ...[
+              SuggestedDoctorCard(
+                name: doctors[i].name,
+                specialty: doctors[i].areaOfKnowledge,
+                rating: doctors[i].averageRating.round(), // if card expects int
+              ),
+              if (i < doctors.length - 1) const SizedBox(height: _cardGap),
+            ],
+          ],
+        );
+      },
     );
   }
 }

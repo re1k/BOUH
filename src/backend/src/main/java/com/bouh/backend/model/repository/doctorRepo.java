@@ -34,6 +34,39 @@ public class doctorRepo {
         dto.setProfilePhotoURL(getString(doc, "profilePhotoURL"));
         return dto;
     }
+    /**
+     * Returns list of approved doctors for caregiver browsing screen.
+     */
+    public java.util.List<com.bouh.backend.model.Dto.DoctorSummaryDto>
+    getDoctorsForCaregiverList() throws ExecutionException, InterruptedException {
+
+        var result = new java.util.ArrayList<com.bouh.backend.model.Dto.DoctorSummaryDto>();
+
+        var querySnapshot = firestore.collection("doctors").get().get();
+
+        for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
+
+            // IMPORTANT: show only approved doctors (change the status in phase 3 when we have the admin logic) For now, we can set the registrationStatus field to "approved" manually in Firestore for testing.
+            String status = getString(doc, "registrationStatus");
+            if (status == null || !status.equalsIgnoreCase("approved")) {
+                continue;
+            }
+
+            var dto = new com.bouh.backend.model.Dto.DoctorSummaryDto();
+            dto.setDoctorID(doc.getId());
+            dto.setName(getString(doc, "name"));
+            dto.setAreaOfKnowledge(getString(doc, "areaOfKnowledge"));
+
+            Double avg = doc.getDouble("averageRating");
+            dto.setAverageRating(avg == null ? 0.0 : avg);
+
+            dto.setProfilePhotoURL(getString(doc, "profilePhotoURL"));
+
+            result.add(dto);
+        }
+
+        return result;
+    }
 
     private static String getString(DocumentSnapshot doc, String field) {
         Object v = doc.get(field);
