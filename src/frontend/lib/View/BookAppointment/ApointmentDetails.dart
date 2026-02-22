@@ -213,7 +213,10 @@ class AppointmentDetailsView extends StatelessWidget {
                           ),
                         );
 
-                        Navigator.pop(context, paymentIntentId);
+                        Navigator.pop(
+                          context,
+                          paymentIntentId,
+                        ); // will be return the value fpr jano to store the appointment
                       } on stripe.StripeException catch (e) {
                         if (!context.mounted) return;
 
