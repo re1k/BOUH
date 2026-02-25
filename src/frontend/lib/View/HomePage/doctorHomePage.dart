@@ -1,9 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:bouh/View/HomePage/widgets/appointment_card.dart';
+import 'package:bouh/View/HomePage/widgets/doctorBottomNav.dart';
 import 'package:bouh/theme/base_themes/colors.dart';
 
+/// When used inside [DoctorNavbar], pass [currentIndex] and [onTap] so the
+/// bottom nav reflects the active tab and handles tab changes.
 class DoctorHomePage extends StatelessWidget {
-  const DoctorHomePage({super.key});
+  const DoctorHomePage({super.key, this.currentIndex = 0, this.onTap});
+
+  /// Active bottom nav index (0 = home). Used when embedded in shell.
+  final int currentIndex;
+
+  /// Called when a bottom nav item is tapped. Used when embedded in shell.
+  final ValueChanged<int>? onTap;
+
+  static const double _cardGap = 16;
 
   @override
   Widget build(BuildContext context) {
@@ -21,7 +32,12 @@ class DoctorHomePage extends StatelessWidget {
             // Backend hook: replace this with today's appointments from controller.
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.fromLTRB(
+                  16,
+                  0,
+                  16,
+                  DoctorBottomNav.barHeight + _cardGap,
+                ),
                 children: const [
                   AppointmentCard(
                     date: '8/12/2025',
@@ -42,6 +58,19 @@ class DoctorHomePage extends StatelessWidget {
             ),
           ],
         ),
+        bottomNavigationBar: onTap != null
+            ? Material(
+                clipBehavior: Clip.none,
+                color: Colors.transparent,
+                child: Directionality(
+                  textDirection: TextDirection.rtl,
+                  child: DoctorBottomNav(
+                    currentIndex: currentIndex,
+                    onTap: onTap,
+                  ),
+                ),
+              )
+            : null,
       ),
     );
   }

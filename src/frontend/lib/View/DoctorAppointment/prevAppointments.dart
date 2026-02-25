@@ -3,11 +3,30 @@ import 'package:bouh/theme/base_themes/colors.dart';
 
 import 'package:bouh/View/DoctorAppointment/available_schedule_screen.dart';
 import 'package:bouh/View/HomePage/widgets/appointment_card.dart';
-
 import 'package:bouh/View/DoctorAppointment/upAppointments.dart';
+import 'package:bouh/View/HomePage/widgets/doctorBottomNav.dart';
 
+/// Doctor previous appointments screen. When used inside [DoctorNavbar],
+/// pass [currentIndex], [onTap], and optionally [onSwitchToUpcoming].
 class PrevAppointmentsScreen extends StatelessWidget {
-  const PrevAppointmentsScreen({super.key});
+  const PrevAppointmentsScreen({
+    super.key,
+    this.currentIndex = 1,
+    this.onTap,
+    this.onSwitchToUpcoming,
+  });
+
+  /// Active bottom nav index (1 = appointments). Pass from shell.
+  final int currentIndex;
+
+  /// Called when a bottom nav item is tapped. Pass from shell.
+  final ValueChanged<int>? onTap;
+
+  /// When provided (e.g. from [DoctorNavbar]), tapping "القادمة" switches
+  /// to upcoming without Navigator. When null, uses Navigator.pushReplacement.
+  final VoidCallback? onSwitchToUpcoming;
+
+  static const double _cardGap = 16;
 
   @override
   Widget build(BuildContext context) {
@@ -38,12 +57,16 @@ class PrevAppointmentsScreen extends StatelessWidget {
                 child: _SegmentedTabs(
                   selected: _AppointmentsTab.past,
                   onUpcomingTap: () {
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const AppointmentsScreen(),
-                      ),
-                    );
+                    if (onSwitchToUpcoming != null) {
+                      onSwitchToUpcoming!();
+                    } else {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const AppointmentsScreen(),
+                        ),
+                      );
+                    }
                   },
                   onPastTap: () {},
                 ),
@@ -54,7 +77,12 @@ class PrevAppointmentsScreen extends StatelessWidget {
               // Backend hook: replace static cards with data from controller.
               Expanded(
                 child: ListView(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.fromLTRB(
+                    16,
+                    0,
+                    16,
+                    DoctorBottomNav.barHeight + _cardGap,
+                  ),
                   children: const [
                     AppointmentCard(
                       date: '11/11/2025',
@@ -86,19 +114,19 @@ class PrevAppointmentsScreen extends StatelessWidget {
         ),
 
         // add remaz navBar
-        bottomNavigationBar: BottomNavigationBar(
-          currentIndex: 1,
-          selectedItemColor: BColors.primary,
-          unselectedItemColor: BColors.darkGrey,
-          items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.person), label: 'حسابي'),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.calendar_today),
-              label: 'المواعيد',
-            ),
-            BottomNavigationBarItem(icon: Icon(Icons.home), label: 'الرئيسية'),
-          ],
-        ),
+        bottomNavigationBar: onTap != null
+            ? Material(
+                clipBehavior: Clip.none,
+                color: Colors.transparent,
+                child: Directionality(
+                  textDirection: TextDirection.rtl,
+                  child: DoctorBottomNav(
+                    currentIndex: currentIndex,
+                    onTap: onTap,
+                  ),
+                ),
+              )
+            : null,
       ),
     );
   }
