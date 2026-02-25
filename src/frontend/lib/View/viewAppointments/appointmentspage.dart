@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import '../../theme/base_themes/colors.dart';
 import 'package:bouh/View/caregiverHomepage/widgets/suggestedDoctorCard.dart';
 import 'package:bouh/View/caregiverHomepage/widgets/caregiverBottomNav.dart';
+import 'package:bouh/dto/DoctorSearchDto.dart';
+import 'package:bouh/services/DoctorSearchService.dart';
+import 'dart:async';
 
 /// Appointments screen
 ///
@@ -32,10 +35,76 @@ class AppointmentsPage extends StatefulWidget {
 
 class _AppointmentsPageState extends State<AppointmentsPage> {
   final TextEditingController _searchController = TextEditingController();
+  final DoctorSearchService _doctorSearchService = DoctorSearchService();
+  List<DoctorSearchDTO> _doctors = [];
+  List<DoctorSearchDTO> _filteredDoctors = [];
+  bool _isLoading = false;
+  String? _error;
+  Timer? _debounce;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(_onSearchChanged);
+    _loadTopRatedDoctors();
+  }
+
+  void _onSearchChanged() {
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    _debounce = Timer(const Duration(milliseconds: 500), () {
+      if (_searchController.text.isNotEmpty) {
+        _searchDoctors(_searchController.text);
+      } else {
+        _loadTopRatedDoctors();
+      }
+    });
+  }
+
+  Future<void> _searchDoctors(String name) async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final results = await _doctorSearchService.searchDoctors(name);
+      setState(() {
+        _doctors = results;
+        _filteredDoctors = results;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = 'حدث خطأ أثناء البحث';
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadTopRatedDoctors() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final results = await _doctorSearchService.getTopRatedDoctors();
+      setState(() {
+        _doctors = results;
+        _filteredDoctors = results;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = 'حدث خطأ في تحميل الأطباء';
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   void dispose() {
+    _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
+    _debounce?.cancel();
     super.dispose();
   }
 
@@ -256,39 +325,32 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
   }
 
   Widget _buildDoctorList() {
-    const mockDoctors = [
-      (
-        name: 'د. علي آل يحيى',
-        specialty: 'خبير في علاج القلق والتوتر',
-        rating: 5,
-      ),
-      (
-        name: 'د. عبد العزيز الناصر',
-        specialty: 'خبير في التعامل مع نوبات الغضب',
-        rating: 4,
-      ),
-      (
-        name: 'د. أحمد القحطاني',
-        specialty: 'خبير في التعامل مع الصدمات',
-        rating: 5,
-      ),
-      (
-        name: 'د. موسى السبيعي',
-        specialty: 'خبير في التعامل مع العزلة',
-        rating: 4,
-      ),
-    ];
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_error != null) {
+      return Center(
+        child: Text(_error!, style: const TextStyle(color: Colors.red)),
+      );
+    }
+
+    if (_filteredDoctors.isEmpty) {
+      return const Center(
+        child: Text('ابحث عن طبيب', style: TextStyle(color: Color(0xFF7D8A96))),
+      );
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (int i = 0; i < mockDoctors.length; i++) ...[
+        for (int i = 0; i < _filteredDoctors.length; i++) ...[
           SuggestedDoctorCard(
-            name: mockDoctors[i].name,
-            specialty: mockDoctors[i].specialty,
-            rating: mockDoctors[i].rating,
+            name: _filteredDoctors[i].name,
+            specialty: _filteredDoctors[i].specialty,
+            rating: _filteredDoctors[i].rating.toInt(),
           ),
-          if (i < mockDoctors.length - 1) const SizedBox(height: _cardGap),
+          if (i < _filteredDoctors.length - 1) const SizedBox(height: _cardGap),
         ],
       ],
     );
