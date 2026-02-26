@@ -5,6 +5,8 @@ import 'package:bouh/View/viewAppointments/widgets/appointmentCard.dart';
 import 'package:bouh/View/caregiverHomepage/widgets/caregiverBottomNav.dart';
 import 'package:bouh/dto/upcomingAppointmentDto.dart';
 import 'package:bouh/services/appointmentsService.dart';
+import 'package:bouh/dto/payment/RefundResponseDto.dart';
+import 'package:bouh/services/payment/RefundService.dart';
 
 /// Booked appointments – upcoming
 ///
@@ -65,6 +67,8 @@ class _BookedAppointmentsUpcomingState
   static const Color _cancelRed = Color(0xFFE85D4F);
 
   final AppointmentsService _appointmentsService = AppointmentsService();
+  final RefundService _refundService = RefundService();
+  bool _refundLoading = false;
 
   @override
   void initState() {
@@ -336,14 +340,22 @@ class _BookedAppointmentsUpcomingState
       profileImage = NetworkImage(dto.doctorProfilePhotoURL!);
     }
     VoidCallback? onActionTap;
-    if (isFirst &&
-        dto.meetingLink != null &&
-        dto.meetingLink!.trim().isNotEmpty) {
-      final link = dto.meetingLink!.trim();
-      onActionTap = () => _openMeetingLink(link);
+    if (isFirst) {
+      if (dto.meetingLink != null && dto.meetingLink!.trim().isNotEmpty) {
+        final link = dto.meetingLink!.trim();
+        onActionTap = () => _openMeetingLink(link);
+      }
+    } else {
+      onActionTap = _refundLoading
+          ? null
+          : () async {
+              final refundSucceeded = await _refundAppointment(dto);
+              if (refundSucceeded) {
+                /* jana code here*/
+              }
+            };
     }
-    // When actionLabel is "الغاء" (cancel), the appointment's paymentIntentId uniquely
-    // identifies the payment for this appointment. It can later be used for refund
+
     return AppointmentCard(
       doctorName: dto.doctorName ?? '',
       specialty: dto.doctorAreaOfKnowledge ?? '',
@@ -383,5 +395,269 @@ class _BookedAppointmentsUpcomingState
     if (s.isEmpty && e.isEmpty) return '';
     if (e.isEmpty) return '$s $suffix';
     return '$s - $e $suffix';
+  }
+
+  Future<bool> _refundAppointment(UpcomingAppointmentDto dto) async {
+    final pi = dto.paymentIntentId?.trim();
+
+    if (pi == null || pi.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("❌ لا يوجد paymentIntentId لهذا الموعد")),
+      );
+      return false;
+    }
+
+    // Confirm dialog
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFFEBEE),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.warning_amber_rounded,
+                  color: Color(0xFFE53935),
+                  size: 40,
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                "تأكيد الإلغاء",
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                "هل تريد إلغاء الموعد واسترجاع المبلغ؟",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.black.withOpacity(0.55),
+                  height: 1.6,
+                ),
+              ),
+              const SizedBox(height: 28),
+              Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 48,
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        style: OutlinedButton.styleFrom(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(54),
+                          ),
+                        ),
+                        child: const Text(
+                          "رجوع",
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: SizedBox(
+                      height: 48,
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFE53935),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(54),
+                          ),
+                        ),
+                        child: const Text(
+                          "تأكيد",
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (confirm != true) return false;
+
+    setState(() => _refundLoading = true);
+
+    try {
+      final RefundResponseDto resp = await _refundService.refund(
+        paymentIntentId: pi,
+      );
+
+      if (!mounted) return false;
+
+      setState(() {
+        _list.removeWhere((x) => x.appointmentId == dto.appointmentId);
+      });
+
+      await showDialog(
+        context: context,
+        builder: (_) => Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 72,
+                  height: 72,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFE8F5E9),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.check_rounded,
+                    color: Color(0xFF4CAF50),
+                    size: 40,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  "تم الإلغاء بنجاح",
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  "تم إلغاء الموعد واسترجاع المبلغ بنجاح.",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.black.withOpacity(0.55),
+                    height: 1.6,
+                  ),
+                ),
+                const SizedBox(height: 28),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: BColors.accent,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(54),
+                      ),
+                    ),
+                    child: const Text(
+                      "حسناً",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      return true; // ✅ Refund succeeded — friend uses this to cancel the appointment
+    } catch (e) {
+      if (!mounted) return false;
+
+      await showDialog(
+        context: context,
+        builder: (_) => Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 72,
+                  height: 72,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFFFEBEE),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.error_outline_rounded,
+                    color: Color(0xFFE53935),
+                    size: 40,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  "فشل الإلغاء",
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  "حدث خطأ أثناء إلغاء الموعد.\nيرجى المحاولة مرة أخرى.",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.black.withOpacity(0.55),
+                    height: 1.6,
+                  ),
+                ),
+                const SizedBox(height: 28),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFE53935),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(54),
+                      ),
+                    ),
+                    child: const Text(
+                      "حسناً",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      return false; // ❌ Refund failed — friend does nothing
+    } finally {
+      if (mounted) setState(() => _refundLoading = false);
+    }
   }
 }

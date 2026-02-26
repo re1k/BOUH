@@ -31,6 +31,9 @@ dependencies:
   flutter:
     sdk: flutter
   http: ^1.2.2
+  firebase_core: ^3.8.1
+  firebase_auth: ^5.3.4
+  shared_preferences: ^2.2.3
   flutter_stripe: ^12.2.0
 
   flutter_localizations:
@@ -69,10 +72,13 @@ flutter:
   # the material Icons class.
   uses-material-design: true
   assets:
+    - assets/images/
     - assets/images/ProfileBackground.png
     - assets/images/DoctorDetails.png
     - assets/images/NoSelectedChild_PlaceHolder.png
     - assets/images/wave.jpg
+    - assets/images/wave_Draw.png
+
     - assets/images/
 
 

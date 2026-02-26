@@ -1,13 +1,25 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:bouh/theme/base_themes/colors.dart';
+import 'package:bouh/dto/caregiverSignupData.dart';
+import 'package:bouh/dto/caregiverDto.dart';
+import 'package:bouh/dto/childDto.dart';
+import 'package:bouh/authentication/AuthService.dart';
+import 'package:bouh/View/AccountCreation/verify_email_view.dart';
+
 
 class CaregiverAccountCreationStep2 extends StatefulWidget {
-  const CaregiverAccountCreationStep2({super.key, this.onSubmitChildren});
+  const CaregiverAccountCreationStep2({
+    super.key,
+    this.signupData,
+    this.onSubmitChildren,
+  });
 
-  /// Next stage hook:
-  /// - Connect to backend/Firebase from here.
-  /// - `children` will contain all children data.
-  /// - Return `Future<void>` to allow loading state later (without changing UI now).
+  /// Step-1 data (email, password, caregiver name). When set, account creation
+  /// runs on submit: caregiver DTO is built and sent via AuthService.
+  final CaregiverSignupData? signupData;
+
+  /// Optional hook when not using [signupData]: custom submit of children payload.
   final Future<void> Function(List<Map<String, String>> children)?
   onSubmitChildren;
 
@@ -37,6 +49,8 @@ class _CaregiverAccountCreationStep2State
   static const int _maxChildren = 5;
 
   final List<_ChildFormData> _childrenForms = [_ChildFormData()];
+  bool _isSubmitting = false;
+  String? _submitError;
 
   List<String> get _days => List.generate(31, (i) => '${i + 1}');
   List<String> get _months => List.generate(12, (i) => '${i + 1}');
@@ -61,6 +75,16 @@ class _CaregiverAccountCreationStep2State
         _childrenForms.every((c) => c.isComplete);
   }
 
+  // ---------------------------------------------------------------------------
+  // Validation helper: enforce Arabic-only names for children (letters + spaces).
+  // ---------------------------------------------------------------------------
+  bool _isArabicName(String value) {
+    final v = value.trim();
+    if (v.isEmpty) return false;
+    final arabicOnly = RegExp(r'^[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\s]+$');
+    return arabicOnly.hasMatch(v);
+  }
+
   bool _canShowAddButton() {
     final last = _childrenForms.last;
     return last.isComplete && _childrenForms.length < _maxChildren;
@@ -78,11 +102,12 @@ class _CaregiverAccountCreationStep2State
     setState(() {});
   }
 
+  /// Submits children: if [signupData] is set, builds caregiver DTO and creates
+  /// account via AuthService; otherwise calls [onSubmitChildren] if provided.
   Future<void> _submitAll() async {
-    // No UI messages/snackbars here by request.
-    // Button remains disabled until all children are complete.
     if (!_allChildrenComplete()) return;
 
+    // Build map payload for optional callback (e.g. analytics).
     final childrenPayload = _childrenForms
         .map(
           (c) => <String, String>{
@@ -93,13 +118,85 @@ class _CaregiverAccountCreationStep2State
         )
         .toList();
 
-    if (widget.onSubmitChildren != null) {
+    if (widget.onSubmitChildren != null && widget.signupData == null) {
       await widget.onSubmitChildren!(childrenPayload);
       return;
     }
 
-    // Next stage default behavior:
-    // Implement navigation to the next screen or call repository/service here.
+    // Account creation path: step-1 data was passed, so build DTO and send.
+    final signupData = widget.signupData;
+    if (signupData != null) {
+      // Enforce Arabic-only names for every child before building DTO.
+      final hasInvalidChildName = _childrenForms.any(
+        (c) => !_isArabicName(c.nameController.text),
+      );
+      if (hasInvalidChildName) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('يرجى إدخال أسماء الأطفال باللغة العربية فقط')),
+          );
+        }
+        return;
+      }
+
+      // Build ChildDto list from form (new children use empty childId).
+      final children = _childrenForms
+          .map(
+            (c) {
+              final day = (c.day ?? '').padLeft(2, '0');
+              final month = (c.month ?? '').padLeft(2, '0');
+              final year = c.year ?? '';
+              final dateOfBirth = '$year-$month-$day';
+              return ChildDto(
+                childId: '',
+                name: c.nameController.text.trim(),
+                dateOfBirth: dateOfBirth,
+                gender: c.gender,
+                drawings: null,
+              );
+            },
+          )
+          .toList();
+
+      // Single caregiver DTO: name, email, list of children (caregiverId set by AuthService).
+      final caregiverDto = CaregiverDto(
+        name: signupData.caregiverName,
+        email: signupData.email,
+        children: children,
+      );
+
+      if (mounted) {
+        setState(() {
+          _isSubmitting = true;
+          _submitError = null;
+        });
+      }
+
+      try {
+        await AuthService.instance.createCaregiverAccount(
+          caregiverDto: caregiverDto,
+          password: signupData.password,
+        );
+        // Success: go to email verification, then user can proceed to login.
+        if (mounted) {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const VerifyEmailView()),
+            (route) => false,
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          final message = e is FirebaseAuthException &&
+                  e.code == 'email-already-in-use'
+              ? 'البريد الإلكتروني مستخدم بالفعل بحساب آخر.'
+              : 'تعذر إنشاء الحساب. تحقق من البيانات وحاول مرة أخرى.';
+          setState(() {
+            _isSubmitting = false;
+            _submitError = message;
+          });
+        }
+      }
+    }
   }
 
   InputDecoration _inputDecoration() {
@@ -120,7 +217,7 @@ class _CaregiverAccountCreationStep2State
 
   @override
   Widget build(BuildContext context) {
-    final isCreateEnabled = _allChildrenComplete();
+    final isCreateEnabled = _allChildrenComplete() && !_isSubmitting;
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -340,7 +437,18 @@ class _CaregiverAccountCreationStep2State
                           ),
                         ),
                       ),
-
+                      if (_submitError != null) ...[
+                        const SizedBox(height: 10),
+                        Text(
+                          _submitError!,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: BColors.validationError,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                       if (_childrenForms.length == 1) ...[
                         const SizedBox(height: 24),
                         const Text(

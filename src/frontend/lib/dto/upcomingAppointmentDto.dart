@@ -9,6 +9,7 @@ class UpcomingAppointmentDto {
   final String? doctorAreaOfKnowledge;
   final String? doctorProfilePhotoURL;
   final String? childName;
+
   /// 0 = لم يتم الحضور, 1 = تم الحضور. Integer only.
   final int? status;
   final String? meetingLink;

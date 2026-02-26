@@ -16,5 +16,5 @@ public class childDto {
     private String childID;
     private String name;
     private String dateOfBirth; // YYYY-MM-DD
-    private String gender;      // male/female
+    private String gender;    
 }

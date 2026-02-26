@@ -15,7 +15,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import com.bouh.backend.service.appointments.AppointmentCreationService;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -31,12 +30,9 @@ import java.util.concurrent.ExecutionException;
 public class appointmentsController {
 
     private final AppointmentsService appointmentsService;
-    private final AppointmentCreationService appointmentCreationService;
 
-    public appointmentsController(AppointmentsService appointmentsService,
-            AppointmentCreationService appointmentCreationService) {
+    public appointmentsController(AppointmentsService appointmentsService) {
         this.appointmentsService = appointmentsService;
-        this.appointmentCreationService = appointmentCreationService;
 
     }
 
@@ -63,15 +59,4 @@ public class appointmentsController {
         return ResponseEntity.ok(list);
     }
 
-    @PostMapping
-    public ResponseEntity<String> create(@Valid @RequestBody appointmentDto dto) {
-        String id = appointmentCreationService.create(dto);
-        return ResponseEntity.ok(id);
-    }
-
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable String id) {
-        appointmentCreationService.delete(id);
-        return ResponseEntity.noContent().build();
-    }
 }

@@ -155,8 +155,10 @@ public class AppointmentRepo {
     /** Status stored as number in DB: 0 or 1. */
     private static int getStatusAsInt(QueryDocumentSnapshot doc) {
         Object v = doc.get("status");
-        if (v instanceof Number) return ((Number) v).intValue() == 1 ? 1 : 0;
-        if (v != null && "1".equals(v.toString().trim())) return 1;
+        if (v instanceof Number)
+            return ((Number) v).intValue() == 1 ? 1 : 0;
+        if (v != null && "1".equals(v.toString().trim()))
+            return 1;
         return 0;
     }
 
@@ -188,26 +190,6 @@ public class AppointmentRepo {
             return date.substring(0, 10);
         }
         return date;
-    }
-
-    public String save(appointmentDto dto) {
-        try {
-            DocumentReference ref = firestore.collection(COLLECTION).document(); // auto id
-            dto.setAppointmentId(ref.getId());
-            ref.set(dto).get();
-            return ref.getId();
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to save appointment: " + e.getMessage(), e);
-        }
-    }
-
-    public void deleteById(String appointmentID) { // used later for the cancelation
-
-        try {
-            firestore.collection(COLLECTION).document(appointmentID).delete().get();
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to delete appointment: " + e.getMessage(), e);
-        }
     }
 
 }

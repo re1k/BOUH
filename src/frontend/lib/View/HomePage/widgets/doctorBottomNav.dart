@@ -1,38 +1,28 @@
 import 'package:flutter/material.dart';
 import '../../../theme/base_themes/colors.dart';
 
-/// Reusable bottom navigation bar for the caregiver view.
+/// Reusable bottom navigation bar for the doctor view.
 ///
-/// Displays four items (RTL): الرئيسية, الرسومات, المواعيد, حسابي.
-/// The active item is highlighted with a circular background (circle.png).
+/// Displays three items (RTL): الرئيسية, المواعيد, حسابي.
 ///
 /// Optional parameters:
-/// - [currentIndex]: Which item is active (0 = home). Defaults to 0. Clamped to 0..3.
-/// - [onTap]: Callback when an item is tapped; receives the index. No logic by default.
+/// - [currentIndex]: Which item is active (0 = home). Defaults to 0. Clamped to 0..2.
+/// - [onTap]: Callback when an item is tapped; receives the index.
 ///
 /// Usage: Use as [Scaffold.bottomNavigationBar]. Wrap in [Directionality] (RTL)
 /// when used in an RTL screen. The parent typically wraps in [Material]
 /// (clipBehavior: Clip.none) for correct overflow.
-///
-/// Example:
-///   bottomNavigationBar: Material(
-///     clipBehavior: Clip.none,
-///     color: Colors.transparent,
-///     child: Directionality(
-///       textDirection: TextDirection.rtl,
-///       child: CaregiverBottomNav(currentIndex: 0),
-///     ),
-///   )
-class CaregiverBottomNav extends StatelessWidget {
-  const CaregiverBottomNav({super.key, this.currentIndex = 0, this.onTap});
+class DoctorBottomNav extends StatelessWidget {
+  const DoctorBottomNav({super.key, this.currentIndex = 0, this.onTap});
 
-  /// Index of the currently active item (0 = home, 1 = drawings, 2 = appointments, 3 = profile).
+  /// Index of the currently active item (0 = home, 1 = appointments, 2 = profile).
   final int currentIndex;
 
   /// Called when a nav item is tapped; receives the index. Optional.
   final ValueChanged<int>? onTap;
 
   /// Height of the bar. Use for content padding (e.g. scroll view bottom padding).
+  /// Matches caregiver bar height.
   static const double barHeight = 92;
 
   // --- Layout constants ---
@@ -46,10 +36,6 @@ class CaregiverBottomNav extends StatelessWidget {
 
   static const List<_NavItemData> _items = [
     _NavItemData(label: 'الرئيسية', iconAsset: 'assets/images/home icon.png'),
-    _NavItemData(
-      label: 'الرسومات',
-      iconAsset: 'assets/images/drawings icon.png',
-    ),
     _NavItemData(
       label: 'المواعيد',
       iconAsset: 'assets/images/calendar icon.png',
@@ -169,24 +155,3 @@ class _NavItemData {
   final String label;
   final String iconAsset;
 }
-
-// USAGE EXAMPLE
-//
-// Default (home active, no tap handling):
-//
-//   bottomNavigationBar: Material(
-//     clipBehavior: Clip.none,
-//     color: Colors.transparent,
-//     child: Directionality(
-//       textDirection: TextDirection.rtl,
-//       child: CaregiverBottomNav(),
-//     ),
-//   )
-//
-// With optional currentIndex and onTap:
-//
-//   CaregiverBottomNav(
-//     currentIndex: 0,
-//     onTap: (index) { /* navigate to tab index */ },
-//   )
-//

@@ -2,8 +2,15 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:bouh/theme/base_themes/colors.dart';
+import 'package:bouh/dto/caregiverSignupData.dart';
 import 'package:bouh/View/AccountCreation/Caregiver/AddChildern_view.dart';
+import 'package:bouh/widgets/password_strength_widget.dart';
 
+// ---------------------------------------------------------------------------
+// Caregiver signup step 1: email, password, confirm password, name.
+// Validation is enforced on each field; on success we pass [CaregiverSignupData]
+// to step 2 (Add Children) where the full caregiver DTO is built and sent.
+// ---------------------------------------------------------------------------
 class CaregiverSignupView extends StatefulWidget {
   const CaregiverSignupView({super.key, this.onNext, this.onSubmitCredentials});
 
@@ -26,8 +33,14 @@ class CaregiverSignupView extends StatefulWidget {
 }
 
 class _CaregiverSignupViewState extends State<CaregiverSignupView> {
-  /// Form key reserved for future validation and submission control.
+  /// Form key for validation and submission control.
   final _formKey = GlobalKey<FormState>();
+
+  /// Keys for each field so we can validate a single field when it loses focus.
+  final _emailFieldKey = GlobalKey<FormFieldState<String>>();
+  final _passwordFieldKey = GlobalKey<FormFieldState<String>>();
+  final _confirmPasswordFieldKey = GlobalKey<FormFieldState<String>>();
+  final _nameFieldKey = GlobalKey<FormFieldState<String>>();
 
   /// Controllers used to retrieve user input for signup/auth integration.
   final _emailCtrl = TextEditingController();
@@ -35,16 +48,147 @@ class _CaregiverSignupViewState extends State<CaregiverSignupView> {
   final _confirmPasswordCtrl = TextEditingController();
   final _nameCtrl = TextEditingController();
 
-  /// Enables the "Next" button only when all fields are filled.
-  /// Validation (email format / password match) is intentionally not enabled yet.
+  /// Focus nodes: when a field loses focus we mark it "touched" and validate only that field.
+  /// Initialized here (not in initState) so they exist after hot reload, when initState is not re-run.
+  final FocusNode _emailFocusNode = FocusNode();
+  final FocusNode _passwordFocusNode = FocusNode();
+  final FocusNode _confirmPasswordFocusNode = FocusNode();
+  final FocusNode _nameFocusNode = FocusNode();
+
+  /// "Touched" per field: error shows only after user has left that field (or on submit).
+  /// Prevents all fields going red when the user taps the first field.
+  bool _emailTouched = false;
+  bool _passwordTouched = false;
+  bool _confirmPasswordTouched = false;
+  bool _nameTouched = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // When a field loses focus: mark it touched and validate only that field (so error appears if empty/invalid).
+    _emailFocusNode.addListener(_onEmailFocusChange);
+    _passwordFocusNode.addListener(_onPasswordFocusChange);
+    _confirmPasswordFocusNode.addListener(_onConfirmPasswordFocusChange);
+    _nameFocusNode.addListener(_onNameFocusChange);
+  }
+
+  void _onEmailFocusChange() {
+    if (!_emailFocusNode.hasFocus) {
+      _emailTouched = true;
+      _emailFieldKey.currentState?.validate();
+      if (mounted) setState(() {});
+    }
+  }
+
+  void _onPasswordFocusChange() {
+    if (!_passwordFocusNode.hasFocus) {
+      _passwordTouched = true;
+      _passwordFieldKey.currentState?.validate();
+      if (mounted) setState(() {});
+    }
+  }
+
+  void _onConfirmPasswordFocusChange() {
+    if (!_confirmPasswordFocusNode.hasFocus) {
+      _confirmPasswordTouched = true;
+      _confirmPasswordFieldKey.currentState?.validate();
+      if (mounted) setState(() {});
+    }
+  }
+
+  void _onNameFocusChange() {
+    if (!_nameFocusNode.hasFocus) {
+      _nameTouched = true;
+      _nameFieldKey.currentState?.validate();
+      if (mounted) setState(() {});
+    }
+  }
+
+  /// Enables the "Next" button when all fields are filled (validation still runs on submit).
   bool get _isFormComplete =>
       _emailCtrl.text.trim().isNotEmpty &&
       _passwordCtrl.text.isNotEmpty &&
       _confirmPasswordCtrl.text.isNotEmpty &&
       _nameCtrl.text.trim().isNotEmpty;
 
+  // -------------------------------------------------------------------------
+  // Pure validators (format, length, match, Arabic name). Used only when the
+  // corresponding _*Touched flag is true (after user leaves field or on Next).
+  // -------------------------------------------------------------------------
+
+  /// Validates email format (basic pattern) and allowed provider domains.
+  static String? _validateEmail(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'يرجى إدخال البريد الإلكتروني';
+    }
+    final trimmed = value.trim();
+    final emailRegex = RegExp(
+      r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+    );
+    if (!emailRegex.hasMatch(trimmed)) {
+      return 'يرجى إدخال بريد إلكتروني صحيح';
+    }
+
+    // Provider/domain enforcement: accept only a known set of email providers.
+    // Adjust this list if your product allows additional domains.
+    const allowedDomains = <String>{
+      'gmail.com',
+      'outlook.com',
+      'hotmail.com',
+      'yahoo.com',
+      'icloud.com',
+      'live.com',
+    };
+
+    final parts = trimmed.split('@');
+    if (parts.length != 2) {
+      return 'يرجى إدخال بريد إلكتروني صحيح';
+    }
+    final domain = parts.last.toLowerCase();
+    if (!allowedDomains.contains(domain)) {
+      return 'يرجى استخدام بريد من مزوّد معتمد (مثل Gmail / Outlook)';
+    }
+    return null;
+  }
+
+  /// Validates password length and strength (uppercase, lowercase, digit, special char).
+  String? _validatePassword(String? value) => validateStrongPassword(value);
+
+  /// Validates confirm password matches password (uses current password from controller in context).
+  String? _validateConfirmPassword(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'يرجى تأكيد كلمة المرور';
+    }
+    if (value != _passwordCtrl.text) {
+      return 'كلمة المرور غير متطابقة';
+    }
+    return null;
+  }
+
+  /// Validates caregiver name is not empty.
+  static String? _validateName(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'يرجى إدخال اسم مقدم الرعاية';
+    }
+    // Arabic-only name validation (letters + spaces).
+    // Covers Arabic blocks: Arabic, Arabic Supplement, Arabic Extended-A.
+    final arabicOnly = RegExp(r'^[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\s]+$');
+    if (!arabicOnly.hasMatch(value.trim())) {
+      return 'يرجى إدخال الاسم باللغة العربية فقط';
+    }
+    return null;
+  }
+
   @override
   void dispose() {
+    _emailFocusNode.removeListener(_onEmailFocusChange);
+    _passwordFocusNode.removeListener(_onPasswordFocusChange);
+    _confirmPasswordFocusNode.removeListener(_onConfirmPasswordFocusChange);
+    _nameFocusNode.removeListener(_onNameFocusChange);
+    _emailFocusNode.dispose();
+    _passwordFocusNode.dispose();
+    _confirmPasswordFocusNode.dispose();
+    _nameFocusNode.dispose();
     _emailCtrl.dispose();
     _passwordCtrl.dispose();
     _confirmPasswordCtrl.dispose();
@@ -52,19 +196,30 @@ class _CaregiverSignupViewState extends State<CaregiverSignupView> {
     super.dispose();
   }
 
-  /// Handles the "Next" action.
-  /// Next stage:
-  /// - Add validators and call `_formKey.currentState!.validate()`.
-  /// - Enforce password match and backend errors.
+  /// Handles the "Next" action: mark all fields touched, run full form validation,
+  /// then build step-1 data and navigate to Add Children view.
   Future<void> _handleNext(BuildContext context) async {
-    if (!_isFormComplete) return;
+    // Mark every field as touched so all errors show on submit (not only the one that was left empty).
+    setState(() {
+      _emailTouched = true;
+      _passwordTouched = true;
+      _confirmPasswordTouched = true;
+      _nameTouched = true;
+    });
+    // Run all validators; if any fail, stay on this screen.
+    if (!(_formKey.currentState?.validate() ?? false)) return;
 
+    final email = _emailCtrl.text.trim();
+    final password = _passwordCtrl.text;
+    final caregiverName = _nameCtrl.text.trim();
+
+    // Optional hook for custom submit (e.g. analytics) before navigating.
     if (widget.onSubmitCredentials != null) {
       await widget.onSubmitCredentials!(
-        email: _emailCtrl.text.trim(),
-        password: _passwordCtrl.text,
+        email: email,
+        password: password,
         confirmPassword: _confirmPasswordCtrl.text,
-        caregiverName: _nameCtrl.text.trim(),
+        caregiverName: caregiverName,
       );
     }
 
@@ -73,9 +228,18 @@ class _CaregiverSignupViewState extends State<CaregiverSignupView> {
       return;
     }
 
+    // Build step-1 data and pass to Add Children view; account creation runs there.
+    final signupData = CaregiverSignupData(
+      email: email,
+      password: password,
+      caregiverName: caregiverName,
+    );
+
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const CaregiverAccountCreationStep2()),
+      MaterialPageRoute(
+        builder: (_) => CaregiverAccountCreationStep2(signupData: signupData),
+      ),
     );
   }
 
@@ -95,6 +259,9 @@ class _CaregiverSignupViewState extends State<CaregiverSignupView> {
                   padding: const EdgeInsets.fromLTRB(22, 30, 22, 240),
                   child: Form(
                     key: _formKey,
+                    // Disabled: we validate only when a field loses focus (single field) or on Next (all fields).
+                    // Avoids all fields going red as soon as the user taps the first one.
+                    autovalidateMode: AutovalidateMode.disabled,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
@@ -126,46 +293,59 @@ class _CaregiverSignupViewState extends State<CaregiverSignupView> {
                         ),
                         const SizedBox(height: 28),
 
-                        /// Email field.
+                        /// Email: error only after user leaves this field empty/invalid (or on Next).
                         _LabeledField(
                           label: 'البريد الإلكتروني',
                           keyboardType: TextInputType.emailAddress,
                           obscure: false,
                           controller: _emailCtrl,
+                          focusNode: _emailFocusNode,
+                          fieldKey: _emailFieldKey,
+                          validator: (v) => _emailTouched ? _validateEmail(v) : null,
                           textInputAction: TextInputAction.next,
                           onChanged: (_) => setState(() {}),
                         ),
                         const SizedBox(height: 14),
 
-                        /// Password field.
+                        /// Password: error only after user leaves this field (or on Next).
                         _LabeledField(
                           label: 'كلمة المرور',
                           keyboardType: TextInputType.text,
                           obscure: true,
                           controller: _passwordCtrl,
+                          focusNode: _passwordFocusNode,
+                          fieldKey: _passwordFieldKey,
+                          validator: (v) => _passwordTouched ? _validatePassword(v) : null,
                           textInputAction: TextInputAction.next,
                           onChanged: (_) => setState(() {}),
                         ),
+                        const SizedBox(height: 8),
+                        PasswordStrengthWidget(password: _passwordCtrl.text),
                         const SizedBox(height: 14),
 
-                        /// Confirm password field.
+                        /// Confirm password: error only after user leaves this field (or on Next).
                         _LabeledField(
                           label: 'تأكيد كلمة المرور',
                           keyboardType: TextInputType.text,
                           obscure: true,
                           controller: _confirmPasswordCtrl,
+                          focusNode: _confirmPasswordFocusNode,
+                          fieldKey: _confirmPasswordFieldKey,
+                          validator: (v) => _confirmPasswordTouched ? _validateConfirmPassword(v) : null,
                           textInputAction: TextInputAction.next,
                           onChanged: (_) => setState(() {}),
                         ),
                         const SizedBox(height: 14),
 
-                        /// Caregiver name field.
-                        /// Arabic input is supported by default; keyboard type remains name/text.
+                        /// Name: error only after user leaves this field (or on Next).
                         _LabeledField(
                           label: 'اسم مقدم الرعاية',
                           keyboardType: TextInputType.name,
                           obscure: false,
                           controller: _nameCtrl,
+                          focusNode: _nameFocusNode,
+                          fieldKey: _nameFieldKey,
+                          validator: (v) => _nameTouched ? _validateName(v) : null,
                           textInputAction: TextInputAction.done,
                           onFieldSubmitted: (_) => _handleNext(context),
                           onChanged: (_) => setState(() {}),
@@ -246,6 +426,8 @@ class _CaregiverSignupViewState extends State<CaregiverSignupView> {
   }
 }
 
+/// Reusable labeled form field. Optional [focusNode] and [fieldKey] let the parent
+/// validate this field when it loses focus (so error shows only after user leaves the field).
 class _LabeledField extends StatelessWidget {
   final String label;
   final bool obscure;
@@ -253,6 +435,15 @@ class _LabeledField extends StatelessWidget {
 
   /// Controller injected from parent for data access and validation.
   final TextEditingController controller;
+
+  /// Optional: used to detect when this field loses focus (mark touched + validate).
+  final FocusNode? focusNode;
+
+  /// Optional: key for this FormField so parent can call validate() on this field only.
+  final Key? fieldKey;
+
+  /// Validator for this field (e.g. email format, password length). Parent often wraps with "touched" check.
+  final String? Function(String?)? validator;
 
   /// Enables keyboard navigation between fields.
   final TextInputAction? textInputAction;
@@ -269,6 +460,9 @@ class _LabeledField extends StatelessWidget {
     required this.obscure,
     required this.controller,
     required this.onChanged,
+    this.focusNode,
+    this.fieldKey,
+    this.validator,
     this.textInputAction,
     this.onFieldSubmitted,
   });
@@ -284,12 +478,15 @@ class _LabeledField extends StatelessWidget {
         ),
         const SizedBox(height: 8),
 
-        /// TextFormField used to enable future validation without altering UI.
+        /// TextFormField: [fieldKey] allows parent to validate this field on unfocus; [focusNode] tracks focus.
         TextFormField(
+          key: fieldKey,
           controller: controller,
+          focusNode: focusNode,
           keyboardType: keyboardType,
           obscureText: obscure,
           textAlign: TextAlign.right,
+          validator: validator,
           textInputAction: textInputAction,
           onFieldSubmitted: onFieldSubmitted,
           onChanged: onChanged,
@@ -307,6 +504,20 @@ class _LabeledField extends StatelessWidget {
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
               borderSide: BorderSide(color: BColors.primary.withOpacity(0.6)),
+            ),
+            // Error text at bottom of field in deep red.
+            errorStyle: const TextStyle(
+              color: BColors.validationError,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: BColors.validationError),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: BColors.validationError, width: 1.5),
             ),
           ),
         ),

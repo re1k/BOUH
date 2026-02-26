@@ -29,6 +29,7 @@ public class FirebaseConfig {
                 .load();
 
         String credentialsPath = dotenv.get("FIREBASE_SERVICE_ACCOUNT_PATH");
+        System.out.println(" Firebase credentials path = " + credentialsPath);
 
         if (credentialsPath == null) {
             throw new RuntimeException("FIREBASE_SERVICE_ACCOUNT_PATH not found in .env"); //stop the exec if not exist, prevent app running with no database setted

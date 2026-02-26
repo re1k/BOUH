@@ -1,8 +1,11 @@
-import 'package:bouh/View/caregiverHomepage/caregivernavbar.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/date_symbol_data_local.dart';
+import 'package:firebase_core/firebase_core.dart';
 
-void main() {
+import 'authentication/AuthLogInRoute.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
   runApp(const MyApp());
 }
 
@@ -11,7 +14,8 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(home: const CaregiverNavbar());
-    //return MaterialApp(home: const CaregiverAccountView());
+    return const MaterialApp(
+      home: LoginResolverView(),
+    );
   }
 }

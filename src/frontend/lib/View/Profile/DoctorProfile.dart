@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:bouh/theme/base_themes/colors.dart';
+import 'package:bouh/View/HomePage/widgets/doctorBottomNav.dart';
 
 class DoctorProfileView extends StatefulWidget {
   const DoctorProfileView({
@@ -17,6 +18,8 @@ class DoctorProfileView extends StatefulWidget {
     this.defaultAvatarAsset,
     this.onSave,
     this.onLogout,
+    this.currentIndex = 2,
+    this.onTap,
   });
 
   final String? initialEmail;
@@ -29,6 +32,12 @@ class DoctorProfileView extends StatefulWidget {
   final String? initialGender;
 
   final String? defaultAvatarAsset;
+
+  /// Active bottom nav index (2 = profile). Pass when used inside [DoctorNavbar].
+  final int currentIndex;
+
+  /// Called when a bottom nav item is tapped. Pass when used inside [DoctorNavbar].
+  final ValueChanged<int>? onTap;
 
   // TODO(next stage): implement DB update + image upload, then store returned image URL/path
   final Future<void> Function({
@@ -225,6 +234,11 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
         backgroundColor: BColors.white,
         body: SafeArea(
           child: SingleChildScrollView(
+            padding: EdgeInsets.only(
+              bottom: widget.onTap != null
+                  ? DoctorBottomNav.barHeight + 24
+                  : 24,
+            ),
             child: Column(
               children: [
                 SizedBox(
@@ -509,6 +523,19 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
             ),
           ),
         ),
+        bottomNavigationBar: widget.onTap != null
+            ? Material(
+                clipBehavior: Clip.none,
+                color: Colors.transparent,
+                child: Directionality(
+                  textDirection: TextDirection.rtl,
+                  child: DoctorBottomNav(
+                    currentIndex: widget.currentIndex,
+                    onTap: widget.onTap,
+                  ),
+                ),
+              )
+            : null,
       ),
     );
   }

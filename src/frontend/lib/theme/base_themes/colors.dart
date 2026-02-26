@@ -13,6 +13,9 @@ class BColors {
   static const Color textBlack = Color(0xFF000000);
   static const Color textDarkestBlue = Color(0xFF0D0D29);
 
+  ///Validation error text (deep red, shown below fields)
+  static const Color validationError = Color(0xFFB71C1C);
+
   ///Neutral Shades
   static const Color black = Color(0xFF272727);
   static const Color darkGrey = Color(0xFF939393);

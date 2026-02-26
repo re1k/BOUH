@@ -53,7 +53,7 @@ class _RequestAnalysisPageState extends State<RequestAnalysisPage> {
               left: 0,
               right: 0,
               child: Image.asset(
-                'assets/Images/wave_Draw.png',
+                'assets/images/wave_Draw.png',
                 width: double.infinity,
                 fit: BoxFit.cover,
               ),
@@ -66,7 +66,7 @@ class _RequestAnalysisPageState extends State<RequestAnalysisPage> {
                   children: [
                     const SizedBox(height: 16),
                     _buildTopBar(),
-                    const Spacer(flex: 2),
+                    const Spacer(flex: 5),
                     _buildTitle(),
                     const SizedBox(height: 40),
                     _buildChildDropdown(),

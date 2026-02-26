@@ -1,8 +1,20 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:bouh/theme/base_themes/colors.dart';
+import 'package:bouh/dto/doctorSignupData.dart';
+import 'package:bouh/dto/doctorDto.dart';
+import 'package:bouh/authentication/AuthService.dart';
+import 'package:bouh/View/AccountCreation/verify_email_view.dart';
 
+/// Step 2 of doctor account creation: work info. When [signupData] is provided
+/// (from step 1), "إنشاء حساب" builds [DoctorDto] and calls
+/// [AuthService.createDoctorAccount], then navigates to [VerifyEmailView].
 class DoctorAccountCreationStep2 extends StatefulWidget {
-  const DoctorAccountCreationStep2({super.key});
+  const DoctorAccountCreationStep2({super.key, this.signupData});
+
+  /// Step-1 data (email, password, name, gender). Required when used in the
+  /// doctor registration flow; account creation runs on submit.
+  final DoctorSignupData? signupData;
 
   @override
   State<DoctorAccountCreationStep2> createState() =>
@@ -17,6 +29,8 @@ class _DoctorAccountCreationStep2State
 
   String? _specialty;
   String? _years;
+  bool _isSubmitting = false;
+  String? _submitError;
 
   final List<String> _specialties = const [
     'توتر وقلق',
@@ -34,12 +48,63 @@ class _DoctorAccountCreationStep2State
       _specialty != null &&
       _years != null;
 
+  static int _parseYears(String value) {
+    if (value == '+5') return 5;
+    return int.tryParse(value) ?? 0;
+  }
+
   @override
   void dispose() {
     _qualificationsCtrl.dispose();
     _classificationCtrl.dispose();
     _ibanCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _submitCreateAccount() async {
+    final signupData = widget.signupData;
+    if (signupData == null || !_isFormComplete || _isSubmitting) return;
+
+    setState(() {
+      _isSubmitting = true;
+      _submitError = null;
+    });
+
+    final doctorDto = DoctorDto(
+      doctorId: '',
+      name: signupData.name,
+      email: signupData.email,
+      gender: signupData.gender,
+      areaOfKnowledge: _specialty!,
+      qualifications: _qualificationsCtrl.text.trim(),
+      yearsOfExperience: _parseYears(_years!),
+      scfhsNumber: _classificationCtrl.text.trim(),
+      iban: _ibanCtrl.text.trim(),
+      registrationStatus: 'PENDING',
+    );
+
+    try {
+      await AuthService.instance.createDoctorAccount(
+        doctorDto: doctorDto,
+        password: signupData.password,
+      );
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const VerifyEmailView()),
+        (route) => false,
+      );
+    } catch (e) {
+      if (mounted) {
+        final message = e is FirebaseAuthException &&
+                e.code == 'email-already-in-use'
+            ? 'البريد الإلكتروني مستخدم بالفعل بحساب آخر.'
+            : 'تعذر إنشاء الحساب. تحقق من البيانات وحاول مرة أخرى.';
+        setState(() {
+          _isSubmitting = false;
+          _submitError = message;
+        });
+      }
+    }
   }
 
   InputDecoration _inputDecoration() {
@@ -54,6 +119,19 @@ class _DoctorAccountCreationStep2State
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
         borderSide: BorderSide(color: BColors.primary.withOpacity(0.6)),
+      ),
+      errorStyle: const TextStyle(
+        color: BColors.validationError,
+        fontSize: 12,
+        fontWeight: FontWeight.w500,
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: BColors.validationError),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: BColors.validationError, width: 1.5),
       ),
     );
   }
@@ -169,10 +247,8 @@ class _DoctorAccountCreationStep2State
                         width: 220,
                         height: 46,
                         child: ElevatedButton(
-                          onPressed: _isFormComplete
-                              ? () {
-                                  // method to be completed later
-                                }
+                          onPressed: _isFormComplete && !_isSubmitting
+                              ? _submitCreateAccount
                               : null,
                           style: ElevatedButton.styleFrom(
                             elevation: 0,
@@ -195,6 +271,18 @@ class _DoctorAccountCreationStep2State
                           ),
                         ),
                       ),
+                      if (_submitError != null) ...[
+                        const SizedBox(height: 10),
+                        Text(
+                          _submitError!,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: BColors.validationError,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
