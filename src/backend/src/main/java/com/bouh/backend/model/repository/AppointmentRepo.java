@@ -7,8 +7,11 @@ import com.google.cloud.firestore.QueryDocumentSnapshot;
 import com.google.cloud.firestore.QuerySnapshot;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Date;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -19,6 +22,8 @@ import java.util.concurrent.ExecutionException;
  */
 @Repository
 public class AppointmentRepo {
+
+    private static final ZoneId ZONE = ZoneId.systemDefault();
 
     private final Firestore firestore;
     private static final String COLLECTION = "appointments";
@@ -38,7 +43,7 @@ public class AppointmentRepo {
         if (caregiverId == null || caregiverId.isBlank()) {
             return new ArrayList<>();
         }
-        String today = ZonedDateTime.now(ZoneId.of("Asia/Riyadh")).toLocalDate().toString(); // yyyy-MM-dd
+        String today = ZonedDateTime.now(ZONE).toLocalDate().toString();
 
         QuerySnapshot snapshot = firestore.collection("appointments")
                 .whereEqualTo("caregiverId", caregiverId)
@@ -52,7 +57,7 @@ public class AppointmentRepo {
             dto.setCaregiverId(getString(doc, "caregiverId"));
             dto.setChildId(getString(doc, "childId"));
             dto.setDoctorId(getString(doc, "doctorId"));
-            dto.setDate(normalizeDate(getString(doc, "date")));
+            dto.setDate(getDateAsYyyyMmDd(doc));
             dto.setTimeSlotId(getString(doc, "timeSlotId"));
             dto.setStartTime(getSlotIndexForDerivation(doc));
             dto.setEndTime(getString(doc, "endTime"));
@@ -84,7 +89,7 @@ public class AppointmentRepo {
         if (caregiverId == null || caregiverId.isBlank()) {
             return new ArrayList<>();
         }
-        String today = ZonedDateTime.now(ZoneId.of("Asia/Riyadh")).toLocalDate().toString();
+        String today = ZonedDateTime.now(ZONE).toLocalDate().toString();
 
         QuerySnapshot snapshot = firestore.collection("appointments")
                 .whereEqualTo("caregiverId", caregiverId)
@@ -98,7 +103,7 @@ public class AppointmentRepo {
             dto.setCaregiverId(getString(doc, "caregiverId"));
             dto.setChildId(getString(doc, "childId"));
             dto.setDoctorId(getString(doc, "doctorId"));
-            dto.setDate(normalizeDate(getString(doc, "date")));
+            dto.setDate(getDateAsYyyyMmDd(doc));
             dto.setTimeSlotId(getString(doc, "timeSlotId"));
             dto.setStartTime(getSlotIndexForDerivation(doc));
             dto.setEndTime(getString(doc, "endTime"));
@@ -139,7 +144,7 @@ public class AppointmentRepo {
             dto.setCaregiverId(getString(doc, "caregiverId"));
             dto.setChildId(getString(doc, "childId"));
             dto.setDoctorId(getString(doc, "doctorId"));
-            dto.setDate(normalizeDate(getString(doc, "date")));
+            dto.setDate(getDateAsYyyyMmDd(doc));
             dto.setTimeSlotId(getString(doc, "timeSlotId"));
             dto.setStartTime(getSlotIndexForDerivation(doc));
             dto.setEndTime(getString(doc, "endTime"));
@@ -150,6 +155,24 @@ public class AppointmentRepo {
             list.add(dto);
         }
         return list;
+    }
+
+    /** Read date from document (Timestamp/Date only). Returns yyyy-MM-dd or null. */
+    private static String getDateAsYyyyMmDd(QueryDocumentSnapshot doc) {
+        Date d = asDate(doc.get("date"));
+        if (d == null) return null;
+        return d.toInstant().atZone(ZONE).toLocalDate().format(DateTimeFormatter.ISO_LOCAL_DATE);
+    }
+
+    private static Date asDate(Object v) {
+        if (v == null) return null;
+        if (v instanceof Date) return (Date) v;
+        try {
+            Object o = v.getClass().getMethod("toDate").invoke(v);
+            return o instanceof Date ? (Date) o : null;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /** Status stored as number in DB: 0 or 1. */
@@ -175,21 +198,4 @@ public class AppointmentRepo {
         Object v = doc.get(field);
         return v == null ? null : v.toString();
     }
-
-    /**
-     * Normalize date to yyyy-MM-dd: if ISO (e.g. 2026-03-10T21:37:59.504Z), take
-     * first 10 chars; else trim.
-     */
-    private static String normalizeDate(String date) {
-        if (date == null)
-            return null;
-        date = date.trim();
-        if (date.isEmpty())
-            return null;
-        if (date.length() >= 10 && date.charAt(4) == '-' && date.charAt(7) == '-') {
-            return date.substring(0, 10);
-        }
-        return date;
-    }
-
 }

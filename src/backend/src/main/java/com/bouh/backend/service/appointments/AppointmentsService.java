@@ -30,7 +30,7 @@ import java.util.concurrent.ExecutionException;
 @Service
 public class AppointmentsService {
 
-    private static final ZoneId ZONE = ZoneId.of("Asia/Riyadh");
+    private static final ZoneId ZONE = ZoneId.systemDefault();
     private static final DateTimeFormatter TIME_NO_AMPM = DateTimeFormatter.ofPattern("h:mm");
 
     private final AppointmentRepo appointmentRepo;
