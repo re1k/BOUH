@@ -45,4 +45,15 @@ class AppointmentsService {
         .map((e) => UpcomingAppointmentDto.fromJson(e as Map<String, dynamic>))
         .toList();
   }
+
+  Future<void> cancelAppointment({required String appointmentId}) async {
+    final url = Uri.parse(
+      '${ApiConfig.baseUrl}/api/appointments/$appointmentId',
+    );
+    final res = await http.delete(url);
+
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception('Backend error ${res.statusCode}: ${res.body}');
+    }
+  }
 }

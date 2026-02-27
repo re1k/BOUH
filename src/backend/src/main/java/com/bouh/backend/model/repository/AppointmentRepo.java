@@ -191,5 +191,10 @@ public class AppointmentRepo {
         }
         return date;
     }
+public void deleteById(String appointmentId) throws ExecutionException, InterruptedException {
+    if (appointmentId == null || appointmentId.isBlank()) return;
 
+    DocumentReference ref = firestore.collection(COLLECTION).document(appointmentId);
+    ref.delete().get();
+}
 }

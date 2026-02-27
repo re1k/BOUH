@@ -204,4 +204,7 @@ public class AppointmentsService {
             return -1;
         }
     }
+    public void cancelAppointment(String appointmentId) throws ExecutionException, InterruptedException {
+    appointmentRepo.deleteById(appointmentId);
+}
 }

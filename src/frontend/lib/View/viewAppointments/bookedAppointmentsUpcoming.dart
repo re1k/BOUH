@@ -351,7 +351,27 @@ class _BookedAppointmentsUpcomingState
           : () async {
               final refundSucceeded = await _refundAppointment(dto);
               if (refundSucceeded) {
-                /* jana code here*/
+                try {
+                  await _appointmentsService.cancelAppointment(
+                    appointmentId: dto.appointmentId,
+                  );
+
+                  if (!mounted) return;
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text(" تم إلغاء الموعد بنجاح ")),
+                  );
+                } catch (e) {
+                  if (!mounted) return;
+
+                  setState(() {
+                    _list.insert(0, dto);
+                  });
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(" فشل إلغاء الموعد  : $e")),
+                  );
+                }
               }
             };
     }

@@ -7,7 +7,6 @@ import 'package:bouh/dto/childDto.dart';
 import 'package:bouh/authentication/AuthService.dart';
 import 'package:bouh/View/AccountCreation/verify_email_view.dart';
 
-
 class CaregiverAccountCreationStep2 extends StatefulWidget {
   const CaregiverAccountCreationStep2({
     super.key,
@@ -81,7 +80,9 @@ class _CaregiverAccountCreationStep2State
   bool _isArabicName(String value) {
     final v = value.trim();
     if (v.isEmpty) return false;
-    final arabicOnly = RegExp(r'^[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\s]+$');
+    final arabicOnly = RegExp(
+      r'^[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\s]+$',
+    );
     return arabicOnly.hasMatch(v);
   }
 
@@ -133,33 +134,32 @@ class _CaregiverAccountCreationStep2State
       if (hasInvalidChildName) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('يرجى إدخال أسماء الأطفال باللغة العربية فقط')),
+            const SnackBar(
+              content: Text('يرجى إدخال أسماء الأطفال باللغة العربية فقط'),
+            ),
           );
         }
         return;
       }
 
       // Build ChildDto list from form (new children use empty childId).
-      final children = _childrenForms
-          .map(
-            (c) {
-              final day = (c.day ?? '').padLeft(2, '0');
-              final month = (c.month ?? '').padLeft(2, '0');
-              final year = c.year ?? '';
-              final dateOfBirth = '$year-$month-$day';
-              return ChildDto(
-                childId: '',
-                name: c.nameController.text.trim(),
-                dateOfBirth: dateOfBirth,
-                gender: c.gender,
-                drawings: null,
-              );
-            },
-          )
-          .toList();
+      final children = _childrenForms.map((c) {
+        final day = (c.day ?? '').padLeft(2, '0');
+        final month = (c.month ?? '').padLeft(2, '0');
+        final year = c.year ?? '';
+        final dateOfBirth = '$year-$month-$day';
+        return ChildDto(
+          childID: '',
+          name: c.nameController.text.trim(),
+          dateOfBirth: dateOfBirth,
+          gender: c.gender,
+          //drawings: null,
+        );
+      }).toList();
 
       // Single caregiver DTO: name, email, list of children (caregiverId set by AuthService).
       final caregiverDto = CaregiverDto(
+        caregiverId: 'cg_12',
         name: signupData.caregiverName,
         email: signupData.email,
         children: children,
@@ -186,8 +186,8 @@ class _CaregiverAccountCreationStep2State
         }
       } catch (e) {
         if (mounted) {
-          final message = e is FirebaseAuthException &&
-                  e.code == 'email-already-in-use'
+          final message =
+              e is FirebaseAuthException && e.code == 'email-already-in-use'
               ? 'البريد الإلكتروني مستخدم بالفعل بحساب آخر.'
               : 'تعذر إنشاء الحساب. تحقق من البيانات وحاول مرة أخرى.';
           setState(() {
