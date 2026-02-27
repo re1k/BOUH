@@ -44,9 +44,13 @@ class _LoginViewState extends State<LoginView> {
   bool _passwordTouched = false;
 
   static String? _validateEmail(String? value) {
-    if (value == null || value.trim().isEmpty) return 'يرجى إدخال البريد الإلكتروني';
-    final emailRegex = RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$');
-    if (!emailRegex.hasMatch(value.trim())) return 'يرجى إدخال بريد إلكتروني صحيح';
+    if (value == null || value.trim().isEmpty)
+      return 'يرجى إدخال البريد الإلكتروني';
+    final emailRegex = RegExp(
+      r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+    );
+    if (!emailRegex.hasMatch(value.trim()))
+      return 'يرجى إدخال بريد إلكتروني صحيح';
     return null;
   }
 
@@ -103,84 +107,85 @@ class _LoginViewState extends State<LoginView> {
     super.dispose();
   }
 
-Future<void> _handleLogin() async {
-  setState(() {
-    _emailError = null;
-    _passwordError = null;
-    _emailTouched = true;
-    _passwordTouched = true;
-  });
-
-  if (!(_formKey.currentState?.validate() ?? false)) return;
-
-  final email = _emailCtrl.text.trim();
-  final password = _passwordCtrl.text;
-
-  // Check email format again before calling login (so wrong format never gets mistaken for network).
-  final emailFormatError = _validateEmail(email);
-  if (emailFormatError != null) {
-    setState(() => _emailError = emailFormatError);
-    return;
-  }
-
-  try {
-    await AuthService.instance.login(email: email, password: password);
-
-    if (!mounted) return;
-
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const LoginResolverView()),
-    );
-
-  } on SocketException {
-    if (!mounted) return;
+  Future<void> _handleLogin() async {
     setState(() {
-      _passwordError = 'لا يوجد اتصال بالإنترنت. تحقق من الشبكة وحاول مرة أخرى.';
+      _emailError = null;
+      _passwordError = null;
+      _emailTouched = true;
+      _passwordTouched = true;
     });
-  } on FirebaseAuthException catch (e) {
-    if (!mounted) return;
-    setState(() {
-      switch (e.code) {
-        case 'invalid-email':
-        case 'invalid-credential':
-          _emailError = 'صيغة البريد الإلكتروني غير صحيحة أو الحساب غير موجود.';
-          _passwordError = null;
-          break;
-        case 'user-not-found':
-        case 'wrong-password':
-        case 'invalid-login-credentials':
-          _emailError = null;
-          _passwordError = 'البريد الإلكتروني أو كلمة المرور غير صحيحة.';
-          break;
-        default:
-          _passwordError = _mapLoginErrorToMessage(e);
-      }
-    });
-  } catch (e) {
-    if (!mounted) return;
-    setState(() {
-      _passwordError = _mapLoginErrorToMessage(e);
-    });
-  }
-}
 
-String _mapLoginErrorToMessage(Object e) {
-  final msg = e.toString();
+    if (!(_formKey.currentState?.validate() ?? false)) return;
 
-  if (msg.contains('wrong_credentials')) {
-    return 'البريد الإلكتروني أو كلمة المرور غير صحيحة.';
+    final email = _emailCtrl.text.trim();
+    final password = _passwordCtrl.text;
+
+    // Check email format again before calling login (so wrong format never gets mistaken for network).
+    final emailFormatError = _validateEmail(email);
+    if (emailFormatError != null) {
+      setState(() => _emailError = emailFormatError);
+      return;
+    }
+
+    try {
+      await AuthService.instance.login(email: email, password: password);
+
+      if (!mounted) return;
+
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const LoginResolverView()),
+      );
+    } on SocketException {
+      if (!mounted) return;
+      setState(() {
+        _passwordError =
+            'لا يوجد اتصال بالإنترنت. تحقق من الشبكة وحاول مرة أخرى.';
+      });
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        switch (e.code) {
+          case 'invalid-email':
+          case 'invalid-credential':
+            _emailError =
+                'صيغة البريد الإلكتروني غير صحيحة أو الحساب غير موجود.';
+            _passwordError = null;
+            break;
+          case 'user-not-found':
+          case 'wrong-password':
+          case 'invalid-login-credentials':
+            _emailError = null;
+            _passwordError = 'البريد الإلكتروني أو كلمة المرور غير صحيحة.';
+            break;
+          default:
+            _passwordError = _mapLoginErrorToMessage(e);
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _passwordError = _mapLoginErrorToMessage(e);
+      });
+    }
   }
 
-  // Only treat as network error for real I/O / socket errors, not for auth errors that might mention "connection".
-  if (e is SocketException) {
-    return 'لا يوجد اتصال بالإنترنت. تحقق من الشبكة وحاول مرة أخرى.';
-  }
-  if (msg.contains('SocketException') || msg.contains('Failed host lookup')) {
-    return 'لا يوجد اتصال بالإنترنت. تحقق من الشبكة وحاول مرة أخرى.';
-  }
+  String _mapLoginErrorToMessage(Object e) {
+    final msg = e.toString();
 
-  return 'حدث خطأ غير متوقع. حاول مرة أخرى.';
-}
+    if (msg.contains('wrong_credentials')) {
+      return 'البريد الإلكتروني أو كلمة المرور غير صحيحة.';
+    }
+
+    // Only treat as network error for real I/O / socket errors, not for auth errors that might mention "connection".
+    if (e is SocketException) {
+      return 'لا يوجد اتصال بالإنترنت. تحقق من الشبكة وحاول مرة أخرى.';
+    }
+    if (msg.contains('SocketException') || msg.contains('Failed host lookup')) {
+      return 'لا يوجد اتصال بالإنترنت. تحقق من الشبكة وحاول مرة أخرى.';
+    }
+
+    return 'حدث خطأ غير متوقع. حاول مرة أخرى.';
+  }
 
   void _handleForgotPassword() {
     if (widget.onForgotPassword != null) {
@@ -189,11 +194,14 @@ String _mapLoginErrorToMessage(Object e) {
     }
     EmailResetPopup.show(
       context,
-      onSubmit: (email) => AuthService.instance.sendPasswordResetEmail(email: email),
+      onSubmit: (email) =>
+          AuthService.instance.sendPasswordResetEmail(email: email),
     ).then((submitted) {
       if (submitted && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('تم إرسال رابط استعادة كلمة المرور إلى بريدك.')),
+          const SnackBar(
+            content: Text('تم إرسال رابط استعادة كلمة المرور إلى بريدك.'),
+          ),
         );
       }
     });
@@ -255,13 +263,15 @@ String _mapLoginErrorToMessage(Object e) {
                           keyboardType: TextInputType.emailAddress,
                           obscure: false,
                           controller: _emailCtrl,
-                           focusNode: _emailFocusNode,
-                           fieldKey: _emailFieldKey,
-                           validator: (v) => _emailTouched ? _validateEmail(v) : null,
+                          focusNode: _emailFocusNode,
+                          fieldKey: _emailFieldKey,
+                          validator: (v) =>
+                              _emailTouched ? _validateEmail(v) : null,
                           textInputAction: TextInputAction.next,
                           serverError: _emailError,
                           onChanged: () {
-                            if (_emailError != null) setState(() => _emailError = null);
+                            if (_emailError != null)
+                              setState(() => _emailError = null);
                           },
                         ),
                         const SizedBox(height: 14),
@@ -272,14 +282,16 @@ String _mapLoginErrorToMessage(Object e) {
                           keyboardType: TextInputType.text,
                           obscure: true,
                           controller: _passwordCtrl,
-                           focusNode: _passwordFocusNode,
-                           fieldKey: _passwordFieldKey,
-                           validator: (v) => _passwordTouched ? _validatePassword(v) : null,
+                          focusNode: _passwordFocusNode,
+                          fieldKey: _passwordFieldKey,
+                          validator: (v) =>
+                              _passwordTouched ? _validatePassword(v) : null,
                           textInputAction: TextInputAction.done,
                           onFieldSubmitted: (_) => _handleLogin(),
                           serverError: _passwordError,
                           onChanged: () {
-                            if (_passwordError != null) setState(() => _passwordError = null);
+                            if (_passwordError != null)
+                              setState(() => _passwordError = null);
                           },
                         ),
                         const SizedBox(height: 18),
@@ -384,21 +396,22 @@ String _mapLoginErrorToMessage(Object e) {
 
               /// Decorative background wave.
               /// Visual-only element; must remain free of logic.
-              Positioned(
-                left: -350,
-                bottom: -250,
-                child: Transform.rotate(
-                  alignment: Alignment.bottomLeft,
-                  angle: 11 * math.pi / 180,
-                  child: SizedBox(
-                    height: 500,
-                    child: Image.asset(
-                      'assets/images/wave_login.jpg',
-                      fit: BoxFit.cover,
+              if (MediaQuery.of(context).viewInsets.bottom == 0)
+                Positioned(
+                  left: -350,
+                  bottom: -250,
+                  child: Transform.rotate(
+                    alignment: Alignment.bottomLeft,
+                    angle: 11 * math.pi / 180,
+                    child: SizedBox(
+                      height: 500,
+                      child: Image.asset(
+                        'assets/images/wave_login.jpg',
+                        fit: BoxFit.cover,
+                      ),
                     ),
                   ),
                 ),
-              ),
             ],
           ),
         ),
@@ -458,7 +471,10 @@ class _LabeledField extends StatelessWidget {
           decoration: InputDecoration(
             filled: true,
             fillColor: BColors.white,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 12,
+            ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
               borderSide: const BorderSide(color: BColors.grey),
@@ -479,7 +495,10 @@ class _LabeledField extends StatelessWidget {
             ),
             focusedErrorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: BColors.validationError, width: 1.5),
+              borderSide: const BorderSide(
+                color: BColors.validationError,
+                width: 1.5,
+              ),
             ),
           ),
         ),

@@ -410,21 +410,22 @@ class _CaregiverSignupViewState extends State<CaregiverSignupView> {
               ),
 
               /// Decorative bottom wave (visual only).
-              Positioned(
-                left: -400,
-                bottom: -290,
-                child: Transform.rotate(
-                  alignment: Alignment.bottomLeft,
-                  angle: 11 * math.pi / 180,
-                  child: SizedBox(
-                    height: 520,
-                    child: Image.asset(
-                      'assets/images/wave_login.jpg',
-                      fit: BoxFit.cover,
+              if (MediaQuery.of(context).viewInsets.bottom == 0)
+                Positioned(
+                  left: -400,
+                  bottom: -290,
+                  child: Transform.rotate(
+                    alignment: Alignment.bottomLeft,
+                    angle: 11 * math.pi / 180,
+                    child: SizedBox(
+                      height: 520,
+                      child: Image.asset(
+                        'assets/images/wave_login.jpg',
+                        fit: BoxFit.cover,
+                      ),
                     ),
                   ),
                 ),
-              ),
             ],
           ),
         ),
