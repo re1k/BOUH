@@ -10,7 +10,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class PaymentService {
 
-    public PaymentResponseDto createPaymentIntent(PaymentRequestDto request) {
+    public PaymentResponseDto createPaymentIntent(PaymentRequestDto request, String uid) {
 
         try {
 

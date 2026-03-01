@@ -18,7 +18,7 @@ public class DoctorSearchService {
         this.doctorSearchRepository = doctorSearchRepository;
     }
 
-    public List<DoctorSearchDTO> searchByName(String name) throws ExecutionException, InterruptedException {
+    public List<DoctorSearchDTO> searchByName(String name, String uid) throws ExecutionException, InterruptedException {
         List<QueryDocumentSnapshot> documents = doctorSearchRepository.getAllDoctors();
 
         return documents.stream()
@@ -42,7 +42,7 @@ public class DoctorSearchService {
                 .collect(Collectors.toList());
     }
 
-    public List<DoctorSearchDTO> getTopRatedDoctors() throws ExecutionException, InterruptedException {
+    public List<DoctorSearchDTO> getTopRatedDoctors(String uid) throws ExecutionException, InterruptedException {
         List<QueryDocumentSnapshot> documents = doctorSearchRepository.getTopRatedDoctors();
 
         return documents.stream()

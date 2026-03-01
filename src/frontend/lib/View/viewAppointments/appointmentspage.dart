@@ -1,3 +1,4 @@
+import 'package:bouh/authentication/AuthSession.dart';
 import 'package:flutter/material.dart';
 import '../../theme/base_themes/colors.dart';
 import 'package:bouh/View/caregiverHomepage/widgets/suggestedDoctorCard.dart';

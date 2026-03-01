@@ -11,7 +11,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class RefundService {
 
-    public RefundResponseDto refund(RefundRequestDto request) {
+    public RefundResponseDto refund(RefundRequestDto request, String uid) {
         try {
             // 1) Retrieve PaymentIntent
             PaymentIntent intent = PaymentIntent.retrieve(request.getPaymentIntentId());

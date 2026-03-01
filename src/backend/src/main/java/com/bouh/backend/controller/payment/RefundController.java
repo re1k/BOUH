@@ -6,6 +6,7 @@ import com.bouh.backend.service.payment.RefundService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.Authentication;
 
 @RestController
 @RequestMapping("/api/payment")
@@ -18,7 +19,9 @@ public class RefundController {
     }
 
     @PostMapping("/refund")
-    public ResponseEntity<RefundResponseDto> refund(@Valid @RequestBody RefundRequestDto request) {
-        return ResponseEntity.ok(refundService.refund(request));
+    public ResponseEntity<RefundResponseDto> refund(@Valid @RequestBody RefundRequestDto request,
+            Authentication authentication) {
+        String uid = authentication.getName();
+        return ResponseEntity.ok(refundService.refund(request, uid));
     }
 }
