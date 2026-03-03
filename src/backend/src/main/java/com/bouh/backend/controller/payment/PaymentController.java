@@ -23,7 +23,7 @@ public class PaymentController {
     public ResponseEntity<PaymentResponseDto> createPaymentIntent(
             @RequestBody PaymentRequestDto request, Authentication authentication) {
         String uid = authentication.getName();
-        PaymentResponseDto response = paymentService.createPaymentIntent(request);
+        PaymentResponseDto response = paymentService.createPaymentIntent(request, uid);
         return ResponseEntity.ok(response);
     }
 }
