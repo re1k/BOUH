@@ -1,13 +1,16 @@
 package com.bouh.backend.model.repository;
 
+import com.bouh.backend.config.TimeSlotConfig;
 import com.bouh.backend.model.Dto.appointmentDto;
+import com.google.cloud.Timestamp;
 import com.google.cloud.firestore.Firestore;
-import com.google.cloud.firestore.DocumentReference;
 import com.google.cloud.firestore.QueryDocumentSnapshot;
 import com.google.cloud.firestore.QuerySnapshot;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -23,7 +26,7 @@ import java.util.concurrent.ExecutionException;
 @Repository
 public class AppointmentRepo {
 
-    private static final ZoneId ZONE = ZoneId.systemDefault();
+    private static final ZoneId ZONE = ZoneId.of("Asia/Riyadh");
 
     private final Firestore firestore;
     private static final String COLLECTION = "appointments";
@@ -43,8 +46,6 @@ public class AppointmentRepo {
         if (caregiverId == null || caregiverId.isBlank()) {
             return new ArrayList<>();
         }
-        String today = ZonedDateTime.now(ZONE).toLocalDate().toString();
-
         QuerySnapshot snapshot = firestore.collection("appointments")
                 .whereEqualTo("caregiverId", caregiverId)
                 .get()
@@ -52,31 +53,19 @@ public class AppointmentRepo {
 
         List<appointmentDto> list = new ArrayList<>();
         for (QueryDocumentSnapshot doc : snapshot.getDocuments()) {
-            appointmentDto dto = new appointmentDto();
-            dto.setAppointmentId(doc.getId());
-            dto.setCaregiverId(getString(doc, "caregiverId"));
-            dto.setChildId(getString(doc, "childId"));
-            dto.setDoctorId(getString(doc, "doctorId"));
-            dto.setDate(getDateAsYyyyMmDd(doc));
-            dto.setTimeSlotId(getString(doc, "timeSlotId"));
-            dto.setStartTime(getSlotIndexForDerivation(doc));
-            dto.setEndTime(getString(doc, "endTime"));
-            dto.setStatus(getStatusAsInt(doc));
-            dto.setMeetingLink(getString(doc, "meetingLink"));
-            dto.setAmount(doc.getLong("amount"));
-            dto.setPaymentIntentId(getString(doc, "paymentIntentId"));
+            appointmentDto dto = mapDocToDto(doc);
             list.add(dto);
         }
 
-        // Filter: date >= today (date normalized to yyyy-MM-dd or null)
+        // Keep only appointments that start today or later. Sort by start time, soonest
+        // first.
+        Instant todayStart = ZonedDateTime.now(ZONE).toLocalDate().atStartOfDay(ZONE).toInstant();
         list.removeIf(d -> {
-            String date = d.getDate();
-            if (date == null || date.isEmpty())
-                return true;
-            return date.compareTo(today) < 0;
+            Timestamp t = d.getStartDateTime();
+            return t == null || Instant.ofEpochSecond(t.getSeconds(), t.getNanos()).isBefore(todayStart);
         });
-        // Sort by date ascending (same as orderBy("date"))
-        list.sort(Comparator.comparing(appointmentDto::getDate, Comparator.nullsLast(Comparator.naturalOrder())));
+        list.sort(Comparator.comparing(appointmentDto::getStartDateTime,
+                Comparator.nullsLast(Comparator.naturalOrder())));
         return list;
     }
 
@@ -89,8 +78,6 @@ public class AppointmentRepo {
         if (caregiverId == null || caregiverId.isBlank()) {
             return new ArrayList<>();
         }
-        String today = ZonedDateTime.now(ZONE).toLocalDate().toString();
-
         QuerySnapshot snapshot = firestore.collection("appointments")
                 .whereEqualTo("caregiverId", caregiverId)
                 .get()
@@ -98,29 +85,19 @@ public class AppointmentRepo {
 
         List<appointmentDto> list = new ArrayList<>();
         for (QueryDocumentSnapshot doc : snapshot.getDocuments()) {
-            appointmentDto dto = new appointmentDto();
-            dto.setAppointmentId(doc.getId());
-            dto.setCaregiverId(getString(doc, "caregiverId"));
-            dto.setChildId(getString(doc, "childId"));
-            dto.setDoctorId(getString(doc, "doctorId"));
-            dto.setDate(getDateAsYyyyMmDd(doc));
-            dto.setTimeSlotId(getString(doc, "timeSlotId"));
-            dto.setStartTime(getSlotIndexForDerivation(doc));
-            dto.setEndTime(getString(doc, "endTime"));
-            dto.setStatus(getStatusAsInt(doc));
-            dto.setMeetingLink(getString(doc, "meetingLink"));
-            dto.setAmount(doc.getLong("amount"));
-            dto.setPaymentIntentId(getString(doc, "paymentIntentId"));
+            appointmentDto dto = mapDocToDto(doc);
             list.add(dto);
         }
 
+        // Keep only appointments that start before today. Sort by start time, newest
+        // first.
+        Instant todayStart = ZonedDateTime.now(ZONE).toLocalDate().atStartOfDay(ZONE).toInstant();
         list.removeIf(d -> {
-            String date = d.getDate();
-            if (date == null || date.isEmpty())
-                return true;
-            return date.compareTo(today) >= 0;
+            Timestamp t = d.getStartDateTime();
+            return t == null || Instant.ofEpochSecond(t.getSeconds(), t.getNanos()).compareTo(todayStart) >= 0;
         });
-        list.sort(Comparator.comparing(appointmentDto::getDate, Comparator.nullsLast(Comparator.reverseOrder())));
+        list.sort(Comparator.comparing(appointmentDto::getStartDateTime,
+                Comparator.nullsLast(Comparator.reverseOrder())));
         return list;
     }
 
@@ -139,34 +116,58 @@ public class AppointmentRepo {
                 .get();
         List<appointmentDto> list = new ArrayList<>();
         for (QueryDocumentSnapshot doc : snapshot.getDocuments()) {
-            appointmentDto dto = new appointmentDto();
-            dto.setAppointmentId(doc.getId());
-            dto.setCaregiverId(getString(doc, "caregiverId"));
-            dto.setChildId(getString(doc, "childId"));
-            dto.setDoctorId(getString(doc, "doctorId"));
-            dto.setDate(getDateAsYyyyMmDd(doc));
-            dto.setTimeSlotId(getString(doc, "timeSlotId"));
-            dto.setStartTime(getSlotIndexForDerivation(doc));
-            dto.setEndTime(getString(doc, "endTime"));
-            dto.setStatus(getStatusAsInt(doc));
-            dto.setMeetingLink(getString(doc, "meetingLink"));
-            dto.setAmount(doc.getLong("amount"));
-            dto.setPaymentIntentId(getString(doc, "paymentIntentId"));
-            list.add(dto);
+            list.add(mapDocToDto(doc));
         }
         return list;
     }
 
-    /** Read date from document (Timestamp/Date only). Returns yyyy-MM-dd or null. */
+    // Copy one Firestore document into an appointmentDto. startDateTime is built
+    // from date + slot.
+    private appointmentDto mapDocToDto(QueryDocumentSnapshot doc) {
+        appointmentDto dto = new appointmentDto();
+        dto.setAppointmentId(doc.getId());
+        dto.setCaregiverId(getString(doc, "caregiverId"));
+        dto.setChildId(getString(doc, "childId"));
+        dto.setDoctorId(getString(doc, "doctorId"));
+        dto.setTimeSlotId(getString(doc, "timeSlotId"));
+        dto.setStartDateTime(buildStartDateTime(doc));
+        dto.setEndTime(getString(doc, "endTime"));
+        dto.setStatus(getStatusAsInt(doc));
+        dto.setMeetingLink(getString(doc, "meetingLink"));
+        dto.setAmount(doc.getLong("amount"));
+        dto.setPaymentIntentId(getString(doc, "paymentIntentId"));
+        return dto;
+    }
+
+    // Combine the document's date and slot index into one timestamp (start of the
+    // appointment).
+    private Timestamp buildStartDateTime(QueryDocumentSnapshot doc) {
+        String dateStr = getDateAsYyyyMmDd(doc);
+        if (dateStr == null || dateStr.isEmpty())
+            return null;
+        int slotIndex = TimeSlotConfig.parseSlotIndex(getSlotIndexForDerivation(doc));
+        if (slotIndex < 0 || slotIndex >= TimeSlotConfig.SLOT_COUNT)
+            return null;
+        LocalDate date = LocalDate.parse(dateStr, DateTimeFormatter.ISO_LOCAL_DATE);
+        LocalDateTime ldt = date.atTime(TimeSlotConfig.slotStart(slotIndex));
+        return Timestamp.of(Date.from(ldt.atZone(ZONE).toInstant()));
+    }
+
+    /**
+     * Read date from document (Timestamp/Date only). Returns yyyy-MM-dd or null.
+     */
     private static String getDateAsYyyyMmDd(QueryDocumentSnapshot doc) {
         Date d = asDate(doc.get("date"));
-        if (d == null) return null;
+        if (d == null)
+            return null;
         return d.toInstant().atZone(ZONE).toLocalDate().format(DateTimeFormatter.ISO_LOCAL_DATE);
     }
 
     private static Date asDate(Object v) {
-        if (v == null) return null;
-        if (v instanceof Date) return (Date) v;
+        if (v == null)
+            return null;
+        if (v instanceof Date)
+            return (Date) v;
         try {
             Object o = v.getClass().getMethod("toDate").invoke(v);
             return o instanceof Date ? (Date) o : null;

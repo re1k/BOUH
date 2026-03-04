@@ -32,4 +32,24 @@ public final class TimeSlotConfig {
     public static LocalTime slotEnd(int slotIndex) {
         return slotStart(slotIndex).plusMinutes(SLOT_MINUTES); //start + 30 minutes
     }
+
+    // Find which slot (0–9) has this start time. Returns -1 if no match.
+    public static int getSlotIndexForStartTime(LocalTime time) {
+        if (time == null) return -1;
+        for (int i = 0; i < SLOT_COUNT; i++) {
+            if (slotStart(i).equals(time)) return i;
+        }
+        return -1;
+    }
+
+    // Parse slot index string (0–9). Returns -1 if missing or invalid.
+    public static int parseSlotIndex(String slotIndexStr) {
+        if (slotIndexStr == null || slotIndexStr.isBlank()) return -1;
+        try {
+            int idx = Integer.parseInt(slotIndexStr.trim());
+            return (idx >= 0 && idx < SLOT_COUNT) ? idx : -1;
+        } catch (NumberFormatException e) {
+            return -1;
+        }
+    }
 }

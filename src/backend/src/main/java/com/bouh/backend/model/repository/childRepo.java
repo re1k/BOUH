@@ -1,16 +1,13 @@
 package com.bouh.backend.model.repository;
 
-import com.google.cloud.firestore.DocumentReference;
 import com.google.cloud.firestore.DocumentSnapshot;
 import com.google.cloud.firestore.Firestore;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
-/**
- * Repository for Firestore path caregivers/{caregiverId}/children/{childId}.
- * Caller: AppointmentsService. Used to resolve child name for appointment card.
- */
 @Repository
 public class childRepo {
 
@@ -20,18 +17,31 @@ public class childRepo {
         this.firestore = firestore;
     }
 
-    /**
-     * Read child document from caregivers/{caregiverId}/children/{childId}. Returns the "name" field.
-     * Data source: Firestore path caregivers/{caregiverId}/children/{childId}.
-     */
+    /** Child name from subcollection or from caregiver doc "children" array/map. */
     public String findChildName(String caregiverId, String childId) throws ExecutionException, InterruptedException {
-        DocumentReference ref = firestore.collection("caregivers").document(caregiverId)
-                .collection("children").document(childId);
-        DocumentSnapshot doc = ref.get().get();
-        if (doc == null || !doc.exists()) {
-            return null;
+        DocumentSnapshot childDoc = firestore.collection("caregivers").document(caregiverId)
+                .collection("children").document(childId).get().get();
+        if (childDoc.exists()) {
+            Object name = childDoc.get("name");
+            if (name != null) return name.toString();
         }
-        Object v = doc.get("name");
-        return v == null ? null : v.toString();
+
+        DocumentSnapshot cgDoc = firestore.collection("caregivers").document(caregiverId).get().get();
+        if (!cgDoc.exists()) return null;
+        Object children = cgDoc.get("children");
+        Object item = null;
+        if (children instanceof List) {
+            List<?> list = (List<?>) children;
+            int i = -1;
+            try { i = Integer.parseInt(childId != null ? childId.trim() : ""); } catch (NumberFormatException ignored) {}
+            if (i >= 0 && i < list.size()) item = list.get(i);
+        } else if (children instanceof Map) {
+            item = ((Map<?, ?>) children).get(childId);
+        }
+        if (item instanceof Map) {
+            Object name = ((Map<?, ?>) item).get("name");
+            return name != null ? name.toString() : null;
+        }
+        return null;
     }
 }

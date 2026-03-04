@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../theme/base_themes/colors.dart';
 import 'package:bouh/View/caregiverHomepage/widgets/caregiverBottomNav.dart';
@@ -47,6 +48,12 @@ class _BookedAppointmentsPreviousState
 
   final AppointmentsService _appointmentsService = AppointmentsService();
 
+  StreamSubscription<(List<UpcomingAppointmentDto>, List<UpcomingAppointmentDto>)>? _subscription;
+
+  // Upcoming list from last stream event; ticker moves ended ones into _list (no HTTP).
+  List<UpcomingAppointmentDto> _upcomingCache = [];
+  Timer? _ticker;
+
   @override
   void initState() {
     super.initState();
@@ -66,43 +73,96 @@ class _BookedAppointmentsPreviousState
     await AuthService.instance.refreshSession();
     final String? _userId = _session.userId;
     if (!mounted) return;
-    _loadIfCaregiverSet(_userId);
+    // Start the realtime stream for this user's previous appointments
+    _subscribeToStream(_userId);
   }
 
-  void _loadIfCaregiverSet(String? caregiverId) {
+  void _subscribeToStream(String? caregiverId) {
+    _subscription?.cancel();
+    _ticker?.cancel();
+
     if (caregiverId == null || caregiverId.isEmpty) {
       setState(() {
         _list = [];
+        _upcomingCache = [];
         _error = null;
         _loading = false;
       });
       return;
     }
+
     setState(() {
       _loading = true;
       _error = null;
       _list = [];
+      _upcomingCache = [];
     });
-    _appointmentsService
-        .getPreviousAppointments(caregiverId)
-        .then((list) {
-          if (mounted) {
+
+    _subscription = _appointmentsService
+        .streamPreviousAppointments(caregiverId)
+        .listen(
+          (data) {
+            if (!mounted) return;
             setState(() {
-              _list = list;
+              _list = data.$1;
+              _upcomingCache = data.$2;
               _loading = false;
               _error = null;
             });
-          }
-        })
-        .catchError((e) {
-          if (mounted) {
+            _startTicker();
+          },
+          onError: (e) {
+            if (!mounted) return;
             setState(() {
               _error = e.toString();
               _list = [];
+              _upcomingCache = [];
               _loading = false;
             });
-          }
+          },
+        );
+  }
+
+  /// Like Upcoming: every second move ended appointments from _upcomingCache into _list (no HTTP).
+  void _startTicker() {
+    _ticker?.cancel();
+    if (_upcomingCache.isEmpty) return;
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) {
+        _ticker?.cancel();
+        return;
+      }
+      final now = DateTime.now();
+      bool changed = false;
+      setState(() {
+        _upcomingCache.removeWhere((dto) {
+          final end = AppointmentsService.parseAppointmentTime(dto.date, dto.endTime);
+          if (end == null || now.isBefore(end)) return false;
+          _list.add(dto);
+          changed = true;
+          return true;
         });
+        // Re-sort newest first when new items were added
+        if (changed) {
+          _list.sort((a, b) {
+            final ta = AppointmentsService.parseAppointmentTime(a.date, a.startTime);
+            final tb = AppointmentsService.parseAppointmentTime(b.date, b.startTime);
+            if (ta == null && tb == null) return 0;
+            if (ta == null) return 1;
+            if (tb == null) return -1;
+            return tb.compareTo(ta);
+          });
+        }
+      });
+      if (_upcomingCache.isEmpty) _ticker?.cancel();
+    });
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    _ticker?.cancel();
+    super.dispose();
   }
 
   static const double _titleTopPadding = 24;

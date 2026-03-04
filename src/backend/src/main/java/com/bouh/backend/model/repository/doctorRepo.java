@@ -64,12 +64,24 @@ public class doctorRepo {
                     .get()
                     .get();
 
-            if (snapshot.exists()) {
-                // Maps the doctor document into doctorDto
-                return snapshot.toObject(doctorDto.class);
-            }
+            if (!snapshot.exists()) return null;
 
-            return null;
+            // Manually map fields to avoid toObject() silently missing fields
+            doctorDto dto = new doctorDto();
+            dto.setDoctorId(snapshot.getId());
+            dto.setName(snapshot.getString("name"));
+            dto.setEmail(snapshot.getString("email"));
+            dto.setGender(snapshot.getString("gender"));
+            dto.setAreaOfKnowledge(snapshot.getString("areaOfKnowledge"));
+            dto.setProfilePhotoURL(snapshot.getString("profilePhotoURL"));
+            dto.setRegistrationStatus(snapshot.getString("registrationStatus"));
+            dto.setFcmToken(snapshot.getString("fcmToken"));
+            dto.setScfhsNumber(snapshot.getString("scfhsNumber"));
+            dto.setIban(snapshot.getString("iban"));
+            dto.setAverageRating(snapshot.getDouble("averageRating"));
+            dto.setYearsOfExperience(snapshot.getLong("yearsOfExperience") != null
+                    ? snapshot.getLong("yearsOfExperience").intValue() : null);
+            return dto;
 
         } catch (Exception e) {
             log.error("Failed to fetch doctor for uid={}", uid);
@@ -77,38 +89,6 @@ public class doctorRepo {
             log.error("Message: {}", e.getMessage());
             throw new RuntimeException("Doctor fetch failed", e);
         }
-    }
-
-    
-    /**
-     * Read doctor document from doctors/{doctorId}.
-     * Returns name, areaOfKnowledge, profilePhotoURL.
-     * --------REMOVE ON DONE------------
-     */
-    public doctorDto findById(String doctorId)
-            throws ExecutionException, InterruptedException {
-
-        DocumentReference ref =
-                firestore.collection("doctors").document(doctorId);
-
-        DocumentSnapshot doc = ref.get().get();
-
-        if (doc == null || !doc.exists()) {
-            return null;
-        }
-
-        doctorDto dto = new doctorDto();
-        dto.setDoctorId(doctorId);
-        dto.setName(getString(doc, "name"));
-        dto.setAreaOfKnowledge(getString(doc, "areaOfKnowledge"));
-        dto.setProfilePhotoURL(getString(doc, "profilePhotoURL"));
-
-        return dto;
-    }
-
-    private static String getString(DocumentSnapshot doc, String field) {
-        Object value = doc.get(field);
-        return value == null ? null : value.toString();
     }
 
     private List<String> cleanQualifications(List<String> qualifications) {
