@@ -35,3 +35,6 @@ build/
 # Environment variables
 .env
 .env.local
+
+bouh-94761-firebase-adminsdk-fbsvc-9e260d7e6e.json
+*.json

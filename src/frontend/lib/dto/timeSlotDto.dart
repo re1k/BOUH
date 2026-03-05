@@ -11,6 +11,16 @@ class TimeSlotDto {
     required this.status,
   });
 
+  factory TimeSlotDto.fromJson(Map<String, dynamic> json) {
+    return TimeSlotDto(
+      timeSlotId: (json['timeSlotId'] ?? json['timeSlotID'] ?? '')
+          .toString(), // Handle both 'timeSlotId' and 'timeSlotID لان بعض ملفاتنا تختلف فيها الاسماء
+      startTime: (json['startTime'] ?? '').toString(),
+      endTime: (json['endTime'] ?? '').toString(),
+      status: (json['status'] ?? '').toString(),
+    );
+  }
+
   Map<String, dynamic> toJson() {
     return {
       'timeSlotId': timeSlotId,

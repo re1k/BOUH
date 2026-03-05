@@ -190,7 +190,8 @@ class _CaregiverAccountCreationStep2State
           if (e is FirebaseAuthException && e.code == 'email-already-in-use') {
             message = 'البريد الإلكتروني مستخدم بالفعل بحساب آخر.';
           } else if (e is SocketException || e is TimeoutException) {
-            message = 'الخادم لا يستجيب أو لا يوجد اتصال. تحقق من الإنترنت وحاول مرة أخرى.';
+            message =
+                'الخادم لا يستجيب أو لا يوجد اتصال. تحقق من الإنترنت وحاول مرة أخرى.';
           } else {
             message = 'تعذر إنشاء الحساب. تحقق من البيانات وحاول مرة أخرى.';
           }

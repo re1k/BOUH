@@ -87,5 +87,17 @@ public class appointmentsController {
         List<upcomingAppointmentDto> list = appointmentsService.getPreviousAppointmentsByDoctor(firebaseDocUID);
         return ResponseEntity.ok(list);
     }
+//@DeleteMapping(value = "/{appointmentId}", produces = MediaType.APPLICATION_JSON_VALUE)
+// public ResponseEntity<Map<String, Object>> cancel(@PathVariable String appointmentId)
+//         throws ExecutionException, InterruptedException {
 
+//     appointmentsService.cancelAppointment(appointmentId);
+
+//     Map<String, Object> res = new HashMap<>();
+//     res.put("success", true);
+//     res.put("message", "Appointment cancelled successfully");
+//     res.put("appointmentId", appointmentId);
+
+//     return ResponseEntity.ok(res);
+// }
 }

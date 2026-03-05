@@ -327,4 +327,16 @@ public class AppointmentsService {
         return new String[] { start.format(TIME_NO_AMPM), end.format(TIME_NO_AMPM) };
     }
 
+    private static int parseSlotIndex(String slotIndexStr) {
+        if (slotIndexStr == null || slotIndexStr.isBlank()) return -1;
+        try {
+            int idx = Integer.parseInt(slotIndexStr.trim());
+            return (idx >= 0 && idx < TimeSlotConfig.SLOT_COUNT) ? idx : -1;
+        } catch (NumberFormatException e) {
+            return -1;
+        }
+    }
+//     public void cancelAppointment(String appointmentId) throws ExecutionException, InterruptedException {
+//     appointmentRepo.deleteById(appointmentId);
+// }
 }

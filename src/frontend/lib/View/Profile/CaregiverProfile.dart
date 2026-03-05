@@ -8,11 +8,7 @@ import 'package:bouh/widgets/confirmation_popup.dart';
 import 'package:bouh/widgets/loading_overlay.dart';
 
 class CaregiverAccountView extends StatefulWidget {
-  const CaregiverAccountView({
-    super.key,
-    this.currentIndex = 3,
-    this.onTap,
-  });
+  const CaregiverAccountView({super.key, this.currentIndex = 3, this.onTap});
 
   /// Active bottom nav index (3 = profile). Pass when used inside [CaregiverNavbar].
   final int currentIndex;
@@ -38,163 +34,165 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
           children: [
             Column(
               children: [
-            //HEADER
-            SizedBox(
-              height: 220,
-              width: double.infinity,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Image.asset(
-                    'assets/images/ProfileBackground.png',
-                    fit: BoxFit.cover,
-                    alignment: Alignment.topCenter,
-                  ),
-
-                  SafeArea(
-                    bottom: false,
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 10, left: 16),
-                      child: Align(
-                        alignment: Alignment.topLeft,
-                      child: _LogoutButton(
-                        onTap: () => _handleLogout(context),
+                //HEADER
+                SizedBox(
+                  height: 220,
+                  width: double.infinity,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Image.asset(
+                        'assets/images/ProfileBackground.png',
+                        fit: BoxFit.cover,
+                        alignment: Alignment.topCenter,
                       ),
-                      ),
-                    ),
-                  ),
 
-                  const Positioned(
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    child: Center(
-                      child: Text(
-                        "المعلومات الشخصية",
-                        style: TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // BODY
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 22),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const SizedBox(height: 20),
-
-                    _label("البريد الالكتروني"),
-                    const SizedBox(height: 6),
-                    _field(text: "lobaaliayhya@gmail.com"),
-
-                    const SizedBox(height: 18),
-
-                    _label("الاسم"),
-                    const SizedBox(height: 6),
-                    _field(
-                      text: "لبى آل يحيى",
-                      trailing: _editIcon(onTap: () {}),
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    SizedBox(
-                      height: 56,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const ChildrenManagementView(),
+                      SafeArea(
+                        bottom: false,
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 10, left: 16),
+                          child: Align(
+                            alignment: Alignment.topLeft,
+                            child: _LogoutButton(
+                              onTap: () => _handleLogout(context),
                             ),
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: BColors.primary,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
                           ),
                         ),
-                        child: Row(
-                          children: const [
-                            Text(
-                              "ادارة الاطفال",
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
+                      ),
+
+                      const Positioned(
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        child: Center(
+                          child: Text(
+                            "المعلومات الشخصية",
+                            style: TextStyle(
+                              fontSize: 32,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black,
                             ),
-                            Spacer(),
-                            Icon(
-                              Icons.arrow_forward_ios_outlined,
-                              color: Colors.white,
-                            ),
-                          ],
+                          ),
                         ),
                       ),
-                    ),
+                    ],
+                  ),
+                ),
 
-                    const Spacer(),
+                // BODY
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 22),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const SizedBox(height: 20),
 
-                    Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          SizedBox(
-                            width: 180,
-                            height: 40,
-                            child: ElevatedButton(
-                              onPressed: () => _handleDeleteAccount(context),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFFE4573D),
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(20),
+                        _label("البريد الالكتروني"),
+                        const SizedBox(height: 6),
+                        _field(text: "lobaaliayhya@gmail.com"),
+
+                        const SizedBox(height: 18),
+
+                        _label("الاسم"),
+                        const SizedBox(height: 6),
+                        _field(
+                          text: "لبى آل يحيى",
+                          trailing: _editIcon(onTap: () {}),
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        SizedBox(
+                          height: 56,
+                          child: ElevatedButton(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      const ChildrenManagementView(),
                                 ),
+                              );
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: BColors.primary,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
                               ),
-                              child: const Text(
-                                "حذف الحساب",
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
+                            ),
+                            child: Row(
+                              children: const [
+                                Text(
+                                  "ادارة الاطفال",
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                Spacer(),
+                                Icon(
+                                  Icons.arrow_forward_ios_outlined,
                                   color: Colors.white,
                                 ),
-                              ),
+                              ],
                             ),
                           ),
-                          if (_deleteError != null) ...[
-                            const SizedBox(height: 8),
-                            Text(
-                              _deleteError!,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                fontSize: 13,
-                                color: BColors.validationError,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
+                        ),
 
-                    const SizedBox(height: 150),
-                  ],
+                        const Spacer(),
+
+                        Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                width: 180,
+                                height: 40,
+                                child: ElevatedButton(
+                                  onPressed: () =>
+                                      _handleDeleteAccount(context),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFFE4573D),
+                                    elevation: 0,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    "حذف الحساب",
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              if (_deleteError != null) ...[
+                                const SizedBox(height: 8),
+                                Text(
+                                  _deleteError!,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    color: BColors.validationError,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 150),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-            ),
-          ],
+              ],
             ),
             if (_isDeletingAccount) BouhLoadingOverlay(),
           ],

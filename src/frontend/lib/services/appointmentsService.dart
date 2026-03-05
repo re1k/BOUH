@@ -70,6 +70,17 @@ class AppointmentsService {
         .toList();
   }
 
+  Future<void> cancelAppointment({required String appointmentId}) async {
+    final url = Uri.parse(
+      '${ApiConfig.baseUrl}/api/appointments/$appointmentId',
+    );
+    final res = await http.delete(url);
+
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception('Backend error ${res.statusCode}: ${res.body}');
+    }
+  }
+
   /// GET /api/appointments/upcoming/doctor/{doctorId}. For doctor view; DTO includes caregiverName.
   Future<List<UpcomingAppointmentDto>> getUpcomingAppointmentsByDoctor(
     String doctorId,
@@ -126,7 +137,7 @@ class AppointmentsService {
 
   /// Same as getFullPreviousWithUpcoming but for doctor: previous + upcoming merged; used for stream.
   Future<(List<UpcomingAppointmentDto>, List<UpcomingAppointmentDto>)>
-      getFullPreviousWithUpcomingForDoctor(String doctorId) async {
+  getFullPreviousWithUpcomingForDoctor(String doctorId) async {
     final results = await Future.wait([
       getPreviousAppointmentsByDoctor(doctorId),
       getUpcomingAppointmentsByDoctor(doctorId),
@@ -250,7 +261,7 @@ class AppointmentsService {
 
   /// Realtime stream for doctor previous: Firestore where doctorId, then merged previous+upcoming.
   Stream<(List<UpcomingAppointmentDto>, List<UpcomingAppointmentDto>)>
-      streamPreviousAppointmentsByDoctor(String doctorId) {
+  streamPreviousAppointmentsByDoctor(String doctorId) {
     return FirebaseFirestore.instance
         .collection('appointments')
         .where('doctorId', isEqualTo: doctorId)

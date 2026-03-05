@@ -1,18 +1,15 @@
-import 'package:bouh/authentication/AuthSession.dart';
+import 'dart:async';
 import 'package:flutter/material.dart';
-import '../../theme/base_themes/colors.dart';
+
+import 'package:bouh/theme/base_themes/colors.dart';
 import 'package:bouh/View/caregiverHomepage/widgets/suggestedDoctorCard.dart';
 import 'package:bouh/View/caregiverHomepage/widgets/caregiverBottomNav.dart';
-import 'package:bouh/dto/DoctorSearchDto.dart';
-import 'package:bouh/services/DoctorSearchService.dart';
-import 'dart:async';
+import 'package:bouh/View/BookAppointment/DoctorDetails.dart';
 
-/// Appointments screen
-///
-/// Shows: title, segmented control (متاحة / محجوزة), search bar, filter button,
-/// and a scrollable list of [SuggestedDoctorCard]. Uses existing bottom nav
-/// with [currentIndex] and [onTap] so the المواعيد tab is active when shown
-/// from [CaregiverNavbar].
+import 'package:bouh/dto/DoctorSearchDto.dart';
+import 'package:bouh/dto/doctorSummaryDto.dart';
+import 'package:bouh/services/DoctorSearchService.dart';
+
 class AppointmentsPage extends StatefulWidget {
   const AppointmentsPage({
     super.key,
@@ -21,13 +18,8 @@ class AppointmentsPage extends StatefulWidget {
     this.onSwitchToBooked,
   });
 
-  /// Active bottom nav index (2 = المواعيد). Pass from shell.
   final int currentIndex;
-
-  /// Called when a bottom nav item is tapped. Pass from shell.
   final ValueChanged<int>? onTap;
-
-  /// Called when user taps "محجوزة" to switch to booked appointments. Optional.
   final VoidCallback? onSwitchToBooked;
 
   @override
@@ -37,48 +29,55 @@ class AppointmentsPage extends StatefulWidget {
 class _AppointmentsPageState extends State<AppointmentsPage> {
   final TextEditingController _searchController = TextEditingController();
   final DoctorSearchService _doctorSearchService = DoctorSearchService();
+
   List<DoctorSearchDTO> _doctors = [];
-  List<DoctorSearchDTO> _filteredDoctors = [];
   bool _isLoading = false;
   String? _error;
   Timer? _debounce;
+
+  // --- Layout (same style you had) ---
+  static const double _titleTopPadding = 24;
+  static const double _titleBottomPadding = 24;
+  static const double _tabHeight = 44;
+  static const double _tabRadius = 12;
+  static const double _tabContainerPadding = 4;
+  static const double _searchFilterGap = 8;
+  static const double _searchHeight = 48;
+  static const double _searchRadius = 12;
+  static const double _filterButtonSize = 48;
+  static const double _sectionGap = 24;
+  static const double _cardGap = 16;
+
+  static const Color _tabContainerBg = Color(0xFFF0F2F4);
+  static const Color _tabActiveBg = Color(0xFFFFFFFF);
+  static const Color _tabActiveColor = Color(0xFF2C3E50);
+  static const Color _tabInactiveColor = Color(0xFF7D8A96);
+  static const Color _searchBorderColor = Color(0xFFE8EBED);
+  static const Color _filterButtonBg = Color(0xFF5B8FA3);
 
   @override
   void initState() {
     super.initState();
     _searchController.addListener(_onSearchChanged);
+
+    // 1) On open: show suggested/top rated doctors
     _loadTopRatedDoctors();
   }
 
   void _onSearchChanged() {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
+
     _debounce = Timer(const Duration(milliseconds: 500), () {
-      if (_searchController.text.isNotEmpty) {
-        _searchDoctors(_searchController.text);
-      } else {
+      final q = _searchController.text.trim();
+
+      // 2) If search is empty, return to suggested/top rated list
+      if (q.isEmpty) {
         _loadTopRatedDoctors();
+      } else {
+        // 3) Search by name
+        _searchDoctors(q);
       }
     });
-  }
-
-  Future<void> _searchDoctors(String name) async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-    try {
-      final results = await _doctorSearchService.searchDoctors(name);
-      setState(() {
-        _doctors = results;
-        _filteredDoctors = results;
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _error = 'حدث خطأ أثناء البحث';
-        _isLoading = false;
-      });
-    }
   }
 
   Future<void> _loadTopRatedDoctors() async {
@@ -86,16 +85,36 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
       _isLoading = true;
       _error = null;
     });
+
     try {
       final results = await _doctorSearchService.getTopRatedDoctors();
       setState(() {
         _doctors = results;
-        _filteredDoctors = results;
         _isLoading = false;
       });
-    } catch (e) {
+    } catch (_) {
       setState(() {
         _error = 'حدث خطأ في تحميل الأطباء';
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _searchDoctors(String name) async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final results = await _doctorSearchService.searchDoctors(name);
+      setState(() {
+        _doctors = results;
+        _isLoading = false;
+      });
+    } catch (_) {
+      setState(() {
+        _error = 'حدث خطأ أثناء البحث';
         _isLoading = false;
       });
     }
@@ -109,26 +128,22 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
     super.dispose();
   }
 
-  // --- Layout (match design.json & reference) ---
-  static const double _titleTopPadding = 24;
-  static const double _titleBottomPadding = 24;
-  static const double _tabHeight = 44;
-  static const double _tabRadius = 12;
-  static const double _tabContainerPadding = 4;
-  static const double _searchFilterGap = 8;
-  static const double _searchHeight = 48;
-  static const double _searchRadius = 12;
-  static const double _filterButtonSize = 48;
-  static const double _sectionGap = 24;
-  static const double _cardGap = 16;
+  void _openDoctorDetails(DoctorSearchDTO d) {
+    // Convert DoctorSearchDTO to DoctorSummaryDto because DoctorDetailsView expects DoctorSummaryDto
+    final doctorSummary = DoctorSummaryDto(
+      doctorId: d.id,
+      name: d.name,
+      areaOfKnowledge: d.specialty,
+      rating: d.rating,
+    );
 
-  /// Tab container background (inactive area).
-  static const Color _tabContainerBg = Color(0xFFF0F2F4);
-  static const Color _tabActiveBg = Color(0xFFFFFFFF);
-  static const Color _tabActiveColor = Color(0xFF2C3E50);
-  static const Color _tabInactiveColor = Color(0xFF7D8A96);
-  static const Color _searchBorderColor = Color(0xFFE8EBED);
-  static const Color _filterButtonBg = Color(0xFF5B8FA3);
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DoctorDetailsView(doctor: doctorSummary),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -248,7 +263,6 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
   }
 
   Widget _buildSearchAndFilter() {
-    // RTL: first child = right. Filter on RIGHT, search on LEFT.
     return Row(
       textDirection: TextDirection.rtl,
       children: [
@@ -265,58 +279,42 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
         Expanded(
           child: SizedBox(
             height: _searchHeight,
-            child: Theme(
-              data: Theme.of(context).copyWith(
-                inputDecorationTheme: InputDecorationTheme(
-                  focusColor: Colors.transparent,
-                  hoverColor: Colors.transparent,
+            child: TextField(
+              controller: _searchController,
+              textDirection: TextDirection.rtl,
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: BColors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(_searchRadius),
+                  borderSide: const BorderSide(color: _searchBorderColor),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(_searchRadius),
+                  borderSide: const BorderSide(color: _searchBorderColor),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(_searchRadius),
+                  borderSide: const BorderSide(color: _searchBorderColor),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                prefixIcon: const Icon(
+                  Icons.search,
+                  size: 22,
+                  color: _tabInactiveColor,
+                ),
+                prefixIconConstraints: const BoxConstraints(
+                  minWidth: 44,
+                  minHeight: 44,
                 ),
               ),
-              child: TextField(
-                controller: _searchController,
-                textDirection: TextDirection.rtl,
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: BColors.white,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(_searchRadius),
-                    borderSide: const BorderSide(color: _searchBorderColor),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(_searchRadius),
-                    borderSide: const BorderSide(color: _searchBorderColor),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(_searchRadius),
-                    borderSide: const BorderSide(color: _searchBorderColor),
-                  ),
-                  errorBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(_searchRadius),
-                    borderSide: const BorderSide(color: _searchBorderColor),
-                  ),
-                  focusedErrorBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(_searchRadius),
-                    borderSide: const BorderSide(color: _searchBorderColor),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                  prefixIcon: const Icon(
-                    Icons.search,
-                    size: 22,
-                    color: _tabInactiveColor,
-                  ),
-                  prefixIconConstraints: const BoxConstraints(
-                    minWidth: 44,
-                    minHeight: 44,
-                  ),
-                ),
-                style: TextStyle(
-                  fontFamily: 'Markazi Text',
-                  fontSize: 14,
-                  color: _tabActiveColor,
-                ),
+              style: TextStyle(
+                fontFamily: 'Markazi Text',
+                fontSize: 14,
+                color: _tabActiveColor,
               ),
             ),
           ),
@@ -336,22 +334,30 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
       );
     }
 
-    if (_filteredDoctors.isEmpty) {
-      return const Center(
-        child: Text('ابحث عن طبيب', style: TextStyle(color: Color(0xFF7D8A96))),
-      );
+    if (_doctors.isEmpty) {
+      // If search is empty, show "no doctors"; if search has text, show "no results"
+      final q = _searchController.text.trim();
+      if (q.isEmpty) {
+        return const Center(child: Text("لا يوجد أطباء حالياً"));
+      }
+      return const Center(child: Text("لا توجد نتائج مطابقة"));
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (int i = 0; i < _filteredDoctors.length; i++) ...[
-          SuggestedDoctorCard(
-            name: _filteredDoctors[i].name,
-            specialty: _filteredDoctors[i].specialty,
-            rating: _filteredDoctors[i].rating.toInt(),
+        for (int i = 0; i < _doctors.length; i++) ...[
+          InkWell(
+            onTap: () => _openDoctorDetails(_doctors[i]),
+            child: SuggestedDoctorCard(
+              name: _doctors[i].name,
+              specialty: _doctors[i].specialty,
+              rating: _doctors[i].rating.toInt(),
+              // إذا الكارد عنده صورة:
+              // profilePhotoURL: _doctors[i].profilePhotoURL,
+            ),
           ),
-          if (i < _filteredDoctors.length - 1) const SizedBox(height: _cardGap),
+          if (i < _doctors.length - 1) const SizedBox(height: _cardGap),
         ],
       ],
     );
