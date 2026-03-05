@@ -71,7 +71,7 @@ class _ChildrenManagementViewState extends State<ChildrenManagementView> {
     try {
       await _service.deleteChild(
         caregiverId: caregiverId,
-        childId: child.childID,
+        childId: child.childId,
       );
       _showSnack("تم حذف الطفل");
       await _loadChildren();
@@ -119,7 +119,7 @@ class _ChildrenManagementViewState extends State<ChildrenManagementView> {
     try {
       await _service.updateChild(
         caregiverId: caregiverId,
-        childId: child.childID,
+        childId: child.childId,
         name: result.name,
         dateOfBirth: result.dateOfBirth,
         gender: result.gender,

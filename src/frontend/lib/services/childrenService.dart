@@ -12,11 +12,13 @@ class ChildrenService {
     );
 
     if (res.statusCode != 200) {
-      throw Exception("Failed to load children");
+      throw Exception("Failed to load children: ${res.statusCode} ${res.body}");
     }
 
-    final List data = jsonDecode(res.body);
-    return data.map((e) => ChildDto.fromJson(e)).toList();
+    final List data = jsonDecode(res.body) as List;
+    return data
+        .map((e) => ChildDto.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<void> addChild({

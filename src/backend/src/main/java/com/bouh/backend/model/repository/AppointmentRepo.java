@@ -249,29 +249,4 @@ public class AppointmentRepo {
         Object v = doc.get(field);
         return v == null ? null : v.toString();
     }
-<<<<<<< HEAD
-
-    /**
-     * Normalize date to yyyy-MM-dd: if ISO (e.g. 2026-03-10T21:37:59.504Z), take
-     * first 10 chars; else trim.
-     */
-    private static String normalizeDate(String date) {
-        if (date == null)
-            return null;
-        date = date.trim();
-        if (date.isEmpty())
-            return null;
-        if (date.length() >= 10 && date.charAt(4) == '-' && date.charAt(7) == '-') {
-            return date.substring(0, 10);
-        }
-        return date;
-    }
-public void deleteById(String appointmentId) throws ExecutionException, InterruptedException {
-    if (appointmentId == null || appointmentId.isBlank()) return;
-
-    DocumentReference ref = firestore.collection(COLLECTION).document(appointmentId);
-    ref.delete().get();
-}
-=======
->>>>>>> 5b9986e6946058677d7269c69b8d5cf6ac5fa7c0
 }

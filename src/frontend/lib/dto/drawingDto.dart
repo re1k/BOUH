@@ -15,6 +15,18 @@ class DrawingDto {
     required this.doctorsIDSuggestion,
   });
 
+  factory DrawingDto.fromJson(Map<String, dynamic> json) {
+    return DrawingDto(
+      drawingId: (json['drawingId'] ?? '').toString(),
+      imageURL: (json['imageURL'] ?? '').toString(),
+      emotionClass: (json['emotionClass'] ?? '').toString(),
+      emotionalInterpretation: (json['emotionalInterpretation'] ?? '')
+          .toString(),
+      createdAt: (json['createdAt'] ?? '').toString(),
+      doctorsIDSuggestion: (json['doctorsIDSuggestion'] ?? '').toString(),
+    );
+  }
+
   Map<String, dynamic> toJson() {
     return {
       'drawingId': drawingId,
