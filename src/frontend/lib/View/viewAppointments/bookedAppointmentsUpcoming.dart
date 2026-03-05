@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../theme/base_themes/colors.dart';
@@ -10,6 +11,7 @@ import 'package:bouh/services/appointmentsService.dart';
 import 'package:bouh/dto/payment/RefundResponseDto.dart';
 import 'package:bouh/services/payment/RefundService.dart';
 import 'package:bouh/widgets/confirmation_popup.dart';
+import 'package:bouh/widgets/loading_overlay.dart';
 
 /// Booked appointments – upcoming
 ///
@@ -73,6 +75,13 @@ class _BookedAppointmentsUpcomingState
   final RefundService _refundService = RefundService();
   bool _refundLoading = false;
 
+  // Holds the active Firestore stream subscription so we can cancel it later.
+  StreamSubscription<List<UpcomingAppointmentDto>>? _subscription;
+
+  // Periodic timer that ticks every second to keep the UI in sync with the clock.
+  // Each tick re-evaluates Join/Cancel button state and removes expired appointments.
+  Timer? _ticker;
+
   @override
   void initState() {
     super.initState();
@@ -92,11 +101,17 @@ class _BookedAppointmentsUpcomingState
     await AuthService.instance.refreshSession();
     final String? _userId = _session.userId;
     if (!mounted) return;
-    _loadIfCaregiverSet(_userId);
+    // Start the realtime stream for this user's appointments
+    _subscribeToStream(_userId);
   }
 
-  /// When caregiverId is set, call backend; on success set list and clear error; on failure set error and clear list.
-  void _loadIfCaregiverSet(String? caregiverId) {
+  /// Cancel the old stream and timer, then start a fresh Firestore stream.
+  /// After each list update, a precision timer is scheduled for the next boundary.
+  void _subscribeToStream(String? caregiverId) {
+    // Always cancel previous subscription and ticker before starting new ones
+    _subscription?.cancel();
+    _ticker?.cancel();
+
     if (caregiverId == null || caregiverId.isEmpty) {
       setState(() {
         _list = [];
@@ -105,31 +120,88 @@ class _BookedAppointmentsUpcomingState
       });
       return;
     }
+
     setState(() {
       _loading = true;
       _error = null;
       _list = [];
     });
-    _appointmentsService
-        .getUpcomingAppointments(caregiverId)
-        .then((list) {
-          if (mounted) {
+
+    // Subscribe to the Firestore realtime stream.
+    // The stream fires immediately with current data, then again on every change.
+    _subscription = _appointmentsService
+        .streamUpcomingAppointments(caregiverId)
+        .listen(
+          (list) {
+            if (!mounted) return;
             setState(() {
-              _list = list;
+              _list = _removeExpired(list);
               _loading = false;
               _error = null;
             });
-          }
-        })
-        .catchError((e) {
-          if (mounted) {
+            // Start/restart the ticker so the UI stays in sync with the clock
+            _startTicker();
+          },
+          onError: (e) {
+            if (!mounted) return;
             setState(() {
               _error = e.toString();
               _list = [];
               _loading = false;
             });
-          }
+          },
+        );
+  }
+
+  /// Start a periodic timer that ticks every second.
+  /// Each tick removes expired appointments and triggers a rebuild so that
+  /// the Join/Cancel button always reflects the current time.
+  void _startTicker() {
+    _ticker?.cancel();
+    if (_list.isEmpty) return;
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) {
+        _ticker?.cancel();
+        return;
+      }
+      // Remove appointments whose endTime has passed and rebuild the UI.
+      // The rebuild also re-evaluates _isJoinEnabled for each card.
+      setState(() {
+        final now = DateTime.now();
+        _list.removeWhere((dto) {
+          final end = AppointmentsService.parseAppointmentTime(
+            dto.date,
+            dto.endTime,
+          );
+          return end != null && !now.isBefore(end);
         });
+      });
+      // Stop ticking when there are no more appointments to track
+      if (_list.isEmpty) _ticker?.cancel();
+    });
+  }
+
+  /// Keep only appointments that have not ended yet (by device time).
+  static List<UpcomingAppointmentDto> _removeExpired(
+    List<UpcomingAppointmentDto> list,
+  ) {
+    final now = DateTime.now();
+    return list.where((dto) {
+      final end = AppointmentsService.parseAppointmentTime(
+        dto.date,
+        dto.endTime,
+      );
+      return end == null || now.isBefore(end);
+    }).toList();
+  }
+
+  @override
+  void dispose() {
+    // Always cancel the stream and timer when the widget is removed from the tree.
+    // This prevents memory leaks and errors from callbacks on a disposed widget.
+    _subscription?.cancel();
+    _ticker?.cancel();
+    super.dispose();
   }
 
   @override
@@ -138,31 +210,36 @@ class _BookedAppointmentsUpcomingState
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: BColors.white,
-        body: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildTitle(),
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: _contentPaddingH,
+        body: Stack(
+          children: [
+            SafeArea(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildTitle(),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: _contentPaddingH,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _buildSegmentedControl(context),
+                          const SizedBox(height: _sectionGap),
+                          _buildFilterBar(),
+                          const SizedBox(height: _sectionGap),
+                          _buildCardList(),
+                          SizedBox(height: CaregiverBottomNav.barHeight + _cardGap),
+                        ],
+                      ),
+                    ),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _buildSegmentedControl(context),
-                      const SizedBox(height: _sectionGap),
-                      _buildFilterBar(),
-                      const SizedBox(height: _sectionGap),
-                      _buildCardList(),
-                      SizedBox(height: CaregiverBottomNav.barHeight + _cardGap),
-                    ],
-                  ),
-                ),
+                ],
               ),
-            ],
-          ),
+            ),
+            if (_loading) const BouhLoadingOverlay(showBarrier: false),
+          ],
         ),
         bottomNavigationBar: Material(
           clipBehavior: Clip.none,
@@ -308,7 +385,7 @@ class _BookedAppointmentsUpcomingState
 
   Widget _buildCardList() {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const SizedBox.shrink();
     }
     if (_error != null) {
       return const Center(
@@ -360,13 +437,20 @@ class _BookedAppointmentsUpcomingState
         dto.doctorProfilePhotoURL!.isNotEmpty) {
       profileImage = NetworkImage(dto.doctorProfilePhotoURL!);
     }
+    // Show Join only when this is the first card AND the appointment is active right now.
+    // Active means: startTime <= now < endTime.
+    // If the first card's appointment hasn't started yet, treat it like other cards (Cancel).
+    final bool showJoin = isFirst && _isJoinEnabled(dto);
+
     VoidCallback? onActionTap;
-    if (isFirst) {
+    if (showJoin) {
+      // Join is tappable only when the meeting link exists
       if (dto.meetingLink != null && dto.meetingLink!.trim().isNotEmpty) {
         final link = dto.meetingLink!.trim();
         onActionTap = () => _openMeetingLink(link);
       }
     } else {
+      // Show Cancel button for cards that are not yet active
       onActionTap = _refundLoading
           ? null
           : () async {
@@ -404,8 +488,9 @@ class _BookedAppointmentsUpcomingState
       date: dateStr,
       time: timeStr,
       profileImage: profileImage,
-      actionLabel: isFirst ? 'انضمام' : 'الغاء',
-      actionColor: isFirst ? BColors.accent : _cancelRed,
+      // Label and color follow the Join/Cancel decision above
+      actionLabel: showJoin ? 'انضمام' : 'الغاء',
+      actionColor: showJoin ? BColors.accent : _cancelRed,
       onActionTap: onActionTap,
     );
   }
@@ -416,6 +501,18 @@ class _BookedAppointmentsUpcomingState
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
+  }
+
+  /// Join is active when startTime <= now < endTime (device time).
+  static bool _isJoinEnabled(UpcomingAppointmentDto dto) {
+    final now = DateTime.now();
+    final start = AppointmentsService.parseAppointmentTime(
+      dto.date,
+      dto.startTime,
+    );
+    final end = AppointmentsService.parseAppointmentTime(dto.date, dto.endTime);
+    if (start == null || end == null) return false;
+    return !now.isBefore(start) && now.isBefore(end);
   }
 
   /// Convert backend date yyyy-MM-dd to display d/m/y.

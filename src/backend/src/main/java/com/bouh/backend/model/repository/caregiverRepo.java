@@ -71,6 +71,17 @@ public class caregiverRepo {
         }
     }
 
+    /**
+     * Returns the caregiver display name for doctor appointment views. Null if not found.
+     */
+    public String findNameByUid(String uid) throws ExecutionException, InterruptedException {
+        if (uid == null || uid.isBlank()) return null;
+        DocumentSnapshot snapshot = firestore.collection("caregivers").document(uid).get().get();
+        if (!snapshot.exists()) return null;
+        Object name = snapshot.get("name");
+        return name != null ? name.toString() : null;
+    }
+
     public boolean existsByUid(String uid) {
         try {
             DocumentSnapshot snapshot = firestore

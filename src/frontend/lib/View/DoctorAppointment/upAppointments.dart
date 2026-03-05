@@ -1,14 +1,20 @@
-import 'package:bouh/View/DoctorAppointment/prevAppointments.dart';
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:bouh/theme/base_themes/colors.dart';
-
+import 'package:bouh/View/DoctorAppointment/prevAppointments.dart';
 import 'package:bouh/View/DoctorAppointment/AvailableScheduleScreen.dart';
 import 'package:bouh/View/HomePage/widgets/appointment_card.dart';
 import 'package:bouh/View/HomePage/widgets/doctorBottomNav.dart';
+import 'package:bouh/authentication/AuthSession.dart';
+import 'package:bouh/authentication/AuthService.dart';
+import 'package:bouh/dto/upcomingAppointmentDto.dart';
+import 'package:bouh/services/appointmentsService.dart';
+import 'package:bouh/services/payment/RefundService.dart';
+import 'package:bouh/widgets/confirmation_popup.dart';
+import 'package:bouh/widgets/loading_overlay.dart';
 
-/// Doctor appointments screen (المواعيد tab). When used inside [DoctorNavbar],
-/// pass [currentIndex], [onTap], and optionally [onSwitchToPrevious].
-class AppointmentsScreen extends StatelessWidget {
+class AppointmentsScreen extends StatefulWidget {
   const AppointmentsScreen({
     super.key,
     this.currentIndex = 1,
@@ -16,17 +22,129 @@ class AppointmentsScreen extends StatelessWidget {
     this.onSwitchToPrevious,
   });
 
-  /// Active bottom nav index (1 = appointments). Pass from shell.
   final int currentIndex;
-
-  /// Called when a bottom nav item is tapped. Pass from shell.
   final ValueChanged<int>? onTap;
-
-  /// When provided (e.g. from [DoctorNavbar]), tapping "السابقة" switches
-  /// to previous appointments without Navigator. When null, uses Navigator.pushReplacement.
   final VoidCallback? onSwitchToPrevious;
 
+  @override
+  State<AppointmentsScreen> createState() => _AppointmentsScreenState();
+}
+
+class _AppointmentsScreenState extends State<AppointmentsScreen> {
+  List<UpcomingAppointmentDto> _list = [];
+  bool _loading = false;
+  String? _error;
+  bool _refundLoading = false;
+
+  final AppointmentsService _appointmentsService = AppointmentsService();
+  final RefundService _refundService = RefundService();
+  StreamSubscription<List<UpcomingAppointmentDto>>? _subscription;
+  Timer? _ticker;
+
   static const double _cardGap = 16;
+
+  @override
+  void initState() {
+    super.initState();
+    _prepareSessionAndLoad();
+  }
+
+  @override
+  void didUpdateWidget(AppointmentsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.currentIndex != widget.currentIndex) {}
+  }
+
+  Future<void> _prepareSessionAndLoad() async {
+    await AuthService.instance.refreshSession();
+    final String? doctorId = AuthSession.instance.userId;
+    if (!mounted) return;
+    _subscribeToStream(doctorId);
+  }
+
+  void _subscribeToStream(String? doctorId) {
+    _subscription?.cancel();
+    _ticker?.cancel();
+
+    if (doctorId == null || doctorId.isEmpty) {
+      setState(() {
+        _list = [];
+        _error = null;
+        _loading = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _error = null;
+      _list = [];
+    });
+
+    _subscription = _appointmentsService
+        .streamUpcomingAppointmentsByDoctor(doctorId)
+        .listen(
+          (list) {
+            if (!mounted) return;
+            setState(() {
+              _list = _removeExpired(list);
+              _loading = false;
+              _error = null;
+            });
+            _startTicker();
+          },
+          onError: (e) {
+            if (!mounted) return;
+            setState(() {
+              _error = e.toString();
+              _list = [];
+              _loading = false;
+            });
+          },
+        );
+  }
+
+  void _startTicker() {
+    _ticker?.cancel();
+    if (_list.isEmpty) return;
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) {
+        _ticker?.cancel();
+        return;
+      }
+      setState(() {
+        final now = DateTime.now();
+        _list.removeWhere((dto) {
+          final end = AppointmentsService.parseAppointmentTime(
+            dto.date,
+            dto.endTime,
+          );
+          return end != null && !now.isBefore(end);
+        });
+      });
+      if (_list.isEmpty) _ticker?.cancel();
+    });
+  }
+
+  static List<UpcomingAppointmentDto> _removeExpired(
+    List<UpcomingAppointmentDto> list,
+  ) {
+    final now = DateTime.now();
+    return list.where((dto) {
+      final end = AppointmentsService.parseAppointmentTime(
+        dto.date,
+        dto.endTime,
+      );
+      return end == null || now.isBefore(end);
+    }).toList();
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    _ticker?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -34,106 +152,327 @@ class AppointmentsScreen extends StatelessWidget {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: BColors.lightGrey,
-        body: SafeArea(
-          child: Column(
-            children: [
-              const SizedBox(height: 10),
-              _TopHeader(
-                // Backend hook: navigate to the availability scheduling screen.
-                // If later you need to pass doctorId/userId, add it here and in AvailableScheduleScreen constructor.
-                onCalendarTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const AvailableScheduleScreen(),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 14),
-
-              // Backend hook: tab switcher should decide which dataset to load (upcoming vs past).
-              // For now, upcoming is the current screen; past navigates to PrevAppointmentsScreen.
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: _SegmentedTabs(
-                  selected: _AppointmentsTab.upcoming,
-                  onUpcomingTap: () {
-                    // Future: trigger fetchUpcomingAppointments() and refresh UI if you convert to StatefulWidget.
-                  },
-                  onPastTap: () {
-                    if (onSwitchToPrevious != null) {
-                      onSwitchToPrevious!();
-                    } else {
-                      Navigator.pushReplacement(
+        body: Stack(
+          children: [
+            SafeArea(
+              child: Column(
+                children: [
+                  const SizedBox(height: 10),
+                  _TopHeader(
+                    onCalendarTap: () {
+                      Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => const PrevAppointmentsScreen(),
+                          builder: (_) => const AvailableScheduleScreen(),
                         ),
                       );
-                    }
-                  },
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(
-                    16,
-                    0,
-                    16,
-                    DoctorBottomNav.barHeight + _cardGap,
+                    },
                   ),
-                  children: const [
-                    AppointmentCard(
-                      // Backend: date/time should come from the appointment entity (and be formatted).
-                      date: '8/12/2025',
-                      time: '8:00 - 8:30 مساءً',
-                      caregiverName: 'جنى الشريف',
-                      childName: 'بسام',
-                      // Backend: map appointment status
-                      buttonType: AppointmentButtonType.start,
+                  const SizedBox(height: 14),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: _SegmentedTabs(
+                      selected: _AppointmentsTab.upcoming,
+                      onUpcomingTap: () {},
+                      onPastTap: () {
+                        if (widget.onSwitchToPrevious != null) {
+                          widget.onSwitchToPrevious!();
+                        } else {
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const PrevAppointmentsScreen(),
+                            ),
+                          );
+                        }
+                      },
                     ),
-                    AppointmentCard(
-                      date: '13/12/2025',
-                      time: '8:00 - 8:30 مساءً',
-                      caregiverName: 'سعد إبراهيم',
-                      childName: 'مهند',
-                      buttonType: AppointmentButtonType.cancel,
-                    ),
-                    AppointmentCard(
-                      date: '19/12/2025',
-                      time: '9:00 - 9:30 مساءً',
-                      caregiverName: 'جمانه العيسى',
-                      childName: 'سارة',
-                      buttonType: AppointmentButtonType.cancel,
-                    ),
-                    SizedBox(height: 14),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 16),
+                  Expanded(child: _buildList()),
+                ],
               ),
-            ],
-          ),
+            ),
+            if (_loading) const BouhLoadingOverlay(showBarrier: false),
+          ],
         ),
-
-        // replace with remaz navBar
-        bottomNavigationBar: onTap != null
+        bottomNavigationBar: widget.onTap != null
             ? Material(
                 clipBehavior: Clip.none,
                 color: Colors.transparent,
                 child: Directionality(
                   textDirection: TextDirection.rtl,
                   child: DoctorBottomNav(
-                    currentIndex: currentIndex,
-                    onTap: onTap,
+                    currentIndex: widget.currentIndex,
+                    onTap: widget.onTap!,
                   ),
                 ),
               )
             : null,
       ),
     );
+  }
+
+  Widget _buildList() {
+    if (_loading) {
+      return const SizedBox.shrink();
+    }
+    if (_error != null) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+            'حدث خطأ، حاول مجددًا لاحقًا.',
+            style: TextStyle(
+              fontFamily: 'Markazi Text',
+              fontSize: 16,
+              color: BColors.darkGrey,
+            ),
+          ),
+        ),
+      );
+    }
+    if (_list.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+            'لا توجد مواعيد قادمة',
+            style: TextStyle(
+              fontFamily: 'Markazi Text',
+              fontSize: 16,
+              color: BColors.darkGrey,
+            ),
+          ),
+        ),
+      );
+    }
+    final children = <Widget>[];
+    for (var i = 0; i < _list.length; i++) {
+      if (i > 0) children.add(const SizedBox(height: 14));
+      children.add(_buildCard(_list[i], isFirst: i == 0));
+    }
+    children.add(const SizedBox(height: 14));
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(
+        16,
+        0,
+        16,
+        DoctorBottomNav.barHeight + _cardGap,
+      ),
+      children: children,
+    );
+  }
+
+  Widget _buildCard(UpcomingAppointmentDto dto, {required bool isFirst}) {
+    final dateStr = _formatDate(dto.date);
+    final timeStr = _formatTimeRange(dto.startTime, dto.endTime);
+    final showJoin = isFirst && _isJoinEnabled(dto);
+    final buttonType = showJoin
+        ? AppointmentButtonType.start
+        : AppointmentButtonType.cancel;
+
+    VoidCallback? onActionTap;
+    if (showJoin) {
+      if (dto.meetingLink != null && dto.meetingLink!.trim().isNotEmpty) {
+        final link = dto.meetingLink!.trim();
+        onActionTap = () => _openMeetingLink(link);
+      }
+    } else {
+      onActionTap = _refundLoading
+          ? null
+          : () async {
+              final ok = await _refundAppointment(dto);
+              if (ok && mounted) {
+                setState(() {
+                  _list.removeWhere(
+                    (x) => x.appointmentId == dto.appointmentId,
+                  );
+                });
+              }
+            };
+    }
+
+    return AppointmentCard(
+      date: dateStr,
+      time: timeStr,
+      caregiverName: dto.caregiverName ?? '',
+      childName: dto.childName ?? '',
+      buttonType: buttonType,
+      onActionTap: onActionTap,
+    );
+  }
+
+  Future<void> _openMeetingLink(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  static bool _isJoinEnabled(UpcomingAppointmentDto dto) {
+    final now = DateTime.now();
+    final start = AppointmentsService.parseAppointmentTime(
+      dto.date,
+      dto.startTime,
+    );
+    final end = AppointmentsService.parseAppointmentTime(dto.date, dto.endTime);
+    if (start == null || end == null) return false;
+    return !now.isBefore(start) && now.isBefore(end);
+  }
+
+  static String _formatDate(String date) {
+    final parts = date.split('-');
+    if (parts.length != 3) return date;
+    return '${parts[2]}/${parts[1]}/${parts[0]}';
+  }
+
+  static String _formatTimeRange(String? start, String? end) {
+    const suffix = 'مساءً';
+    final s = start ?? '';
+    final e = end ?? '';
+    if (s.isEmpty && e.isEmpty) return '';
+    if (e.isEmpty) return '$s $suffix';
+    return '$s - $e $suffix';
+  }
+
+  Future<bool> _refundAppointment(UpcomingAppointmentDto dto) async {
+    final pi = dto.paymentIntentId?.trim();
+    if (pi == null || pi.isEmpty) {
+      if (!mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('لا يوجد paymentIntentId لهذا الموعد')),
+      );
+      return false;
+    }
+    final confirm = await ConfirmationPopup.show(
+      context,
+      title: 'تأكيد الإلغاء',
+      message: 'هل تريد إلغاء الموعد واسترجاع المبلغ؟',
+      confirmText: 'تأكيد',
+      cancelText: 'رجوع',
+      isDestructive: true,
+    );
+    if (confirm != true) return false;
+
+    setState(() => _refundLoading = true);
+    try {
+      await _refundService.refund(paymentIntentId: pi);
+      if (!mounted) return true;
+      await showDialog(
+        context: context,
+        builder: (_) => Directionality(
+          textDirection: TextDirection.rtl,
+          child: AlertDialog(
+            backgroundColor: BColors.white,
+            actionsAlignment: MainAxisAlignment.center,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: const Text(
+              'تم الإلغاء بنجاح',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: 'Markazi Text',
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: BColors.textDarkestBlue,
+              ),
+            ),
+            content: const Text(
+              'تم إلغاء الموعد واسترجاع المبلغ بنجاح.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: 'Markazi Text',
+                fontSize: 15,
+                color: BColors.darkGrey,
+                height: 1.4,
+              ),
+            ),
+            actions: [
+              ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: BColors.primary,
+                  foregroundColor: BColors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  'حسناً',
+                  style: TextStyle(
+                    fontFamily: 'Markazi Text',
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+      return true;
+    } catch (e) {
+      if (!mounted) return false;
+      await showDialog(
+        context: context,
+        builder: (_) => Directionality(
+          textDirection: TextDirection.rtl,
+          child: AlertDialog(
+            backgroundColor: BColors.white,
+            actionsAlignment: MainAxisAlignment.center,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: const Text(
+              'فشل الإلغاء',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: 'Markazi Text',
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: BColors.textDarkestBlue,
+              ),
+            ),
+            content: const Text(
+              'حدث خطأ أثناء إلغاء الموعد.\nيرجى المحاولة مرة أخرى.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: 'Markazi Text',
+                fontSize: 15,
+                color: BColors.darkGrey,
+                height: 1.4,
+              ),
+            ),
+            actions: [
+              ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: BColors.validationError,
+                  foregroundColor: BColors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  'حسناً',
+                  style: TextStyle(
+                    fontFamily: 'Markazi Text',
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+      return false;
+    } finally {
+      if (mounted) setState(() => _refundLoading = false);
+    }
   }
 }
 
@@ -170,8 +509,9 @@ class _TopHeader extends StatelessWidget {
               child: Text(
                 'المواعيد',
                 style: TextStyle(
+                  fontFamily: 'Markazi Text',
                   fontSize: 24,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w600,
                   color: BColors.textDarkestBlue,
                 ),
               ),
@@ -263,8 +603,9 @@ class _TabPill extends StatelessWidget {
         child: Text(
           title,
           style: TextStyle(
+            fontFamily: 'Markazi Text',
             fontSize: 16,
-            fontWeight: FontWeight.w800,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
             color: selected ? BColors.textDarkestBlue : BColors.darkGrey,
           ),
         ),

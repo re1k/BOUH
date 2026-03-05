@@ -1,14 +1,17 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:bouh/theme/base_themes/colors.dart';
-
 import 'package:bouh/View/DoctorAppointment/AvailableScheduleScreen.dart';
-import 'package:bouh/View/HomePage/widgets/appointment_card.dart';
 import 'package:bouh/View/DoctorAppointment/upAppointments.dart';
+import 'package:bouh/View/HomePage/widgets/appointment_card.dart';
 import 'package:bouh/View/HomePage/widgets/doctorBottomNav.dart';
+import 'package:bouh/authentication/AuthSession.dart';
+import 'package:bouh/authentication/AuthService.dart';
+import 'package:bouh/dto/upcomingAppointmentDto.dart';
+import 'package:bouh/services/appointmentsService.dart';
+import 'package:bouh/widgets/loading_overlay.dart';
 
-/// Doctor previous appointments screen. When used inside [DoctorNavbar],
-/// pass [currentIndex], [onTap], and optionally [onSwitchToUpcoming].
-class PrevAppointmentsScreen extends StatelessWidget {
+class PrevAppointmentsScreen extends StatefulWidget {
   const PrevAppointmentsScreen({
     super.key,
     this.currentIndex = 1,
@@ -16,17 +19,142 @@ class PrevAppointmentsScreen extends StatelessWidget {
     this.onSwitchToUpcoming,
   });
 
-  /// Active bottom nav index (1 = appointments). Pass from shell.
   final int currentIndex;
-
-  /// Called when a bottom nav item is tapped. Pass from shell.
   final ValueChanged<int>? onTap;
-
-  /// When provided (e.g. from [DoctorNavbar]), tapping "القادمة" switches
-  /// to upcoming without Navigator. When null, uses Navigator.pushReplacement.
   final VoidCallback? onSwitchToUpcoming;
 
+  @override
+  State<PrevAppointmentsScreen> createState() => _PrevAppointmentsScreenState();
+}
+
+class _PrevAppointmentsScreenState extends State<PrevAppointmentsScreen> {
+  List<UpcomingAppointmentDto> _list = [];
+  List<UpcomingAppointmentDto> _upcomingCache = [];
+  bool _loading = false;
+  String? _error;
+
+  final AppointmentsService _appointmentsService = AppointmentsService();
+  StreamSubscription<
+    (List<UpcomingAppointmentDto>, List<UpcomingAppointmentDto>)
+  >?
+  _subscription;
+  Timer? _ticker;
+
   static const double _cardGap = 16;
+
+  @override
+  void initState() {
+    super.initState();
+    _prepareSessionAndLoad();
+  }
+
+  @override
+  void didUpdateWidget(PrevAppointmentsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+  }
+
+  Future<void> _prepareSessionAndLoad() async {
+    await AuthService.instance.refreshSession();
+    final String? doctorId = AuthSession.instance.userId;
+    if (!mounted) return;
+    _subscribeToStream(doctorId);
+  }
+
+  void _subscribeToStream(String? doctorId) {
+    _subscription?.cancel();
+    _ticker?.cancel();
+
+    if (doctorId == null || doctorId.isEmpty) {
+      setState(() {
+        _list = [];
+        _upcomingCache = [];
+        _error = null;
+        _loading = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _error = null;
+      _list = [];
+      _upcomingCache = [];
+    });
+
+    _subscription = _appointmentsService
+        .streamPreviousAppointmentsByDoctor(doctorId)
+        .listen(
+          (data) {
+            if (!mounted) return;
+            setState(() {
+              _list = data.$1;
+              _upcomingCache = data.$2;
+              _loading = false;
+              _error = null;
+            });
+            _startTicker();
+          },
+          onError: (e) {
+            if (!mounted) return;
+            setState(() {
+              _error = e.toString();
+              _list = [];
+              _upcomingCache = [];
+              _loading = false;
+            });
+          },
+        );
+  }
+
+  /// Every second move ended appointments from _upcomingCache into _list
+  void _startTicker() {
+    _ticker?.cancel();
+    if (_upcomingCache.isEmpty) return;
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) {
+        _ticker?.cancel();
+        return;
+      }
+      final now = DateTime.now();
+      bool changed = false;
+      setState(() {
+        _upcomingCache.removeWhere((dto) {
+          final end = AppointmentsService.parseAppointmentTime(
+            dto.date,
+            dto.endTime,
+          );
+          if (end == null || now.isBefore(end)) return false;
+          _list.add(dto);
+          changed = true;
+          return true;
+        });
+        if (changed) {
+          _list.sort((a, b) {
+            final ta = AppointmentsService.parseAppointmentTime(
+              a.date,
+              a.startTime,
+            );
+            final tb = AppointmentsService.parseAppointmentTime(
+              b.date,
+              b.startTime,
+            );
+            if (ta == null && tb == null) return 0;
+            if (ta == null) return 1;
+            if (tb == null) return -1;
+            return tb.compareTo(ta);
+          });
+        }
+      });
+      if (_upcomingCache.isEmpty) _ticker?.cancel();
+    });
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    _ticker?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -34,101 +162,143 @@ class PrevAppointmentsScreen extends StatelessWidget {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: BColors.lightGrey,
-        body: SafeArea(
-          child: Column(
-            children: [
-              const SizedBox(height: 10),
-
-              _TopHeader(
-                onCalendarTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const AvailableScheduleScreen(),
-                    ),
-                  );
-                },
-              ),
-
-              const SizedBox(height: 14),
-
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: _SegmentedTabs(
-                  selected: _AppointmentsTab.past,
-                  onUpcomingTap: () {
-                    if (onSwitchToUpcoming != null) {
-                      onSwitchToUpcoming!();
-                    } else {
-                      Navigator.pushReplacement(
+        body: Stack(
+          children: [
+            SafeArea(
+              child: Column(
+                children: [
+                  const SizedBox(height: 10),
+                  _TopHeader(
+                    onCalendarTap: () {
+                      Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => const AppointmentsScreen(),
+                          builder: (_) => const AvailableScheduleScreen(),
                         ),
                       );
-                    }
-                  },
-                  onPastTap: () {},
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Backend hook: replace static cards with data from controller.
-              Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(
-                    16,
-                    0,
-                    16,
-                    DoctorBottomNav.barHeight + _cardGap,
+                    },
                   ),
-                  children: const [
-                    AppointmentCard(
-                      date: '11/11/2025',
-                      time: '7:30 مساءً',
-                      caregiverName: 'فرح الشهري',
-                      childName: 'تالا',
-                      buttonType: AppointmentButtonType.none,
+                  const SizedBox(height: 14),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: _SegmentedTabs(
+                      selected: _AppointmentsTab.past,
+                      onUpcomingTap: () {
+                        if (widget.onSwitchToUpcoming != null) {
+                          widget.onSwitchToUpcoming!();
+                        } else {
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const AppointmentsScreen(),
+                            ),
+                          );
+                        }
+                      },
+                      onPastTap: () {},
                     ),
-                    AppointmentCard(
-                      date: '11/11/2025',
-                      time: '8:00 مساءً',
-                      caregiverName: 'حسام العتيبي',
-                      childName: 'ريم',
-                      buttonType: AppointmentButtonType.none,
-                    ),
-                    AppointmentCard(
-                      date: '13/11/2025',
-                      time: '7:00 مساءً',
-                      caregiverName: 'عبدالرحمن أحمد',
-                      childName: 'خالد',
-                      buttonType: AppointmentButtonType.none,
-                    ),
-                    SizedBox(height: 14),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 16),
+                  Expanded(child: _buildList()),
+                ],
               ),
-            ],
-          ),
+            ),
+            if (_loading) const BouhLoadingOverlay(showBarrier: false),
+          ],
         ),
-
-        // add remaz navBar
-        bottomNavigationBar: onTap != null
+        bottomNavigationBar: widget.onTap != null
             ? Material(
                 clipBehavior: Clip.none,
                 color: Colors.transparent,
                 child: Directionality(
                   textDirection: TextDirection.rtl,
                   child: DoctorBottomNav(
-                    currentIndex: currentIndex,
-                    onTap: onTap,
+                    currentIndex: widget.currentIndex,
+                    onTap: widget.onTap!,
                   ),
                 ),
               )
             : null,
       ),
     );
+  }
+
+  Widget _buildList() {
+    if (_loading) {
+      return const SizedBox.shrink();
+    }
+    if (_error != null) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+            'حدث خطأ، حاول مجددًا لاحقًا.',
+            style: TextStyle(
+              fontFamily: 'Markazi Text',
+              fontSize: 16,
+              color: BColors.darkGrey,
+            ),
+          ),
+        ),
+      );
+    }
+    if (_list.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+            'لا توجد مواعيد سابقة',
+            style: TextStyle(
+              fontFamily: 'Markazi Text',
+              fontSize: 16,
+              color: BColors.darkGrey,
+            ),
+          ),
+        ),
+      );
+    }
+    final children = <Widget>[];
+    for (var i = 0; i < _list.length; i++) {
+      if (i > 0) children.add(const SizedBox(height: 14));
+      children.add(_buildCard(_list[i]));
+    }
+    children.add(const SizedBox(height: 14));
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(
+        16,
+        0,
+        16,
+        DoctorBottomNav.barHeight + _cardGap,
+      ),
+      children: children,
+    );
+  }
+
+  Widget _buildCard(UpcomingAppointmentDto dto) {
+    final dateStr = _formatDate(dto.date);
+    final timeStr = _formatTimeRange(dto.startTime, dto.endTime);
+    return AppointmentCard(
+      date: dateStr,
+      time: timeStr,
+      caregiverName: dto.caregiverName ?? '',
+      childName: dto.childName ?? '',
+      buttonType: AppointmentButtonType.none,
+    );
+  }
+
+  static String _formatDate(String date) {
+    final parts = date.split('-');
+    if (parts.length != 3) return date;
+    return '${parts[2]}/${parts[1]}/${parts[0]}';
+  }
+
+  static String _formatTimeRange(String? start, String? end) {
+    const suffix = 'مساءً';
+    final s = start ?? '';
+    final e = end ?? '';
+    if (s.isEmpty && e.isEmpty) return '';
+    if (e.isEmpty) return '$s $suffix';
+    return '$s - $e $suffix';
   }
 }
 
@@ -165,8 +335,9 @@ class _TopHeader extends StatelessWidget {
               child: Text(
                 'المواعيد',
                 style: TextStyle(
+                  fontFamily: 'Markazi Text',
                   fontSize: 24,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w600,
                   color: BColors.textDarkestBlue,
                 ),
               ),
@@ -258,8 +429,9 @@ class _TabPill extends StatelessWidget {
         child: Text(
           title,
           style: TextStyle(
+            fontFamily: 'Markazi Text',
             fontSize: 16,
-            fontWeight: FontWeight.w800,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
             color: selected ? BColors.textDarkestBlue : BColors.darkGrey,
           ),
         ),

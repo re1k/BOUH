@@ -67,12 +67,24 @@ public class doctorRepo {
                     .get()
                     .get();
 
-            if (snapshot.exists()) {
-                // Maps the doctor document into doctorDto
-                return snapshot.toObject(doctorDto.class);
-            }
+            if (!snapshot.exists()) return null;
 
-            return null;
+            // Manually map fields to avoid toObject() silently missing fields
+            doctorDto dto = new doctorDto();
+            dto.setDoctorId(snapshot.getId());
+            dto.setName(snapshot.getString("name"));
+            dto.setEmail(snapshot.getString("email"));
+            dto.setGender(snapshot.getString("gender"));
+            dto.setAreaOfKnowledge(snapshot.getString("areaOfKnowledge"));
+            dto.setProfilePhotoURL(snapshot.getString("profilePhotoURL"));
+            dto.setRegistrationStatus(snapshot.getString("registrationStatus"));
+            dto.setFcmToken(snapshot.getString("fcmToken"));
+            dto.setScfhsNumber(snapshot.getString("scfhsNumber"));
+            dto.setIban(snapshot.getString("iban"));
+            dto.setAverageRating(snapshot.getDouble("averageRating"));
+            dto.setYearsOfExperience(snapshot.getLong("yearsOfExperience") != null
+                    ? snapshot.getLong("yearsOfExperience").intValue() : null);
+            return dto;
 
         } catch (Exception e) {
             log.error("Failed to fetch doctor for uid={}", uid);
@@ -83,31 +95,8 @@ public class doctorRepo {
     }
 
     
-    /**
-     * Read doctor document from doctors/{doctorId}.
-     * Returns name, areaOfKnowledge, profilePhotoURL.
-     * --------REMOVE ON DONE------------
-     */
-    public doctorDto findById(String doctorId)
-            throws ExecutionException, InterruptedException {
-
-        DocumentReference ref =
-                firestore.collection("doctors").document(doctorId);
-
-        DocumentSnapshot doc = ref.get().get();
-
-        if (doc == null || !doc.exists()) {
-            return null;
-        }
-
-        doctorDto dto = new doctorDto();
-        dto.setDoctorId(doctorId);
-        dto.setName(getString(doc, "name"));
-        dto.setAreaOfKnowledge(getString(doc, "areaOfKnowledge"));
-        dto.setProfilePhotoURL(getString(doc, "profilePhotoURL"));
-
-        return dto;
-    }
+   
+    
     /**
      * Returns list of approved doctors for caregiver browsing screen.
      */
@@ -227,20 +216,20 @@ public DoctorScheduleDto getDoctorScheduleByDate(String doctorId, String date)
         Object value = doc.get(field);
         return value == null ? null : value.toString();
     }
-//     private static double getDouble(DocumentSnapshot doc, String field) { DELETE IT ON DONE
-//     Object v = doc.get(field);
-//     if (v == null) return 0.0;
+    private static double getDouble(DocumentSnapshot doc, String field) { 
+    Object v = doc.get(field);
+    if (v == null) return 0.0;
 
-//     if (v instanceof Number) {
-//         return ((Number) v).doubleValue(); //  Long/Int/Double
-//     }
+    if (v instanceof Number) {
+        return ((Number) v).doubleValue(); //  Long/Int/Double
+    }
 
-//     try {
-//         return Double.parseDouble(v.toString()); 
-//     } catch (Exception e) {
-//         return 0.0;
-//     }
-// }
+    try {
+        return Double.parseDouble(v.toString()); 
+    } catch (Exception e) {
+        return 0.0;
+    }
+}
 
 
     private List<String> cleanQualifications(List<String> qualifications) {

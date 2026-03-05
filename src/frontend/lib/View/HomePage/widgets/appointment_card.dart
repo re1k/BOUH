@@ -9,6 +9,8 @@ class AppointmentCard extends StatelessWidget {
   final String caregiverName;
   final String childName;
   final AppointmentButtonType buttonType;
+  /// When set, the action button (بدء/إلغاء) is tappable and triggers this callback.
+  final VoidCallback? onActionTap;
 
   const AppointmentCard({
     super.key,
@@ -17,6 +19,7 @@ class AppointmentCard extends StatelessWidget {
     required this.caregiverName,
     required this.childName,
     required this.buttonType,
+    this.onActionTap,
   });
 
   @override
@@ -53,9 +56,13 @@ class AppointmentCard extends StatelessWidget {
                 children: [
                   const Text(
                     'تاريخ ووقت الموعد',
-                    style: TextStyle(fontSize: 12, color: BColors.darkGrey),
+                    style: TextStyle(
+                      fontFamily: 'Markazi Text',
+                      fontSize: 14,
+                      color: BColors.darkGrey,
+                    ),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
 
                   Align(
                     alignment: Alignment.centerRight,
@@ -69,18 +76,22 @@ class AppointmentCard extends StatelessWidget {
                     ),
                   ),
 
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 12),
 
                   RichText(
                     text: TextSpan(
                       style: const TextStyle(
-                        fontSize: 14,
+                        fontFamily: 'Markazi Text',
+                        fontSize: 16,
                         color: BColors.textDarkestBlue,
                       ),
                       children: [
                         const TextSpan(
                           text: 'مقدم الرعاية : ',
-                          style: TextStyle(fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            fontFamily: 'Markazi Text',
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                         TextSpan(text: caregiverName),
                       ],
@@ -90,13 +101,17 @@ class AppointmentCard extends StatelessWidget {
                   RichText(
                     text: TextSpan(
                       style: const TextStyle(
-                        fontSize: 14,
+                        fontFamily: 'Markazi Text',
+                        fontSize: 16,
                         color: BColors.textDarkestBlue,
                       ),
                       children: [
                         const TextSpan(
                           text: 'للطفل : ',
-                          style: TextStyle(fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            fontFamily: 'Markazi Text',
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                         TextSpan(text: childName),
                       ],
@@ -107,7 +122,13 @@ class AppointmentCard extends StatelessWidget {
 
                   Align(
                     alignment: Alignment.centerLeft,
-                    child: _actionButton(),
+                    child: onActionTap != null
+                        ? GestureDetector(
+                            onTap: onActionTap,
+                            behavior: HitTestBehavior.opaque,
+                            child: _actionButton(),
+                          )
+                        : _actionButton(),
                   ),
                 ],
               ),
@@ -133,23 +154,34 @@ class AppointmentCard extends StatelessWidget {
       ),
       child: Text(
         isStart ? 'بدء' : 'إلغاء',
-        style: const TextStyle(color: Colors.white, fontSize: 13),
+        style: const TextStyle(
+          fontFamily: 'Markazi Text',
+          color: Colors.white,
+          fontSize: 14,
+        ),
       ),
     );
   }
 
   static Widget _chip(IconData icon, String text) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: BColors.softGrey,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: BColors.primary),
+          Icon(icon, size: 16, color: BColors.primary),
           const SizedBox(width: 6),
-          Text(text, style: const TextStyle(fontSize: 12)),
+          Text(
+            text,
+            style: const TextStyle(
+              fontFamily: 'Markazi Text',
+              fontSize: 14,
+            ),
+          ),
         ],
       ),
     );

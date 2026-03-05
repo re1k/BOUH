@@ -6,8 +6,10 @@ import com.bouh.backend.service.appointments.AppointmentsService;
 
 import jakarta.validation.Valid;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -39,12 +41,13 @@ public class appointmentsController {
     /**
      * GET /api/appointments/upcoming/{caregiverId} — returns list of upcoming
      * booked appointments for the caregiver.
-     * Response: ResponseEntity.ok(List of upcomingAppointmentDto) as raw JSON.
      */
     @GetMapping(value = "/upcoming/{caregiverId}", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<List<upcomingAppointmentDto>> getUpcoming(@PathVariable String caregiverId)
+    public ResponseEntity<List<upcomingAppointmentDto>> getUpcoming(
+            @PathVariable String caregiverId,
+            @AuthenticationPrincipal String firebaseDocUID)
             throws ExecutionException, InterruptedException {
-        List<upcomingAppointmentDto> list = appointmentsService.getUpcomingAppointments(caregiverId);
+        List<upcomingAppointmentDto> list = appointmentsService.getUpcomingAppointments(firebaseDocUID);
         return ResponseEntity.ok(list);
     }
 
@@ -53,9 +56,35 @@ public class appointmentsController {
      * booked appointments.
      */
     @GetMapping(value = "/previous/{caregiverId}", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<List<upcomingAppointmentDto>> getPrevious(@PathVariable String caregiverId)
+    public ResponseEntity<List<upcomingAppointmentDto>> getPrevious(
+            @PathVariable String caregiverId,
+            @AuthenticationPrincipal String firebaseDocUID)
             throws ExecutionException, InterruptedException {
-        List<upcomingAppointmentDto> list = appointmentsService.getPreviousAppointments(caregiverId);
+        List<upcomingAppointmentDto> list = appointmentsService.getPreviousAppointments(firebaseDocUID);
+        return ResponseEntity.ok(list);
+    }
+
+    /**
+     * GET /api/appointments/upcoming/doctor/{doctorId} — upcoming appointments for doctor view. 
+     */
+    @GetMapping(value = "/upcoming/doctor/{doctorId}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<List<upcomingAppointmentDto>> getUpcomingByDoctor(
+            @PathVariable String doctorId,
+            @AuthenticationPrincipal String firebaseDocUID)
+            throws ExecutionException, InterruptedException {
+        List<upcomingAppointmentDto> list = appointmentsService.getUpcomingAppointmentsByDoctor(firebaseDocUID);
+        return ResponseEntity.ok(list);
+    }
+
+    /**
+     * GET /api/appointments/previous/doctor/{doctorId} — previous appointments for doctor view.
+     */
+    @GetMapping(value = "/previous/doctor/{doctorId}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<List<upcomingAppointmentDto>> getPreviousByDoctor(
+            @PathVariable String doctorId,
+            @AuthenticationPrincipal String firebaseDocUID)
+            throws ExecutionException, InterruptedException {
+        List<upcomingAppointmentDto> list = appointmentsService.getPreviousAppointmentsByDoctor(firebaseDocUID);
         return ResponseEntity.ok(list);
     }
 @DeleteMapping(value = "/{appointmentId}", produces = MediaType.APPLICATION_JSON_VALUE)

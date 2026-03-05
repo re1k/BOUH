@@ -2,14 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:bouh/theme/base_themes/colors.dart';
 
 /// Full-screen circular loading overlay using the app's three primary colors.
+/// Use [barrierColor: Colors.transparent] or [showBarrier: false] for no dimmed background.
 class BouhLoadingOverlay extends StatefulWidget {
   const BouhLoadingOverlay({
     super.key,
     this.barrierColor,
+    this.showBarrier = true,
     this.size = 56,
   });
 
+  /// Overrides the dimmed overlay color. Default is semi-transparent black.
   final Color? barrierColor;
+  /// When false, no background is drawn (spinner only). Ignored if [barrierColor] is set.
+  final bool showBarrier;
   final double size;
 
   @override
@@ -65,8 +70,10 @@ class _BouhLoadingOverlayState extends State<BouhLoadingOverlay>
     );
   }
 
-  Color get barrierColor =>
-      widget.barrierColor ?? Colors.black.withOpacity(0.35);
+  Color get barrierColor {
+    if (widget.barrierColor != null) return widget.barrierColor!;
+    return widget.showBarrier ? Colors.black.withOpacity(0.35) : Colors.transparent;
+  }
 }
 
 class _CircularGradientProgressPainter extends CustomPainter {
