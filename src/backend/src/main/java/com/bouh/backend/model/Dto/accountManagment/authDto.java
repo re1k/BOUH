@@ -10,5 +10,6 @@ import lombok.NoArgsConstructor;
 public class authDto {
     private String uid;
     private String role;
+    private String name;
     private String registrationStatus; //For Doctors
 }

@@ -5,8 +5,12 @@ import com.bouh.backend.model.Dto.accountManagment.accountResponseDto;
 import com.bouh.backend.model.Dto.accountManagment.authDto;
 import com.bouh.backend.model.repository.caregiverRepo;
 import com.bouh.backend.model.repository.doctorRepo;
+
+import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.stereotype.Service;
 
+@Slf4j
 @Service
 public class accountsService {
 
@@ -27,22 +31,28 @@ public class accountsService {
     }
 
     public authDto resolveAuthState(String uid) {
+
         doctorDto doctor = doctorRepository.findByUid(uid);
+        caregiverDto caregiver = caregiverRepository.findByUid(uid);
+
         if (doctor != null) {
             return new authDto(
                     uid,
                     "doctor",
+                    doctor.getName(),
                     doctor.getRegistrationStatus());
         }
-        if (caregiverRepository.existsByUid(uid)) {
+        if (caregiver != null) {
             return new authDto(
                     uid,
                     "caregiver",
+                    caregiver.getName(),
                     null);
         }
         // user with no profile
         return new authDto(
                 uid,
+                null,
                 null,
                 null);
     }

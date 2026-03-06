@@ -484,14 +484,16 @@ class DoctorHomePageState extends State<DoctorHomePage> {
           ),
           const SizedBox(width: 12),
 
-          // Backend hook: doctor name and rating should come from user profile API.
+          // Doctor name from /me (AuthSession); rating from profile API when available.
           Column(
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
+            children: [
               Text(
-                'مرحباً بعودتك، أهلاً علي',
-                style: TextStyle(
+                AuthSession.instance.userName?.trim().isNotEmpty == true
+                    ? 'مرحباً بعودتك، أهلاً ${AuthSession.instance.userName}'
+                    : 'مرحباً بعودتك، أهلاً',
+                style: const TextStyle(
                   fontFamily: 'Markazi Text',
                   color: Colors.white,
                   fontSize: 18,

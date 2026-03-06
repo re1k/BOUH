@@ -184,18 +184,17 @@ class _CaregiverSignupViewState extends State<CaregiverSignupView> {
     return null;
   }
 
-  /// Validates caregiver name is not empty.
+  /// Validates caregiver name: not empty, letters (Arabic or English) and spaces only.
   static String? _validateName(String? value) {
     if (value == null || value.trim().isEmpty) {
       return 'يرجى إدخال اسم مقدم الرعاية';
     }
-    // Arabic-only name validation (letters + spaces).
-    // Covers Arabic blocks: Arabic, Arabic Supplement, Arabic Extended-A.
-    final arabicOnly = RegExp(
-      r'^[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\s]+$',
+    // Arabic + English letters and spaces.
+    final nameRegex = RegExp(
+      r'^[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FFa-zA-Z\s]+$',
     );
-    if (!arabicOnly.hasMatch(value.trim())) {
-      return 'يرجى إدخال الاسم باللغة العربية فقط';
+    if (!nameRegex.hasMatch(value.trim())) {
+      return 'يرجى إدخال الاسم  ';
     }
     return null;
   }

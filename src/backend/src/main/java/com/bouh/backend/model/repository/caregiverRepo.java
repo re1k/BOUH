@@ -150,4 +150,33 @@ public class caregiverRepo {
             throw new RuntimeException("Failed to update caregiver FCM token", e);
         }
     }
+
+    // caregiver profile Info Id,email,name,fcmToken
+    public caregiverDto findByUid(String uid) {
+        try {
+            DocumentSnapshot snapshot = firestore
+                    .collection("caregivers")
+                    .document(uid)
+                    .get()
+                    .get();
+
+            if (!snapshot.exists())
+                return null;
+
+            // Manually map fields to avoid toObject() silently missing fields
+            caregiverDto dto = new caregiverDto();
+            dto.setCaregiverId(snapshot.getId());
+            dto.setName(snapshot.getString("name"));
+            dto.setEmail(snapshot.getString("email"));
+            dto.setFcmToken(snapshot.getString("fcmToken"));
+            return dto;
+
+        } catch (Exception e) {
+            log.error("Failed to fetch caregiver for uid={}", uid);
+            log.error("Exception type: {}", e.getClass().getName());
+            log.error("Message: {}", e.getMessage());
+            throw new RuntimeException("caregiver fetch failed", e);
+        }
+    }
+
 }

@@ -436,7 +436,9 @@ class _CaregiverHomepageState extends State<CaregiverHomepage> {
                 Transform.translate(
                   offset: const Offset(0, -8),
                   child: Text(
-                    'أهلًا لبى',
+                    AuthSession.instance.userName?.trim().isNotEmpty == true
+                        ? AuthSession.instance.userName!
+                        : 'أهلًا',
                     style: TextStyle(
                       fontFamily: 'Markazi Text',
                       fontSize: 30,

@@ -53,8 +53,8 @@ class AuthService {
 
     _session.setSession(idToken: token, userId: user.uid);
 
-    final role = await _getRoleFromBackend(token);
-    await _session.setSessionFromBackend(uid: user.uid, role: role);
+    final (role, name) = await _getMeFromBackend(token);
+    await _session.setSessionFromBackend(uid: user.uid, role: role, name: name);
 
     return role;
   }
@@ -188,8 +188,8 @@ class AuthService {
 
   Future<void> refreshSession() async => _refreshSession();
 
-  //Backend: GET /api/accounts/me
-  Future<String> _getRoleFromBackend(String idToken) async {
+  //Backend: GET /api/accounts/me ,returns role and name
+  Future<(String role, String? name)> _getMeFromBackend(String idToken) async {
     print('logging in. . .');
     final uri =
         Uri.parse('${ApiConfig.baseUrl}/api/accounts/me');
@@ -214,18 +214,20 @@ class AuthService {
 
     final map = jsonDecode(response.body) as Map<String, dynamic>;
     final role = map['role'] as String?;
-    print('role: $role');
     final registrationStatus = map['registrationStatus'] as String?;
+    final name = map['name'] as String?;
 
+    print('role: $role');
+    print('name: $name');
+    
     if (role == null || (role != 'doctor' && role != 'caregiver')) {
       throw Exception('Invalid role from backend: $role');
     }
 
     //Doctor with PENDING registration
-    if (role == 'doctor' && registrationStatus == 'PENDING') {
-      return 'pending';
-    }
-    return role;
+    final resolvedRole =
+        (role == 'doctor' && registrationStatus == 'PENDING') ? 'pending' : role;
+    return (resolvedRole, name);
   }
 
 

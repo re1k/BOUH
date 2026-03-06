@@ -7,17 +7,20 @@ class AuthSession {
   static AuthSession get instance => _instance;
 
   static const String _roleKeyPrefix = 'userRole_';
+  static const String _userNameKeyPrefix = 'userName_';
   static const String _lastUserIdKey = 'lastUserId';
   static const String _legacyRoleKey = 'userRole';
 
   String? _idToken;
   String? _userId;
   String? _role;
+  String? _userName;
 
   String? get idToken => _idToken;
   String? get userId => _userId;
+  String? get userName => _userName;
 
-  //Role from backend login. Loads from memory or prefs (lastUserId + userRole_uid).
+  //Role from backend login. Loads from memory or prefs (lastUserId + userRole_uid). Also loads userName.
   Future<String?> get role async {
     if (_userId != null && _role != null) return _role;
     final prefs = await SharedPreferences.getInstance();
@@ -25,10 +28,12 @@ class AuthSession {
     if (lastUid == null) {
       _userId = null;
       _role = null;
+      _userName = null;
       return null;
     }
     _userId = lastUid;
     _role = prefs.getString(_roleKeyPrefix + lastUid);
+    _userName = prefs.getString(_userNameKeyPrefix + lastUid);
     return _role;
   }
 
@@ -42,16 +47,25 @@ class AuthSession {
     _userId = userId;
   }
 
-  //Backend login: set session from response { uid, role }. Only place role is set. Keeps existing idToken if set (e.g. after Firebase login).
+  //Backend login: set session from response { uid, role, name }. Only place role/name are set. Keeps existing idToken if set (e.g. after Firebase login).
   // role: 'doctor' | 'caregiver' | 'pending' (pending = doctor with registrationStatus PENDING).
-  Future<void> setSessionFromBackend({required String uid, required String role}) async {
+  Future<void> setSessionFromBackend({
+    required String uid,
+    required String role,
+    String? name,
+  }) async {
     if (role != 'doctor' && role != 'caregiver' && role != 'pending') return;
     _userId = uid;
     _role = role;
-    //keep _idToken so API calls can still use Bearer token
+    _userName = name;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_lastUserIdKey, uid);
     await prefs.setString(_roleKeyPrefix + uid, role);
+    if (name != null && name.isNotEmpty) {
+      await prefs.setString(_userNameKeyPrefix + uid, name);
+    } else {
+      await prefs.remove(_userNameKeyPrefix + uid);
+    }
     await prefs.remove(_legacyRoleKey);
   }
 
@@ -60,11 +74,13 @@ class AuthSession {
     _idToken = null;
     _userId = null;
     _role = null;
+    _userName = null;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_lastUserIdKey);
     await prefs.remove(_legacyRoleKey);
     if (uid != null) {
       await prefs.remove(_roleKeyPrefix + uid);
+      await prefs.remove(_userNameKeyPrefix + uid);
     }
   }
 }

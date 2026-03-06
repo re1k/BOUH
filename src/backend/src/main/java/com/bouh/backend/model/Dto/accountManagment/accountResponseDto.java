@@ -9,5 +9,4 @@ public class accountResponseDto {
     private boolean success;
     private String code;
     private String message;
-    
 }
