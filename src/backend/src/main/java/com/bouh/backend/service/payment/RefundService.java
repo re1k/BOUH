@@ -110,7 +110,9 @@ public class RefundService {
 
         // If doctor canceled, notify caregiver no matter what day it is.
         if (actorUid.equals(doctorId)) {
-            String caregiverToken = caregiverRepository.findFcmTokenByUid(caregiverId);
+            // Get caregiver from repo; caregiverDto holds fcmToken
+            var caregiver = caregiverRepository.findByUid(caregiverId);
+            String caregiverToken = caregiver == null ? null : caregiver.getFcmToken();
             if (caregiverToken == null || caregiverToken.isBlank()) {
                 return;
             }
