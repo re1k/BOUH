@@ -489,7 +489,7 @@ class CaregiverHomepageState extends State<CaregiverHomepage>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildSectionWithViewAll('مواعيدك اليوم'),
+            _buildSectionTitle('مواعيدك اليوم'),
             const SizedBox(height: 12),
             _buildTodayAppointments(),
             const SizedBox(height: _sectionGap),
@@ -570,6 +570,26 @@ class CaregiverHomepageState extends State<CaregiverHomepage>
     );
   }
 
+  Widget _buildSectionTitle(String title) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      textDirection: TextDirection.rtl,
+      children: [
+        Text(
+          title,
+          textAlign: TextAlign.right,
+          style: TextStyle(
+            fontFamily: 'Markazi Text',
+            fontSize: 24,
+            fontWeight: FontWeight.w600,
+            color: BColors.textDarkestBlue,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Section header with title and "View All" link. Used for suggested doctors.
   Widget _buildSectionWithViewAll(String title) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,

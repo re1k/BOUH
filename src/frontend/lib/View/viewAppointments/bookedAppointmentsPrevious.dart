@@ -224,7 +224,9 @@ class _BookedAppointmentsPreviousState
                           _buildFilterBar(),
                           const SizedBox(height: _sectionGap),
                           _buildCardList(),
-                          SizedBox(height: CaregiverBottomNav.barHeight + _cardGap),
+                          SizedBox(
+                            height: CaregiverBottomNav.barHeight + _cardGap,
+                          ),
                         ],
                       ),
                     ),
@@ -422,6 +424,12 @@ class _BookedAppointmentsPreviousState
     );
   }
 
+  /// Returns the caregiver's rating for this doctor (0–5).
+  /// for Reem, next phase will implement
+  int? getRatingForAppointment(UpcomingAppointmentDto dto) {
+    return 3; // THIS IS A PLACEHOLDER
+  }
+
   Widget _buildCardFor(UpcomingAppointmentDto dto) {
     final dateStr = _formatDate(dto.date);
     final timeStr = _formatTimeRange(dto.startTime, dto.endTime);
@@ -431,6 +439,8 @@ class _BookedAppointmentsPreviousState
       profileImage = NetworkImage(dto.doctorProfilePhotoURL!);
     }
     final attendanceStatus = _statusToDisplay(dto.status);
+    // This function will return the rating (0–5) for the doctor
+    final rating = getRatingForAppointment(dto);
     return PreviousBookedAppointmentCard(
       doctorName: dto.doctorName ?? '',
       specialty: dto.doctorAreaOfKnowledge ?? '',
@@ -439,7 +449,7 @@ class _BookedAppointmentsPreviousState
       time: timeStr,
       profileImage: profileImage,
       attendanceStatus: attendanceStatus,
-      rating: null,
+      rating: rating,
     );
   }
 
