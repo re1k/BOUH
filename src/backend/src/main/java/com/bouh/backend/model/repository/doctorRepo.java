@@ -4,8 +4,6 @@ import com.bouh.backend.model.Dto.DoctorScheduleDto;
 import com.bouh.backend.model.Dto.appointmentDto;
 import com.bouh.backend.model.Dto.doctorDto;
 import com.bouh.backend.model.Dto.AvailabilitySchedule.AvailabilityStoredSlotDto;
-import com.google.api.core.ApiFuture;
-import com.google.cloud.Timestamp;
 import com.google.cloud.firestore.*;
 import com.google.firebase.auth.FirebaseAuth;
 import lombok.extern.slf4j.Slf4j;
