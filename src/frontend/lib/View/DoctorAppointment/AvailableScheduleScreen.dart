@@ -1,4 +1,5 @@
 import 'package:bouh/widgets/confirmation_popup.dart';
+import 'package:bouh/widgets/loading_overlay.dart';
 import 'package:flutter/material.dart';
 import 'package:bouh/theme/base_themes/colors.dart';
 import 'package:table_calendar/table_calendar.dart';
@@ -297,7 +298,7 @@ class _AvailableScheduleScreenState extends State<AvailableScheduleScreen> {
                     if (isLoading)
                       const Padding(
                         padding: EdgeInsets.symmetric(vertical: 18),
-                        child: CircularProgressIndicator(),
+                        child: BouhOvalLoadingIndicator(),
                       )
                     else if (loadError != null)
                       Container(
@@ -337,8 +338,6 @@ class _AvailableScheduleScreenState extends State<AvailableScheduleScreen> {
           ],
         ),
       ),
-
-      bottomNavigationBar: _bottomNav(),
     );
   }
 
@@ -786,23 +785,6 @@ class _AvailableScheduleScreenState extends State<AvailableScheduleScreen> {
         ),
         child: Icon(icon, color: iconColor, size: 20),
       ),
-    );
-  }
-
-  // add remaz navbar
-  Widget _bottomNav() {
-    return BottomNavigationBar(
-      currentIndex: 1,
-      selectedItemColor: BColors.primary,
-      unselectedItemColor: BColors.darkGrey,
-      items: const [
-        BottomNavigationBarItem(icon: Icon(Icons.home), label: 'الرئيسية'),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.calendar_today),
-          label: 'المواعيد',
-        ),
-        BottomNavigationBarItem(icon: Icon(Icons.person), label: 'حسابي'),
-      ],
     );
   }
 }
