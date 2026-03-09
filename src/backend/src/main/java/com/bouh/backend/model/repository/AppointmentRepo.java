@@ -19,7 +19,11 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
-
+import com.google.cloud.firestore.DocumentReference;
+import com.google.cloud.firestore.DocumentSnapshot;
+import com.google.cloud.firestore.DocumentSnapshot;
+import java.util.HashMap;
+import java.util.Map;
 /**
  * Repository for Firestore collection "appointments".
  */
@@ -197,14 +201,14 @@ public class AppointmentRepo {
 
     // Copy one Firestore document into an appointmentDto. startDateTime is built
     // from date + slot.
-    private appointmentDto mapDocToDto(QueryDocumentSnapshot doc) {
+    private appointmentDto mapDocToDto(DocumentSnapshot doc) {
         appointmentDto dto = new appointmentDto();
         dto.setAppointmentId(doc.getId());
         dto.setCaregiverId(getString(doc, "caregiverId"));
         dto.setChildId(getString(doc, "childId"));
         dto.setDoctorId(getString(doc, "doctorId"));
         dto.setTimeSlotId(getString(doc, "timeSlotId"));
-        dto.setStartDateTime(buildStartDateTime(doc));
+        dto.setStartDateTime(getStartDateTime(doc));// Important: this combines the date and slot index into one timestamp for easier handling in Java. It expects the date field to be a Firestore Timestamp or Date.REMAZ 
         dto.setEndTime(getString(doc, "endTime"));
         dto.setStatus(getStatusAsInt(doc));
         dto.setMeetingLink(getString(doc, "meetingLink"));
@@ -215,7 +219,7 @@ public class AppointmentRepo {
 
     // Combine the document's date and slot index into one timestamp (start of the
     // appointment).
-    private Timestamp buildStartDateTime(QueryDocumentSnapshot doc) {
+    private Timestamp buildStartDateTime(DocumentSnapshot doc) {
         String dateStr = getDateAsYyyyMmDd(doc);
         if (dateStr == null || dateStr.isEmpty())
             return null;
@@ -230,7 +234,7 @@ public class AppointmentRepo {
     /**
      * Read date from document (Timestamp/Date only). Returns yyyy-MM-dd or null.
      */
-    private static String getDateAsYyyyMmDd(QueryDocumentSnapshot doc) {
+    private static String getDateAsYyyyMmDd(DocumentSnapshot doc) {
         Date d = asDate(doc.get("date"));
         if (d == null)
             return null;
@@ -251,7 +255,7 @@ public class AppointmentRepo {
     }
 
     /** Status stored as number in DB: 0 or 1. */
-    private static int getStatusAsInt(QueryDocumentSnapshot doc) {
+    private static int getStatusAsInt(DocumentSnapshot doc) {
         Object v = doc.get("status");
         if (v instanceof Number)
             return ((Number) v).intValue() == 1 ? 1 : 0;
@@ -261,7 +265,7 @@ public class AppointmentRepo {
     }
 
     /** Slot index (0-9) as string for time derivation: from slotIndex field */
-    private static String getSlotIndexForDerivation(QueryDocumentSnapshot doc) {
+    private static String getSlotIndexForDerivation(DocumentSnapshot doc) {
         Object slotIndex = doc.get("slotIndex");
         if (slotIndex != null) {
             return slotIndex.toString();
@@ -269,8 +273,106 @@ public class AppointmentRepo {
         return getString(doc, "startTime");
     }
 
-    private static String getString(QueryDocumentSnapshot doc, String field) {
+    private static String getString(DocumentSnapshot doc, String field) {
         Object v = doc.get(field);
         return v == null ? null : v.toString();
     }
+    public boolean caregiverHasConflict(String caregiverId, String date, int slotIndex)
+        throws ExecutionException, InterruptedException {
+    List<appointmentDto> list = findByCaregiverIdAndDateFromToday(caregiverId);
+
+    for (appointmentDto dto : list) {
+        Timestamp start = dto.getStartDateTime();
+        if (start == null) continue;
+
+        ZonedDateTime zdt = ZonedDateTime.ofInstant(
+                Instant.ofEpochSecond(start.getSeconds(), start.getNanos()),
+                ZONE
+        );
+
+        String existingDate = zdt.toLocalDate().toString();
+        int existingSlot = TimeSlotConfig.getSlotIndexForStartTime(zdt.toLocalTime());
+
+        if (date.equals(existingDate) && slotIndex == existingSlot) {
+            return true;
+        }
+    }
+    return false;
+}
+public appointmentDto create(appointmentDto dto, String date, int slotIndex)
+        throws ExecutionException, InterruptedException {
+
+    DocumentReference ref = firestore.collection(COLLECTION).document();
+
+    LocalDate localDate = LocalDate.parse(date, DateTimeFormatter.ISO_LOCAL_DATE);
+    LocalDateTime startLdt = localDate.atTime(TimeSlotConfig.slotStart(slotIndex));
+    Timestamp startTimestamp = Timestamp.of(Date.from(startLdt.atZone(ZONE).toInstant()));
+
+    Map<String, Object> data = new HashMap<>();
+    data.put("caregiverId", dto.getCaregiverId());
+    data.put("doctorId", dto.getDoctorId());
+    data.put("childId", dto.getChildId());
+
+  
+    data.put("slotIndex", slotIndex);
+
+    // مهم:  getDateAsYyyyMmDd يتوقع Timestamp
+    data.put("date", Date.from(localDate.atStartOfDay(ZONE).toInstant()));
+
+ 
+    data.put("startDateTime", startTimestamp);
+
+    data.put("endTime", dto.getEndTime());
+    data.put("meetingLink", dto.getMeetingLink());
+    data.put("amount", dto.getAmount());
+    data.put("status", dto.getStatus() == null ? 0 : dto.getStatus());
+    data.put("paymentIntentId", dto.getPaymentIntentId());
+
+    ref.set(data).get();
+
+    dto.setAppointmentId(ref.getId());
+    dto.setTimeSlotId(String.valueOf(slotIndex));
+    dto.setStartDateTime(startTimestamp);
+
+    return dto;
+}
+private Timestamp getStartDateTime(DocumentSnapshot doc) {
+    Object raw = doc.get("startDateTime");
+
+    if (raw instanceof Timestamp) {
+        return (Timestamp) raw;
+    }
+
+    return buildStartDateTime(doc);
+}
+public appointmentDto findById(String appointmentId)
+        throws ExecutionException, InterruptedException {
+    if (appointmentId == null || appointmentId.isBlank()) {
+        return null;
+    }
+
+    DocumentSnapshot doc = firestore.collection(COLLECTION)
+            .document(appointmentId)
+            .get()
+            .get();
+
+    if (!doc.exists()) {
+        return null;
+    }
+
+    return mapDocToDto(doc);
+}
+
+public void deleteById(String appointmentId)
+        throws ExecutionException, InterruptedException {
+    if (appointmentId == null || appointmentId.isBlank()) {
+        throw new IllegalArgumentException("appointmentId is required");
+    }
+
+    firestore.collection(COLLECTION)
+            .document(appointmentId)
+            .delete()
+            .get();
+}
+
 }

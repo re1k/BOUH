@@ -3,7 +3,7 @@ package com.bouh.backend.controller;
 import com.bouh.backend.model.Dto.appointmentDto;
 import com.bouh.backend.model.Dto.upcomingAppointmentDto;
 import com.bouh.backend.service.appointments.AppointmentsService;
-
+import com.bouh.backend.model.Dto.appointmentCreateRequestDto;
 import jakarta.validation.Valid;
 
 import org.springframework.http.HttpStatus;
@@ -87,17 +87,70 @@ public class appointmentsController {
         List<upcomingAppointmentDto> list = appointmentsService.getPreviousAppointmentsByDoctor(firebaseDocUID);
         return ResponseEntity.ok(list);
     }
-//@DeleteMapping(value = "/{appointmentId}", produces = MediaType.APPLICATION_JSON_VALUE)
-// public ResponseEntity<Map<String, Object>> cancel(@PathVariable String appointmentId)
-//         throws ExecutionException, InterruptedException {
+  @PostMapping
+public ResponseEntity<?> createAppointment(
+        @Valid @RequestBody appointmentCreateRequestDto request,
+        @AuthenticationPrincipal String firebaseDocUID) {
+    try {
+        appointmentDto created = appointmentsService.createAppointment(firebaseDocUID, request);
 
-//     appointmentsService.cancelAppointment(appointmentId);
+        Map<String, Object> res = new HashMap<>();
+        res.put("success", true);
+        res.put("appointmentId", created.getAppointmentId());
+        res.put("message", "Appointment booked successfully");
 
-//     Map<String, Object> res = new HashMap<>();
-//     res.put("success", true);
-//     res.put("message", "Appointment cancelled successfully");
-//     res.put("appointmentId", appointmentId);
+        return ResponseEntity.status(HttpStatus.CREATED).body(res);
 
-//     return ResponseEntity.ok(res);
-// }
+    } catch (IllegalStateException e) {
+        Map<String, Object> err = new HashMap<>();
+        err.put("success", false);
+        err.put("message", e.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(err);
+
+    } catch (IllegalArgumentException e) {
+        Map<String, Object> err = new HashMap<>();
+        err.put("success", false);
+        err.put("message", e.getMessage());
+        return ResponseEntity.badRequest().body(err);
+
+    } catch (Exception e) {
+        Map<String, Object> err = new HashMap<>();
+        err.put("success", false);
+        err.put("message", "Failed to create appointment");
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(err);
+    }
+}
+@DeleteMapping(value = "/{appointmentId}", produces = MediaType.APPLICATION_JSON_VALUE)
+public ResponseEntity<Map<String, Object>> cancel(
+        @PathVariable String appointmentId,
+        @AuthenticationPrincipal String firebaseDocUID) {
+    try {
+        appointmentsService.cancelAppointment(firebaseDocUID, appointmentId);
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("success", true);
+        res.put("message", "Appointment cancelled successfully");
+        res.put("appointmentId", appointmentId);
+
+        return ResponseEntity.ok(res);
+
+    } catch (IllegalStateException e) {
+        Map<String, Object> err = new HashMap<>();
+        err.put("success", false);
+        err.put("message", e.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(err);
+
+    } catch (IllegalArgumentException e) {
+        Map<String, Object> err = new HashMap<>();
+        err.put("success", false);
+        err.put("message", e.getMessage());
+        return ResponseEntity.badRequest().body(err);
+
+    } catch (Exception e) {
+        Map<String, Object> err = new HashMap<>();
+        err.put("success", false);
+        err.put("message", "Failed to cancel appointment");
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(err);
+    }
+}
 }

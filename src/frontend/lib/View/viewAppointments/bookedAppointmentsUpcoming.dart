@@ -230,7 +230,9 @@ class _BookedAppointmentsUpcomingState
                           _buildFilterBar(),
                           const SizedBox(height: _sectionGap),
                           _buildCardList(),
-                          SizedBox(height: CaregiverBottomNav.barHeight + _cardGap),
+                          SizedBox(
+                            height: CaregiverBottomNav.barHeight + _cardGap,
+                          ),
                         ],
                       ),
                     ),
@@ -441,16 +443,24 @@ class _BookedAppointmentsUpcomingState
     // Active means: startTime <= now < endTime.
     // If the first card's appointment hasn't started yet, treat it like other cards (Cancel).
     final bool showJoin = isFirst && _isJoinEnabled(dto);
+    final bool canCancel = !showJoin && _canCancelAppointment(dto);
 
     VoidCallback? onActionTap;
+    String actionLabel;
+    Color actionColor;
+
     if (showJoin) {
-      // Join is tappable only when the meeting link exists
+      actionLabel = 'انضمام';
+      actionColor = BColors.accent;
+
       if (dto.meetingLink != null && dto.meetingLink!.trim().isNotEmpty) {
         final link = dto.meetingLink!.trim();
         onActionTap = () => _openMeetingLink(link);
       }
-    } else {
-      // Show Cancel button for cards that are not yet active
+    } else if (canCancel) {
+      actionLabel = 'الغاء';
+      actionColor = _cancelRed;
+
       onActionTap = _refundLoading
           ? null
           : () async {
@@ -464,7 +474,7 @@ class _BookedAppointmentsUpcomingState
                   if (!mounted) return;
 
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text(" تم إلغاء الموعد بنجاح ")),
+                    const SnackBar(content: Text("تم إلغاء الموعد بنجاح")),
                   );
                 } catch (e) {
                   if (!mounted) return;
@@ -474,11 +484,15 @@ class _BookedAppointmentsUpcomingState
                   });
 
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(" فشل إلغاء الموعد  : $e")),
+                    SnackBar(content: Text("فشل إلغاء الموعد: $e")),
                   );
                 }
               }
             };
+    } else {
+      actionLabel = 'لا يمكن إلغاء الموعد قبل أقل من 30 دقيقة من وقت البدء';
+      actionColor = Colors.grey;
+      onActionTap = null;
     }
 
     return AppointmentCard(
@@ -488,9 +502,8 @@ class _BookedAppointmentsUpcomingState
       date: dateStr,
       time: timeStr,
       profileImage: profileImage,
-      // Label and color follow the Join/Cancel decision above
-      actionLabel: showJoin ? 'انضمام' : 'الغاء',
-      actionColor: showJoin ? BColors.accent : _cancelRed,
+      actionLabel: actionLabel,
+      actionColor: actionColor,
       onActionTap: onActionTap,
     );
   }
@@ -513,6 +526,22 @@ class _BookedAppointmentsUpcomingState
     final end = AppointmentsService.parseAppointmentTime(dto.date, dto.endTime);
     if (start == null || end == null) return false;
     return !now.isBefore(start) && now.isBefore(end);
+  }
+
+  /// Cancellation is allowed only if there are more than 30 minutes
+  /// before the appointment start time.
+  static bool _canCancelAppointment(UpcomingAppointmentDto dto) {
+    final now = DateTime.now();
+    final start = AppointmentsService.parseAppointmentTime(
+      dto.date,
+      dto.startTime,
+    );
+
+    if (start == null) return false;
+
+    final cancelDeadline = start.subtract(const Duration(minutes: 30));
+
+    return now.isBefore(cancelDeadline);
   }
 
   /// Convert backend date yyyy-MM-dd to display d/m/y.

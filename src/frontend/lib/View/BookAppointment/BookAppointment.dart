@@ -4,14 +4,20 @@ import 'package:bouh/theme/base_themes/colors.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:bouh/services/scheduleService.dart';
 import 'package:bouh/services/childrenService.dart';
+import 'package:bouh/services/appointmentsService.dart';
 import 'package:bouh/dto/scheduleDto.dart';
 import 'package:bouh/dto/childDto.dart';
 import 'package:bouh/authentication/AuthSession.dart';
 
 class BookingView extends StatefulWidget {
   final String doctorId;
+  final String doctorName;
 
-  const BookingView({super.key, required this.doctorId});
+  const BookingView({
+    super.key,
+    required this.doctorId,
+    required this.doctorName,
+  });
 
   @override
   State<BookingView> createState() => _BookingViewState();
@@ -19,6 +25,7 @@ class BookingView extends StatefulWidget {
 
 class _BookingViewState extends State<BookingView> {
   final ChildrenService _childrenService = ChildrenService();
+  final AppointmentsService _appointmentsService = AppointmentsService();
 
   List<ChildDto> children = [];
   String? selectedChildId;
@@ -32,6 +39,7 @@ class _BookingViewState extends State<BookingView> {
 
   bool isLoadingSchedule = false;
   bool isLoadingChildren = false;
+  bool isCheckingConflict = false;
 
   String? scheduleError;
   String? childrenError;
@@ -139,6 +147,96 @@ class _BookingViewState extends State<BookingView> {
     }
 
     return "${fmt(hour, minute)} - ${fmt(hour2, minute2)} مساءً";
+  }
+
+  String _slotStartText(int index) {
+    final totalMinutes = index * 30;
+    final hour = 16 + (totalMinutes ~/ 60);
+    final minute = totalMinutes % 60;
+    final hh = hour > 12 ? hour - 12 : hour;
+    return "$hh:${minute.toString().padLeft(2, '0')}";
+  }
+
+  Future<bool> _hasConflictBeforeBooking({
+    required String caregiverId,
+    required String date,
+    required int slotIndex,
+  }) async {
+    final upcoming = await _appointmentsService.getUpcomingAppointments(
+      caregiverId,
+    );
+
+    final selectedStart = AppointmentsService.parseAppointmentTime(
+      date,
+      _slotStartText(slotIndex),
+    );
+
+    if (selectedStart == null) return false;
+
+    for (final appt in upcoming) {
+      final apptStart = AppointmentsService.parseAppointmentTime(
+        appt.date,
+        appt.startTime,
+      );
+
+      if (apptStart != null && apptStart.isAtSameMomentAs(selectedStart)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  Future<void> _showConflictDialog() async {
+    if (!mounted) return;
+
+    await showDialog(
+      context: context,
+      builder: (_) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          backgroundColor: Colors.white,
+          actionsAlignment: MainAxisAlignment.center,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text(
+            'لا يمكن إكمال الحجز',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: BColors.textDarkestBlue,
+            ),
+          ),
+          content: const Text(
+            'لديك موعد قادم في نفس التاريخ والوقت.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 15,
+              color: BColors.darkGrey,
+              height: 1.4,
+            ),
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: BColors.primary,
+                foregroundColor: BColors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text(
+                'حسناً',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   bool _isAvailable(DateTime day) {
@@ -448,27 +546,61 @@ class _BookingViewState extends State<BookingView> {
           width: 220,
           height: 52,
           child: ElevatedButton(
-            onPressed: selectedTimeIndex == -1 || selectedChild == null
+            onPressed:
+                selectedTimeIndex == -1 ||
+                    selectedChild == null ||
+                    isCheckingConflict
                 ? null
-                : () {
+                : () async {
+                    final caregiverId = AuthSession.instance.userId ?? "";
                     final selectedSlot = availableTimeSlots[selectedTimeIndex];
+                    final selectedDate = _iso(selectedDay!);
 
-                    Navigator.of(context, rootNavigator: true).push(
-                      MaterialPageRoute(
-                        builder: (_) => AppointmentDetailsView(
-                          doctorName: "الطبيبة",
-                          timeRange: _slotLabel(selectedSlot.index),
-                          dateText: _iso(selectedDay!),
-                          childName: selectedChild!.name,
-                          price: 130,
-                          total: 149.5,
-                          caregiverId: AuthSession.instance.userId ?? "",
-                          doctorId: widget.doctorId,
-                          childId: selectedChild!.childId,
-                          timeSlotId: selectedSlot.index.toString(),
+                    setState(() => isCheckingConflict = true);
+
+                    try {
+                      final hasConflict = await _hasConflictBeforeBooking(
+                        caregiverId: caregiverId,
+                        date: selectedDate,
+                        slotIndex: selectedSlot.index,
+                      );
+
+                      if (hasConflict) {
+                        await _showConflictDialog();
+                        return;
+                      }
+
+                      if (!mounted) return;
+
+                      Navigator.of(context, rootNavigator: true).push(
+                        MaterialPageRoute(
+                          builder: (_) => AppointmentDetailsView(
+                            doctorName: widget.doctorName,
+                            timeRange: _slotLabel(selectedSlot.index),
+                            dateText: selectedDate,
+                            dateIso: selectedDate,
+                            childName: selectedChild!.name,
+                            price: 130,
+                            total: 149.5,
+                            caregiverId: caregiverId,
+                            doctorId: widget.doctorId,
+                            childId: selectedChild!.childId,
+                            timeSlotId: selectedSlot.index.toString(),
+                            slotIndex: selectedSlot.index,
+                          ),
                         ),
-                      ),
-                    );
+                      );
+                    } catch (e) {
+                      if (!mounted) return;
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('تعذر التحقق من الموعد: $e')),
+                      );
+                    } finally {
+                      if (mounted) {
+                        setState(() => isCheckingConflict = false);
+                      }
+                    }
                   },
             style: ElevatedButton.styleFrom(
               backgroundColor: BColors.accent,
@@ -477,14 +609,23 @@ class _BookingViewState extends State<BookingView> {
                 borderRadius: BorderRadius.circular(54.52),
               ),
             ),
-            child: const Text(
-              "حجز",
-              style: TextStyle(
-                fontSize: 20.44,
-                fontWeight: FontWeight.w600,
-                color: Colors.white,
-              ),
-            ),
+            child: isCheckingConflict
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Text(
+                    "حجز",
+                    style: TextStyle(
+                      fontSize: 20.44,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
           ),
         ),
       ],

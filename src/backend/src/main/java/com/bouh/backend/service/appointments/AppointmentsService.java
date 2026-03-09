@@ -11,7 +11,10 @@ import com.bouh.backend.model.repository.caregiverRepo;
 import com.bouh.backend.model.repository.childrenRepo;
 import com.bouh.backend.model.repository.doctorRepo;
 import org.springframework.stereotype.Service;
-
+import com.bouh.backend.model.Dto.appointmentCreateRequestDto;
+import com.bouh.backend.model.Dto.AvailabilitySchedule.AvailabilityDayDto;
+import com.bouh.backend.model.Dto.AvailabilitySchedule.AvailabilityStoredSlotDto;
+import com.bouh.backend.model.repository.AvailabilityScheduleRepo;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.time.ZoneId;
@@ -26,7 +29,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-
+import java.time.Duration;
 /**
  * Service for Upcoming and Previous appointments. Time from TimeSlotConfig only
  * (slot index).
@@ -42,14 +45,20 @@ public class AppointmentsService {
     private final doctorRepo doctorRepo;
     private final childrenRepo childrenRepo;
     private final caregiverRepo caregiverRepo;
+    private final AvailabilityScheduleRepo availabilityScheduleRepo;
 
-    public AppointmentsService(AppointmentRepo appointmentRepo, doctorRepo doctorRepo, childrenRepo childrenRepo,
-            caregiverRepo caregiverRepo) {
-        this.appointmentRepo = appointmentRepo;
-        this.doctorRepo = doctorRepo;
-        this.childrenRepo = childrenRepo;
-        this.caregiverRepo = caregiverRepo;
-    }
+   public AppointmentsService(
+        AppointmentRepo appointmentRepo,
+        doctorRepo doctorRepo,
+        childrenRepo childrenRepo,
+        caregiverRepo caregiverRepo,
+        AvailabilityScheduleRepo availabilityScheduleRepo) {
+    this.appointmentRepo = appointmentRepo;
+    this.doctorRepo = doctorRepo;
+    this.childrenRepo = childrenRepo;
+    this.caregiverRepo = caregiverRepo;
+    this.availabilityScheduleRepo = availabilityScheduleRepo;
+}
 
     /**
      * Upcoming: date >= today, excluding same-day slots whose end time has passed.
@@ -338,7 +347,180 @@ public class AppointmentsService {
             return -1;
         }
     }
-//     public void cancelAppointment(String appointmentId) throws ExecutionException, InterruptedException {
-//     appointmentRepo.deleteById(appointmentId);
-// }
+    public appointmentDto createAppointment(String caregiverId, appointmentCreateRequestDto request)
+        throws ExecutionException, InterruptedException {
+
+    if (caregiverId == null || caregiverId.isBlank()) {
+        throw new IllegalArgumentException("Caregiver not authenticated");
+    }
+
+    if (request.getDoctorId() == null || request.getDoctorId().isBlank()) {
+        throw new IllegalArgumentException("doctorId is required");
+    }
+
+    if (request.getChildId() == null || request.getChildId().isBlank()) {
+        throw new IllegalArgumentException("childId is required");
+    }
+
+    if (request.getDate() == null || request.getDate().isBlank()) {
+        throw new IllegalArgumentException("date is required");
+    }
+
+    if (request.getSlotIndex() == null ||
+            request.getSlotIndex() < 0 ||
+            request.getSlotIndex() >= TimeSlotConfig.SLOT_COUNT) {
+        throw new IllegalArgumentException("Invalid slotIndex");
+    }
+
+    if (request.getPaymentIntentId() == null || request.getPaymentIntentId().isBlank()) {
+        throw new IllegalArgumentException("paymentIntentId is required");
+    }
+
+    // 1) check caregiver doesn't have another appointment at the same date and slot
+    boolean hasConflict = appointmentRepo.caregiverHasConflict(
+            caregiverId,
+            request.getDate(),
+            request.getSlotIndex()
+    );
+
+    if (hasConflict) {
+        throw new IllegalStateException("يوجد لديك موعد آخر في نفس التاريخ والوقت");
+    }
+
+    // 2) check doctor availability for the requested date and slot
+    AvailabilityDayDto day = availabilityScheduleRepo.getDay(request.getDoctorId(), request.getDate());
+
+    if (day == null || day.getSlots() == null || day.getSlots().isEmpty()) {
+        throw new IllegalStateException("هذا الموعد غير متاح");
+    }
+
+    AvailabilityStoredSlotDto targetSlot = null;
+    for (AvailabilityStoredSlotDto slot : day.getSlots()) {
+        if (slot.getIndex() == request.getSlotIndex()) {
+            targetSlot = slot;
+            break;
+        }
+    }
+
+    if (targetSlot == null) {
+        throw new IllegalStateException("هذا الموعد غير متاح");
+    }
+
+    if (targetSlot.isBooked()) {
+        throw new IllegalStateException("تم حجز هذا الموعد مسبقًا");
+    }
+
+    // 3) prepare appointment DTO
+    appointmentDto dto = new appointmentDto();
+    dto.setCaregiverId(caregiverId);
+    dto.setDoctorId(request.getDoctorId());
+    dto.setChildId(request.getChildId());
+    dto.setTimeSlotId(String.valueOf(request.getSlotIndex()));
+    dto.setMeetingLink("");
+    dto.setAmount(request.getAmount());
+    dto.setStatus(0);
+    dto.setPaymentIntentId(request.getPaymentIntentId());
+
+    // endTime اختياري للآن، لأن الواجهة تبنيه من slotIndex
+    dto.setEndTime(null);
+
+    // 4) Save the appointment
+    appointmentDto created = appointmentRepo.create(dto, request.getDate(), request.getSlotIndex());
+
+    // 5) update availability schedule to mark the slot as booked
+    targetSlot.setBooked(true);
+
+    Map<String, AvailabilityDayDto> daysToUpdate = new HashMap<>();
+    daysToUpdate.put(request.getDate(), day);
+
+    availabilityScheduleRepo.update(
+            request.getDoctorId(),
+            daysToUpdate,
+            new HashSet<>()
+    );
+
+    return created;
+}
+public void cancelAppointment(String caregiverId, String appointmentId)
+        throws ExecutionException, InterruptedException {
+
+    if (caregiverId == null || caregiverId.isBlank()) {
+        throw new IllegalArgumentException("Caregiver not authenticated");
+    }
+
+    if (appointmentId == null || appointmentId.isBlank()) {
+        throw new IllegalArgumentException("appointmentId is required");
+    }
+
+    appointmentDto appointment = appointmentRepo.findById(appointmentId);
+
+    if (appointment == null) {
+        throw new IllegalArgumentException("الموعد غير موجود");
+    }
+
+   String appointmentCaregiverId = appointment.getCaregiverId();
+String appointmentDoctorId = appointment.getDoctorId();
+
+boolean isCaregiverOwner =
+        appointmentCaregiverId != null && caregiverId.equals(appointmentCaregiverId);
+
+boolean isDoctorOwner =
+        appointmentDoctorId != null && caregiverId.equals(appointmentDoctorId);
+
+if (!isCaregiverOwner && !isDoctorOwner) {
+    throw new IllegalStateException("غير مصرح لك بإلغاء هذا الموعد");
+}
+    Timestamp startTs = appointment.getStartDateTime();
+    if (startTs == null) {
+        throw new IllegalStateException("تعذر تحديد وقت الموعد");
+    }
+
+    ZonedDateTime start = ZonedDateTime.ofInstant(
+            Instant.ofEpochSecond(startTs.getSeconds(), startTs.getNanos()),
+            ZONE
+    );
+
+    ZonedDateTime now = ZonedDateTime.now(ZONE);
+
+    Duration remaining = Duration.between(now, start);
+
+    // مسموح فقط إذا باقي أكثر من 30 دقيقة
+    if (!remaining.minusMinutes(30).isPositive()) {
+        throw new IllegalStateException("لا يمكن إلغاء الموعد قبل أقل من 30 دقيقة من وقت البدء");
+    }
+
+    String doctorId = appointment.getDoctorId();
+    if (doctorId == null || doctorId.isBlank()) {
+        throw new IllegalStateException("تعذر تحديد الدكتور");
+    }
+
+    String date = start.toLocalDate().format(DateTimeFormatter.ISO_LOCAL_DATE);
+    int slotIndex = TimeSlotConfig.getSlotIndexForStartTime(start.toLocalTime());
+
+    if (slotIndex < 0 || slotIndex >= TimeSlotConfig.SLOT_COUNT) {
+        throw new IllegalStateException("تعذر تحديد الفترة الزمنية للموعد");
+    }
+
+    AvailabilityDayDto day = availabilityScheduleRepo.getDay(doctorId, date);
+    if (day != null && day.getSlots() != null) {
+        for (AvailabilityStoredSlotDto slot : day.getSlots()) {
+            if (slot.getIndex() == slotIndex) {
+                slot.setBooked(false);
+                break;
+            }
+        }
+
+        Map<String, AvailabilityDayDto> daysToUpdate = new HashMap<>();
+        daysToUpdate.put(date, day);
+
+        availabilityScheduleRepo.update(
+                doctorId,
+                daysToUpdate,
+                new HashSet<>()
+        );
+    }
+
+    appointmentRepo.deleteById(appointmentId);
+}
+
 }

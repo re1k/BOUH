@@ -1,10 +1,12 @@
 import 'dart:convert';
+import 'package:bouh/dto/bookAppointmentRequestDto.dart';
 import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'package:bouh/config/api_config.dart';
 import 'package:bouh/dto/upcomingAppointmentDto.dart';
 import 'package:bouh/authentication/AuthSession.dart';
+import 'package:bouh/dto/bookAppointmentRequestDto.dart';
 
 class AppointmentsService {
   final AuthSession _session = AuthSession.instance;
@@ -71,13 +73,31 @@ class AppointmentsService {
   }
 
   Future<void> cancelAppointment({required String appointmentId}) async {
+    final token = _session.idToken;
+    if (token == null || token.isEmpty) {
+      throw Exception('UNAUTHORIZED');
+    }
+
     final url = Uri.parse(
       '${ApiConfig.baseUrl}/api/appointments/$appointmentId',
     );
-    final res = await http.delete(url);
+
+    final res = await http.delete(
+      url,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
 
     if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw Exception('Backend error ${res.statusCode}: ${res.body}');
+      try {
+        final body = jsonDecode(res.body);
+        final message = body['message']?.toString();
+        throw Exception(message ?? 'Failed to cancel appointment');
+      } catch (_) {
+        throw Exception('Backend error ${res.statusCode}: ${res.body}');
+      }
     }
   }
 
@@ -267,5 +287,33 @@ class AppointmentsService {
         .where('doctorId', isEqualTo: doctorId)
         .snapshots()
         .asyncMap((_) => getFullPreviousWithUpcomingForDoctor(doctorId));
+  }
+
+  Future<void> createAppointment(BookAppointmentRequestDto request) async {
+    final token = _session.idToken;
+    if (token == null || token.isEmpty) {
+      throw Exception('UNAUTHORIZED');
+    }
+
+    final url = Uri.parse('${ApiConfig.baseUrl}/api/appointments');
+
+    final res = await http.post(
+      url,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode(request.toJson()),
+    );
+
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      try {
+        final body = jsonDecode(res.body);
+        final message = body['message']?.toString();
+        throw Exception(message ?? 'Failed to create appointment');
+      } catch (_) {
+        throw Exception('Failed to create appointment: ${res.body}');
+      }
+    }
   }
 }

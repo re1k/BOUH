@@ -70,7 +70,10 @@ class _DoctorDetailsViewState extends State<DoctorDetailsView> {
                                 qualifications: qualifications,
                               ),
                             if (tabIndex == 1)
-                              BookingView(doctorId: widget.doctor.doctorId!),
+                              BookingView(
+                                doctorId: widget.doctor.doctorId!,
+                                doctorName: doctorName,
+                              ),
                             const SizedBox(height: 18),
                           ],
                         ),

@@ -2,27 +2,32 @@ import 'package:flutter/material.dart';
 import 'package:bouh/theme/base_themes/colors.dart';
 import 'payment_sheet.dart';
 import 'package:flutter_stripe/flutter_stripe.dart' as stripe;
+import 'package:bouh/services/appointmentsService.dart';
+import 'package:bouh/dto/bookAppointmentRequestDto.dart';
+import 'package:bouh/View/viewAppointments/bookedAppointmentsUpcoming.dart';
+import 'package:bouh/authentication/AuthSession.dart';
 
-class AppointmentDetailsView extends StatelessWidget {
+class AppointmentDetailsView extends StatefulWidget {
   const AppointmentDetailsView({
     super.key,
     required this.doctorName,
     required this.timeRange,
     required this.dateText,
+    required this.dateIso,
     required this.childName,
     required this.price,
     required this.total,
-
     required this.doctorId,
     required this.childId,
-
     required this.timeSlotId,
+    required this.slotIndex,
     required this.caregiverId,
   });
 
   final String doctorName;
   final String timeRange;
   final String dateText;
+  final String dateIso;
   final String childName;
   final double price;
   final double total;
@@ -31,7 +36,207 @@ class AppointmentDetailsView extends StatelessWidget {
   final String childId;
 
   final String timeSlotId;
-  final String caregiverId; // later will use the session
+  final int slotIndex;
+  final String caregiverId;
+
+  @override
+  State<AppointmentDetailsView> createState() => _AppointmentDetailsViewState();
+}
+
+class _AppointmentDetailsViewState extends State<AppointmentDetailsView> {
+  final AppointmentsService _appointmentsService = AppointmentsService();
+  bool _isSubmitting = false;
+
+  Future<void> _handlePaymentAndBooking() async {
+    if (_isSubmitting) return;
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      final paymentIntentId = await PaymentSheet.show(total: widget.total);
+
+      if (!mounted) return;
+
+      await _appointmentsService.createAppointment(
+        BookAppointmentRequestDto(
+          doctorId: widget.doctorId,
+          childId: widget.childId,
+          date: widget.dateIso,
+          slotIndex: widget.slotIndex,
+          paymentIntentId: paymentIntentId,
+          amount: (widget.total * 100).round(),
+        ),
+      );
+
+      if (!mounted) return;
+
+      await showDialog(
+        context: context,
+        builder: (_) => Directionality(
+          textDirection: TextDirection.rtl,
+          child: AlertDialog(
+            backgroundColor: BColors.white,
+            actionsAlignment: MainAxisAlignment.center,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: const Text(
+              'تم الحجز بنجاح',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: BColors.textDarkestBlue,
+              ),
+            ),
+            content: const Text(
+              'تم الدفع وتأكيد الموعد بنجاح.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 15,
+                color: BColors.darkGrey,
+                height: 1.4,
+              ),
+            ),
+            actions: [
+              ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: BColors.primary,
+                  foregroundColor: BColors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  'حسناً',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      if (!mounted) return;
+
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (_) => BookedAppointmentsUpcoming(
+            caregiverId: AuthSession.instance.userId,
+            currentIndex: 2,
+          ),
+        ),
+        (route) => false,
+      );
+    } on stripe.StripeException {
+      if (!mounted) return;
+
+      await showDialog(
+        context: context,
+        builder: (_) => Directionality(
+          textDirection: TextDirection.rtl,
+          child: AlertDialog(
+            backgroundColor: BColors.white,
+            actionsAlignment: MainAxisAlignment.center,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: const Text(
+              'لم تتم عملية الدفع',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: BColors.textDarkestBlue,
+              ),
+            ),
+            content: const Text(
+              'تم إلغاء الدفع أو حدث خطأ.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 15,
+                color: BColors.darkGrey,
+                height: 1.4,
+              ),
+            ),
+            actions: [
+              ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: BColors.validationError,
+                  foregroundColor: BColors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  'حسناً',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      final msg = e.toString().replaceFirst('Exception: ', '');
+
+      await showDialog(
+        context: context,
+        builder: (_) => Directionality(
+          textDirection: TextDirection.rtl,
+          child: AlertDialog(
+            backgroundColor: BColors.white,
+            actionsAlignment: MainAxisAlignment.center,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: const Text(
+              'تعذر إتمام الحجز',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: BColors.textDarkestBlue,
+              ),
+            ),
+            content: Text(
+              msg,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 15,
+                color: BColors.darkGrey,
+                height: 1.4,
+              ),
+            ),
+            actions: [
+              ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: BColors.validationError,
+                  foregroundColor: BColors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  'حسناً',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -65,13 +270,12 @@ class AppointmentDetailsView extends StatelessWidget {
 
                 const SizedBox(height: 26),
 
-                // Details card
                 _Card(
                   child: Column(
                     children: [
                       _InfoRow(
-                        label: "الدكتور",
-                        value: doctorName,
+                        label: "الطبيب",
+                        value: widget.doctorName,
                         icon: Icons.favorite_border,
                         iconBg: const Color(0xFFE9EEF3),
                         iconColor: BColors.primary,
@@ -79,7 +283,7 @@ class AppointmentDetailsView extends StatelessWidget {
                       _divider(),
                       _InfoRow(
                         label: "الوقت",
-                        value: timeRange,
+                        value: widget.timeRange,
                         icon: Icons.watch_later_outlined,
                         iconBg: const Color(0xFFE9EEF3),
                         iconColor: BColors.primary,
@@ -87,7 +291,7 @@ class AppointmentDetailsView extends StatelessWidget {
                       _divider(),
                       _InfoRow(
                         label: "التاريخ",
-                        value: dateText,
+                        value: widget.dateText,
                         icon: Icons.calendar_month_outlined,
                         iconBg: const Color(0xFFE9EEF3),
                         iconColor: BColors.primary,
@@ -95,7 +299,7 @@ class AppointmentDetailsView extends StatelessWidget {
                       _divider(),
                       _InfoRow(
                         label: "الطفل",
-                        value: childName,
+                        value: widget.childName,
                         icon: Icons.person_outline,
                         iconBg: const Color(0xFFE9EEF3),
                         iconColor: BColors.primary,
@@ -106,7 +310,6 @@ class AppointmentDetailsView extends StatelessWidget {
 
                 const SizedBox(height: 26),
 
-                // thin line separator
                 Container(
                   height: 1,
                   width: double.infinity,
@@ -115,15 +318,17 @@ class AppointmentDetailsView extends StatelessWidget {
 
                 const SizedBox(height: 26),
 
-                // Price summary card
                 _Card(
                   child: Column(
                     children: [
-                      _PriceRow(label: "سعر الموعد", value: "${(price)} ريال"),
+                      _PriceRow(
+                        label: "سعر الموعد",
+                        value: "${widget.price} ريال",
+                      ),
                       const SizedBox(height: 14),
                       _PriceRow(
                         label: "المجموع",
-                        value: "${(total)} ريال",
+                        value: "${widget.total} ريال",
                         bold: true,
                       ),
                     ],
@@ -132,185 +337,11 @@ class AppointmentDetailsView extends StatelessWidget {
 
                 const SizedBox(height: 36),
 
-                // Pay button
                 SizedBox(
                   width: 240,
                   height: 56,
                   child: ElevatedButton(
-                    onPressed: () async {
-                      try {
-                        final paymentIntentId = await PaymentSheet.show(
-                          total: total,
-                        );
-
-                        if (!context.mounted) return;
-
-                        await showDialog(
-                          context: context,
-                          builder: (_) => Directionality(
-                            textDirection: TextDirection.rtl,
-                            child: AlertDialog(
-                              backgroundColor: BColors.white,
-                              actionsAlignment: MainAxisAlignment.center,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              title: const Text(
-                                'تم الدفع بنجاح',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w700,
-                                  color: BColors.textDarkestBlue,
-                                ),
-                              ),
-                              content: const Text(
-                                'تمت عملية الدفع بنجاح.',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  color: BColors.darkGrey,
-                                  height: 1.4,
-                                ),
-                              ),
-                              actions: [
-                                ElevatedButton(
-                                  onPressed: () => Navigator.of(context).pop(),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: BColors.primary,
-                                    foregroundColor: BColors.white,
-
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                  ),
-                                  child: const Text(
-                                    'حسناً',
-                                    style: TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-
-                        Navigator.pop(
-                          context,
-                          paymentIntentId,
-                        ); // will be return the value fpr jano to store the appointment
-                      } on stripe.StripeException catch (e) {
-                        if (!context.mounted) return;
-
-                        await showDialog(
-                          context: context,
-                          builder: (_) => Directionality(
-                            textDirection: TextDirection.rtl,
-                            child: AlertDialog(
-                              backgroundColor: BColors.white,
-                              actionsAlignment: MainAxisAlignment.center,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              title: const Text(
-                                'لم تتم عملية الدفع',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w700,
-                                  color: BColors.textDarkestBlue,
-                                ),
-                              ),
-                              content: Text(
-                                'تم إلغاء الدفع أو حدث خطأ.',
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  color: BColors.darkGrey,
-                                  height: 1.4,
-                                ),
-                              ),
-                              actions: [
-                                ElevatedButton(
-                                  onPressed: () => Navigator.of(context).pop(),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: BColors.validationError,
-                                    foregroundColor: BColors.white,
-
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                  ),
-                                  child: const Text(
-                                    'حسناً',
-                                    style: TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      } catch (e) {
-                        if (!context.mounted) return;
-
-                        await showDialog(
-                          context: context,
-                          builder: (_) => Directionality(
-                            textDirection: TextDirection.rtl,
-                            child: AlertDialog(
-                              backgroundColor: BColors.white,
-                              actionsAlignment: MainAxisAlignment.center,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              title: const Text(
-                                'خطأ غير متوقع',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w700,
-                                  color: BColors.textDarkestBlue,
-                                ),
-                              ),
-                              content: const Text(
-                                'حدث خطأ أثناء معالجة الدفع.\nيرجى المحاولة مرة أخرى.',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  color: BColors.darkGrey,
-                                  height: 1.4,
-                                ),
-                              ),
-                              actions: [
-                                ElevatedButton(
-                                  onPressed: () => Navigator.of(context).pop(),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: BColors.validationError,
-                                    foregroundColor: BColors.white,
-
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                  ),
-                                  child: const Text(
-                                    'حسناً',
-                                    style: TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      }
-                    },
+                    onPressed: _isSubmitting ? null : _handlePaymentAndBooking,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: BColors.accent,
                       elevation: 0,
@@ -318,14 +349,23 @@ class AppointmentDetailsView extends StatelessWidget {
                         borderRadius: BorderRadius.circular(54.52),
                       ),
                     ),
-                    child: const Text(
-                      "دفع",
-                      style: TextStyle(
-                        fontSize: 20.44,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
+                    child: _isSubmitting
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text(
+                            "دفع",
+                            style: TextStyle(
+                              fontSize: 20.44,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
                   ),
                 ),
 
