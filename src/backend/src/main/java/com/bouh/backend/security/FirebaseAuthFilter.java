@@ -21,6 +21,14 @@ import java.util.List;
 @Component // Registers this filter as a Spring-managed component
 public class FirebaseAuthFilter extends OncePerRequestFilter {
 
+
+    // remove this (after testing)
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        return path.startsWith("/api/gemini/");
+    }
+
     /**
      * This method is executed ONCE for every incoming HTTP request.
      * It runs BEFORE the request reaches any Controller.
@@ -31,6 +39,14 @@ public class FirebaseAuthFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain)
             throws ServletException, IOException {
+
+        // For admin
+        // CORS preflight requests (OPTIONS) carry no Bearer token;
+        // let them through so CorsConfig can add the required headers.
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            filterChain.doFilter(request, response);
+            return;
+        }
 
         // Read the Authorization header from the HTTP request
         String header = request.getHeader("Authorization");
