@@ -282,13 +282,69 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
       onActionTap = _refundLoading
           ? null
           : () async {
-              final ok = await _refundAppointment(dto);
-              if (ok && mounted) {
+              final refundSucceeded = await _refundAppointment(dto);
+              if (!refundSucceeded) return;
+
+              try {
+                await _appointmentsService.cancelAppointment(
+                  appointmentId: dto.appointmentId,
+                );
+
+                if (!mounted) return;
+
                 setState(() {
                   _list.removeWhere(
                     (x) => x.appointmentId == dto.appointmentId,
                   );
                 });
+
+                await showDialog(
+                  context: context,
+                  builder: (_) => Directionality(
+                    textDirection: TextDirection.rtl,
+                    child: AlertDialog(
+                      backgroundColor: BColors.white,
+                      actionsAlignment: MainAxisAlignment.center,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      title: const Text(
+                        'تم الإلغاء بنجاح',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: BColors.textDarkestBlue,
+                        ),
+                      ),
+                      content: const Text(
+                        'تم إلغاء الموعد واسترجاع المبلغ بنجاح.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: BColors.darkGrey,
+                          height: 1.4,
+                        ),
+                      ),
+                      actions: [
+                        ElevatedButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: BColors.primary,
+                            foregroundColor: BColors.white,
+                          ),
+                          child: const Text('حسناً'),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              } catch (e) {
+                if (!mounted) return;
+
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text("فشل إلغاء الموعد: $e")));
               }
             };
     }
@@ -339,13 +395,14 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
 
   Future<bool> _refundAppointment(UpcomingAppointmentDto dto) async {
     final pi = dto.paymentIntentId?.trim();
+
     if (pi == null || pi.isEmpty) {
-      if (!mounted) return false;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('لا يوجد paymentIntentId لهذا الموعد')),
+        const SnackBar(content: Text("لا يوجد paymentIntentId لهذا الموعد")),
       );
       return false;
     }
+
     final confirm = await ConfirmationPopup.show(
       context,
       title: 'تأكيد الإلغاء',
@@ -357,65 +414,13 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
     if (confirm != true) return false;
 
     setState(() => _refundLoading = true);
+
     try {
       await _refundService.refund(paymentIntentId: pi);
-      if (!mounted) return true;
-      await showDialog(
-        context: context,
-        builder: (_) => Directionality(
-          textDirection: TextDirection.rtl,
-          child: AlertDialog(
-            backgroundColor: BColors.white,
-            actionsAlignment: MainAxisAlignment.center,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            title: const Text(
-              'تم الإلغاء بنجاح',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontFamily: 'Markazi Text',
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: BColors.textDarkestBlue,
-              ),
-            ),
-            content: const Text(
-              'تم إلغاء الموعد واسترجاع المبلغ بنجاح.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontFamily: 'Markazi Text',
-                fontSize: 15,
-                color: BColors.darkGrey,
-                height: 1.4,
-              ),
-            ),
-            actions: [
-              ElevatedButton(
-                onPressed: () => Navigator.of(context).pop(),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: BColors.primary,
-                  foregroundColor: BColors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: const Text(
-                  'حسناً',
-                  style: TextStyle(
-                    fontFamily: 'Markazi Text',
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
       return true;
     } catch (e) {
       if (!mounted) return false;
+
       await showDialog(
         context: context,
         builder: (_) => Directionality(
@@ -430,45 +435,24 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
               'فشل الإلغاء',
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontFamily: 'Markazi Text',
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
                 color: BColors.textDarkestBlue,
               ),
             ),
             content: const Text(
-              'حدث خطأ أثناء إلغاء الموعد.\nيرجى المحاولة مرة أخرى.',
+              'حدث خطأ أثناء استرجاع المبلغ.\nيرجى المحاولة مرة أخرى.',
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontFamily: 'Markazi Text',
                 fontSize: 15,
                 color: BColors.darkGrey,
                 height: 1.4,
               ),
             ),
-            actions: [
-              ElevatedButton(
-                onPressed: () => Navigator.of(context).pop(),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: BColors.validationError,
-                  foregroundColor: BColors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: const Text(
-                  'حسناً',
-                  style: TextStyle(
-                    fontFamily: 'Markazi Text',
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
           ),
         ),
       );
+
       return false;
     } finally {
       if (mounted) setState(() => _refundLoading = false);

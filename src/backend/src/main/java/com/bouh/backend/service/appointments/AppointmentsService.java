@@ -438,7 +438,7 @@ public class AppointmentsService {
             daysToUpdate,
             new HashSet<>()
     );
-
+//Loba 
     return created;
 }
 public void cancelAppointment(String caregiverId, String appointmentId)
@@ -484,10 +484,10 @@ if (!isCaregiverOwner && !isDoctorOwner) {
 
     Duration remaining = Duration.between(now, start);
 
-    // مسموح فقط إذا باقي أكثر من 30 دقيقة
-    if (!remaining.minusMinutes(30).isPositive()) {
-        throw new IllegalStateException("لا يمكن إلغاء الموعد قبل أقل من 30 دقيقة من وقت البدء");
-    }
+// Allowed only if more than 30 minutes remain before start
+if (remaining.compareTo(Duration.ofMinutes(30)) <= 0) {
+    throw new IllegalStateException("لا يمكن إلغاء الموعد قبل أقل من 30 دقيقة من وقت البدء");
+}
 
     String doctorId = appointment.getDoctorId();
     if (doctorId == null || doctorId.isBlank()) {

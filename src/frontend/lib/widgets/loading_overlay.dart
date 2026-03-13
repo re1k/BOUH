@@ -13,6 +13,7 @@ class BouhLoadingOverlay extends StatefulWidget {
 
   /// Overrides the dimmed overlay color. Default is semi-transparent black.
   final Color? barrierColor;
+
   /// When false, no background is drawn (spinner only). Ignored if [barrierColor] is set.
   final bool showBarrier;
   final double size;
@@ -42,37 +43,46 @@ class _BouhLoadingOverlayState extends State<BouhLoadingOverlay>
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: barrierColor,
-      child: Center(
-        child: SizedBox(
-          width: widget.size,
-          height: widget.size,
-          child: AnimatedBuilder(
-            animation: _controller,
-            builder: (context, child) {
-              return CustomPaint(
-                painter: _CircularGradientProgressPainter(
-                  progress: _controller.value,
-                  colors: const [
-                    BColors.primary,
-                    BColors.accent,
-                    BColors.secondary,
-                    BColors.primary,
-                  ],
-                  strokeWidth: 3,
-                ),
-              );
-            },
-          ),
+    final child = Center(
+      child: SizedBox(
+        width: widget.size,
+        height: widget.size,
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, child) {
+            return CustomPaint(
+              painter: _CircularGradientProgressPainter(
+                progress: _controller.value,
+                colors: const [
+                  BColors.primary,
+                  BColors.accent,
+                  BColors.secondary,
+                  BColors.primary,
+                ],
+                strokeWidth: 3,
+              ),
+            );
+          },
         ),
       ),
     );
+
+    // If no barrier is wanted, don't block touches
+    if (!widget.showBarrier && widget.barrierColor == null) {
+      return IgnorePointer(
+        ignoring: true,
+        child: Material(type: MaterialType.transparency, child: child),
+      );
+    }
+
+    return Material(color: barrierColor, child: child);
   }
 
   Color get barrierColor {
     if (widget.barrierColor != null) return widget.barrierColor!;
-    return widget.showBarrier ? Colors.black.withOpacity(0.35) : Colors.transparent;
+    return widget.showBarrier
+        ? Colors.black.withOpacity(0.35)
+        : Colors.transparent;
   }
 }
 
