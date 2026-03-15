@@ -43,9 +43,6 @@ public class RefundService {
     public RefundResponseDto refund(RefundRequestDto request, String uid) {
         try {
 
-            // Notify the other party (caregiver or doctor) that the appointment was canceled. 
-            notifyOtherPartyAboutCanceledAppointment(request.getPaymentIntentId(), uid);
-
             // 1) Retrieve PaymentIntent
             PaymentIntent intent = PaymentIntent.retrieve(request.getPaymentIntentId());
 
@@ -65,6 +62,9 @@ public class RefundService {
             }
 
             Refund refund = Refund.create(builder.build());
+
+            // Notify the other party (caregiver or doctor) that the appointment was canceled.
+            notifyOtherPartyAboutCanceledAppointment(request.getPaymentIntentId(), uid);
 
             return new RefundResponseDto(
                     refund.getId(),

@@ -4,6 +4,7 @@ import com.bouh.backend.model.Dto.DoctorScheduleDto;
 import com.bouh.backend.model.Dto.appointmentDto;
 import com.bouh.backend.model.Dto.doctorDto;
 import com.bouh.backend.model.Dto.AvailabilitySchedule.AvailabilityStoredSlotDto;
+import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.*;
 import com.google.firebase.auth.FirebaseAuth;
 import lombok.extern.slf4j.Slf4j;
@@ -323,6 +324,9 @@ public class doctorRepo {
             }
             DocumentReference doctorRef = firestore.collection("doctors").document(uid);
 
+            // delete all doctor appointments
+            deleteByDoctorId(uid);
+
             // delete doctor profile image if exists
             String ImagePathToDelete = doctor.getProfilePhotoURL();
             if (ImagePathToDelete != null) {
@@ -352,7 +356,6 @@ public class doctorRepo {
         }
     }
 
-    
     public void deleteAccountProfileImage(String imageUrl) {
 
         String imagePath = extractPathFromUrl(imageUrl);
@@ -370,6 +373,19 @@ public class doctorRepo {
             log.info("Image deleted successfully: " + imagePath);
         } else {
             log.error("Image not found: " + imagePath);
+        }
+    }
+
+    public void deleteByDoctorId(String uid) throws Exception {
+
+        ApiFuture<QuerySnapshot> future = firestore.collection("appointments")
+                .whereEqualTo("doctorId", uid)
+                .get();
+
+        List<QueryDocumentSnapshot> docs = future.get().getDocuments();
+
+        for (QueryDocumentSnapshot doc : docs) {
+            doc.getReference().delete().get();
         }
     }
 

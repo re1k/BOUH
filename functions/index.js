@@ -60,15 +60,15 @@ export const sendCancellationNotification = onRequest(async (req, res) => {
   let body;
   if (notificationType === "doctor_canceled") {
     // Backend sends full label e.g. "يوم الأحد 14 مايو الساعة 5:30 مساءً"
-    title = timeLabel
+    body = timeLabel
       ? "تم إلغاء موعد " + timeLabel
       : "تم إلغاء الموعد";
-    body = "تم إلغاء الموعد من قبل الطبيب.";
+    title = "تم إلغاء الموعد من قبل الطبيب.";
   } else if (notificationType === "caregiver_canceled") {
-    title = timeLabel
+    body = timeLabel
       ? "تم إلغاء موعد اليوم الساعة " + timeLabel
       : "تم إلغاء الموعد";
-    body = "تم إلغاء الموعد من قبل مقدم الرعاية.";
+    title = "تم إلغاء الموعد من قبل مقدم الرعاية.";
   } else {
     console.log("Unknown notificationType:", notificationType);
     res.status(400).json({ success: false, reason: "unknown_notification_type" });
@@ -87,4 +87,51 @@ export const sendCancellationNotification = onRequest(async (req, res) => {
     console.error(`Error sending cancellation notification to ${targetRole} ${targetUserId}:`, err);
     res.status(500).json({ success: false, reason: "send_failed" });
   }
+});
+
+export const sendBookingNotification = onRequest(async (req, res) => {
+    if (req.method !== "POST") {
+        return res.status(405).send("Method Not Allowed");
+    }
+
+    const { targetUserId, appointmentStartTime } = req.body;
+
+    if (!targetUserId) {
+        console.log("Missing required fields in request body.");
+        res.status(400).send("Missing required fields");
+        return;
+    }
+
+    try {
+        const userDoc = await db.collection("doctors")
+            .doc(targetUserId)
+            .get();
+
+        if (!userDoc.exists) {
+            return res.status(404).send("User not found");
+        }
+
+        const token = userDoc.exists ? userDoc.data().fcmToken : null;
+        if (!token) {
+              console.log(`No FCM token found for doctor ${targetUserId}, skipping.`);
+              res.status(200).json({ success: false, reason: "no_fcm_token" });
+              return;        
+            }
+
+        const timeLabel = appointmentStartTime || "";
+        await messaging.send({
+            token,
+            notification: {
+                title: "موعد جديد قريب",
+                body: timeLabel ? `تم حجز موعد جديد الساعة ${timeLabel}` : "تم حجز موعد جديد",
+            },
+        });
+      
+        console.log(`Booking notification sent to doctor ${targetUserId}`);
+        return res.status(200).send("Notification sent");
+
+    } catch (error) {
+        console.error("sendBookingNotification error:", error);
+        return res.status(500).send("Internal error: " + error.message);
+    }
 });

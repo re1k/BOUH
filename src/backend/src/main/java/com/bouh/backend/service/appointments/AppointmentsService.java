@@ -16,6 +16,7 @@ import com.bouh.backend.model.Dto.AvailabilitySchedule.AvailabilityDayDto;
 import com.bouh.backend.model.Dto.AvailabilitySchedule.AvailabilityStoredSlotDto;
 import com.bouh.backend.model.repository.AvailabilityScheduleRepo;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -30,14 +31,27 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.time.Duration;
+import org.springframework.beans.factory.annotation.Value;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import lombok.extern.slf4j.Slf4j;
 /**
  * Service for Upcoming and Previous appointments. Time from TimeSlotConfig only
  * (slot index).
  * Status: 0: ABSENT, 1: PRESENT. Order: newest to oldest.
  */
+@Slf4j
 @Service
 public class AppointmentsService {
+    // Add these fields at the top of the class, with the other fields
+    private final HttpClient httpClient;
 
+    @Value("${bouh.cloud-function.booking-url:}")
+    private String bookingFunctionUrl;
+
+    
     private static final ZoneId ZONE = ZoneId.of("Asia/Riyadh");
     private static final DateTimeFormatter TIME_NO_AMPM = DateTimeFormatter.ofPattern("h:mm");
 
@@ -58,6 +72,7 @@ public class AppointmentsService {
     this.childrenRepo = childrenRepo;
     this.caregiverRepo = caregiverRepo;
     this.availabilityScheduleRepo = availabilityScheduleRepo;
+    this.httpClient = HttpClient.newHttpClient();
 }
 
     /**
@@ -438,7 +453,10 @@ public class AppointmentsService {
             daysToUpdate,
             new HashSet<>()
     );
-//Loba 
+
+    // Notify the doctor if the appointment is within the next hour.
+    notifyDoctorAboutNewBooking(created, request.getDate(), request.getSlotIndex());
+
     return created;
 }
 public void cancelAppointment(String caregiverId, String appointmentId)
@@ -484,10 +502,10 @@ if (!isCaregiverOwner && !isDoctorOwner) {
 
     Duration remaining = Duration.between(now, start);
 
-// Allowed only if more than 30 minutes remain before start
-if (remaining.compareTo(Duration.ofMinutes(30)) <= 0) {
-    throw new IllegalStateException("لا يمكن إلغاء الموعد قبل أقل من 30 دقيقة من وقت البدء");
-}
+    // مسموح فقط إذا باقي أكثر من 30 دقيقة (انا لبى عدلته عشان الايرور مدري صح ولا لا حطيت الي اقترحه)
+    if (remaining.minusMinutes(30).isNegative() || remaining.minusMinutes(30).isZero()) {
+        throw new IllegalStateException("لا يمكن إلغاء الموعد قبل أقل من 30 دقيقة من وقت البدء");
+    }
 
     String doctorId = appointment.getDoctorId();
     if (doctorId == null || doctorId.isBlank()) {
@@ -522,5 +540,77 @@ if (remaining.compareTo(Duration.ofMinutes(30)) <= 0) {
 
     appointmentRepo.deleteById(appointmentId);
 }
+
+    // ─────────────────────────────────────────────────────────────
+    // Booking notification helpers
+    // ─────────────────────────────────────────────────────────────
+
+    /**
+     * Sends a booking notification to the doctor only when the appointment
+     * is less than 1 hour away. Builds a human-readable Arabic time string
+     * (e.g. "8:30 صباحًا") and delegates to callBookingFunction.
+     */
+    private void notifyDoctorAboutNewBooking(appointmentDto created, String date, int slotIndex) {
+        String doctorId = created.getDoctorId();
+        if (doctorId == null || doctorId.isBlank()) return;
+
+        // Reconstruct the appointment start as a ZonedDateTime to measure
+        // how far away it is from right now.
+        ZonedDateTime appointmentStart = LocalDate
+                .parse(date)
+                .atTime(TimeSlotConfig.slotStart(slotIndex))
+                .atZone(ZONE);
+        
+        ZonedDateTime appointmentEnd = LocalDate
+                .parse(date)
+                .atTime(TimeSlotConfig.slotEnd(slotIndex))
+                .atZone(ZONE);
+        
+
+        ZonedDateTime now = ZonedDateTime.now(ZONE);
+        Duration untilStartAppointment = Duration.between(now, appointmentStart);
+        Duration untilEndAppointment = Duration.between(now, appointmentEnd);
+
+
+        // Skip notification if the appointment is in the past or >= 60 minutes away
+        if (untilEndAppointment.isNegative() || untilStartAppointment.toMinutes() >= 60) return;
+
+        // Build Arabic time string, e.g. "8:30 صباحًا" or "3:00 مساءً"
+        LocalTime startTime = TimeSlotConfig.slotStart(slotIndex);
+        String amPm = startTime.getHour() < 12 ? "صباحًا" : "مساءً";
+        String timeText = startTime.format(DateTimeFormatter.ofPattern("h:mm")) + " " + amPm;
+
+        callBookingFunction(doctorId, timeText);
+    }
+
+    /**
+     * POSTs a JSON payload to the booking Cloud Function asynchronously.
+     * Async so the appointment creation response is never delayed by this call.
+     */
+    private void callBookingFunction(String targetUserId, String appointmentStartTime) {
+        if (bookingFunctionUrl == null || bookingFunctionUrl.isBlank()) {
+            log.warn("Booking cloud function URL not configured, skipping notification.");
+            return;
+        }
+
+        String json = String.format(
+            "{\"targetUserId\":\"%s\",\"targetRole\":\"doctor\",\"appointmentStartTime\":\"%s\"}",
+                targetUserId, appointmentStartTime);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(bookingFunctionUrl))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(json))
+                .build();
+
+        // Fire-and-forget: if the Cloud Function is temporarily down,
+        // the appointment is still created successfully.
+        httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                .thenAccept(resp -> log.info("Booking cloud function responded: {} {}", resp.statusCode(), resp.body()))
+                .exceptionally(ex -> {
+                    log.error("Failed to call booking cloud function: {}", ex.getMessage());
+                    return null;
+                });
+    }
 
 }
