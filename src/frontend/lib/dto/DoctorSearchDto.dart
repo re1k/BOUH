@@ -1,15 +1,15 @@
 class DoctorSearchDTO {
   final String id;
   final String name;
-  final String specialty;
-  final double rating;
+  final String areaOfKnowledge;
+  final double averageRating;
   final String profilePhotoURL;
 
   DoctorSearchDTO({
     required this.id,
     required this.name,
-    required this.specialty,
-    required this.rating,
+    required this.areaOfKnowledge,
+    required this.averageRating,
     required this.profilePhotoURL,
   });
 
@@ -17,9 +17,9 @@ class DoctorSearchDTO {
     return DoctorSearchDTO(
       id: json['id'] ?? '',
       name: json['name'] ?? '',
-      specialty: json['specialty'] ?? '',
-      rating: (json['rating'] ?? 0).toDouble(),
-      profilePhotoURL: json['profilePhoto'] ?? '',
+      areaOfKnowledge: json['areaOfKnowledge'] ?? '',
+      averageRating: (json['averageRating'] ?? 0).toDouble(),
+      profilePhotoURL: json['profilePhotoURL'] ?? '',
     );
   }
 }

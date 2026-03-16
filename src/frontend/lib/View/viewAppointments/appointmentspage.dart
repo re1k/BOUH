@@ -7,7 +7,7 @@ import 'package:bouh/View/caregiverHomepage/widgets/caregiverBottomNav.dart';
 import 'package:bouh/View/BookAppointment/DoctorDetails.dart';
 
 import 'package:bouh/dto/doctorSummaryDto.dart';
-import 'package:bouh/services/doctorsService.dart';
+import 'package:bouh/services/DoctorSearchService.dart';
 
 class AppointmentsPage extends StatefulWidget {
   const AppointmentsPage({
@@ -27,13 +27,21 @@ class AppointmentsPage extends StatefulWidget {
 
 class _AppointmentsPageState extends State<AppointmentsPage> {
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
 
   List<DoctorSummaryDto> _allDoctors = [];
   List<DoctorSummaryDto> _filteredDoctors = [];
+  List<DoctorSummaryDto> _searchResults = [];
 
   bool _isLoading = false;
   String? _error;
   Timer? _debounce;
+  String? _selectedArea;
+  bool _hasMore = true;
+  String? _lastDoctorId;
+  bool _isLoadingMore = false;
+  bool _isSearching = false;
+  final DoctorSearchService _service = DoctorSearchService();
 
   static const double _titleTopPadding = 24;
   static const double _titleBottomPadding = 24;
@@ -53,11 +61,25 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
   static const Color _tabInactiveColor = Color(0xFF7D8A96);
   static const Color _searchBorderColor = Color(0xFFE8EBED);
   static const Color _filterButtonBg = Color(0xFF5B8FA3);
+  static const List<String> _areas = [
+    'الكل',
+    'توتر وقلق',
+    'خوف',
+    'حزن',
+    'تفاؤل',
+    'غضب',
+  ];
 
   @override
   void initState() {
     super.initState();
     _searchController.addListener(_onSearchChanged);
+    _scrollController.addListener(() {
+      if (_scrollController.position.pixels >=
+          _scrollController.position.maxScrollExtent - 200) {
+        if (!_isSearching && _selectedArea == null) _loadMore();
+      }
+    });
     _loadDoctorsForCaregiver();
   }
 
@@ -65,13 +87,18 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
     setState(() {
       _isLoading = true;
       _error = null;
+      _allDoctors = [];
+      _lastDoctorId = null;
+      _hasMore = true;
     });
 
     try {
-      final results = await DoctorsService.getDoctorsForCaregiver();
+      final (doctors, hasMore) = await _service.getTopRatedDoctors();
       setState(() {
-        _allDoctors = results;
-        _filteredDoctors = results;
+        _allDoctors = doctors;
+        _filteredDoctors = doctors;
+        _hasMore = hasMore;
+        _lastDoctorId = doctors.isNotEmpty ? doctors.last.doctorId : null;
         _isLoading = false;
       });
     } catch (e) {
@@ -82,23 +109,112 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
     }
   }
 
+  Future<void> _loadMore() async {
+    if (_isLoadingMore || !_hasMore || _lastDoctorId == null) return;
+    setState(() => _isLoadingMore = true);
+    try {
+      final (doctors, hasMore) = await _service.getTopRatedDoctors(
+        lastDoctorId: _lastDoctorId,
+      );
+      setState(() {
+        _allDoctors.addAll(doctors);
+        _filteredDoctors = _allDoctors;
+        _hasMore = hasMore;
+        _lastDoctorId = doctors.isNotEmpty ? doctors.last.doctorId : null;
+        _isLoadingMore = false;
+      });
+    } catch (e) {
+      setState(() => _isLoadingMore = false);
+    }
+  }
+
+  // ── 10.2.32  filter by area ───────────────────────────────────────────────────
+  Future<void> _onAreaSelected(String area) async {
+    // "الكل" clears the filter
+    if (area == 'الكل') {
+      setState(() {
+        _selectedArea = null;
+        _filteredDoctors = _isSearching ? _searchResults : _allDoctors;
+      });
+      return;
+    }
+
+    // toggle off if same area tapped again
+    if (_selectedArea == area) {
+      setState(() {
+        _selectedArea = null;
+        _filteredDoctors = _isSearching ? _searchResults : _allDoctors;
+      });
+      return;
+    }
+
+    setState(() => _selectedArea = area);
+
+    // search is active → filter raw search results locally, no API call
+    if (_isSearching) {
+      setState(() {
+        _filteredDoctors = _searchResults
+            .where((d) => d.areaOfKnowledge == area)
+            .toList();
+      });
+      return;
+    }
+
+    // no search active → call backend
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final results = await _service.filterDoctors(area);
+      setState(() {
+        _filteredDoctors = results;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = 'حدث خطأ في التصفية';
+        _isLoading = false;
+      });
+    }
+  }
+
+  // ── 10.2.31  search by name — calls backend ───────────────────────────────────
   void _onSearchChanged() {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
 
-    _debounce = Timer(const Duration(milliseconds: 300), () {
-      final q = _searchController.text.trim().toLowerCase();
+    _debounce = Timer(const Duration(milliseconds: 300), () async {
+      final q = _searchController.text.trim();
 
-      setState(() {
-        if (q.isEmpty) {
-          _filteredDoctors = _allDoctors;
-        } else {
-          _filteredDoctors = _allDoctors.where((doctor) {
-            final name = doctor.name.toLowerCase();
-            final specialty = doctor.areaOfKnowledge.toLowerCase();
-            return name.contains(q) || specialty.contains(q);
-          }).toList();
-        }
-      });
+      if (q.isEmpty) {
+        setState(() {
+          _isSearching = false;
+          _searchResults = [];
+          _filteredDoctors = _selectedArea != null
+              ? _allDoctors
+                    .where((d) => d.areaOfKnowledge == _selectedArea)
+                    .toList()
+              : _allDoctors;
+        });
+        return;
+      }
+
+      setState(() => _isSearching = true);
+
+      try {
+        final results = await _service.searchDoctors(q);
+        _searchResults = results;
+        final filtered = _selectedArea != null
+            ? results.where((d) => d.areaOfKnowledge == _selectedArea).toList()
+            : results;
+        setState(() => _filteredDoctors = filtered);
+      } catch (e) {
+        setState(() {
+          _searchResults = [];
+          _filteredDoctors = [];
+        });
+      }
     });
   }
 
@@ -106,6 +222,7 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
   void dispose() {
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
+    _scrollController.dispose();
     _debounce?.cancel();
     super.dispose();
   }
@@ -130,6 +247,7 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
               _buildTitle(),
               Expanded(
                 child: SingleChildScrollView(
+                  controller: _scrollController,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -139,6 +257,11 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
                       _buildSearchAndFilter(),
                       const SizedBox(height: _sectionGap),
                       _buildDoctorList(),
+                      if (_isLoadingMore)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          child: Center(child: CircularProgressIndicator()),
+                        ),
                       SizedBox(height: CaregiverBottomNav.barHeight + _cardGap),
                     ],
                   ),
@@ -238,14 +361,55 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
     return Row(
       textDirection: TextDirection.rtl,
       children: [
-        Container(
-          width: _filterButtonSize,
-          height: _filterButtonSize,
-          decoration: BoxDecoration(
-            color: _filterButtonBg,
-            borderRadius: BorderRadius.circular(_searchRadius),
+        PopupMenuButton<String>(
+          color: BColors.white,
+          onSelected: _onAreaSelected,
+          itemBuilder: (_) => [
+            for (final area in _areas)
+              PopupMenuItem(
+                value: area,
+                child: Row(
+                  children: [
+                    if (_selectedArea == area)
+                      const Icon(
+                        Icons.check,
+                        size: 16,
+                        color: Color(0xFF5B8FA3),
+                      ),
+                    if (_selectedArea == area) const SizedBox(width: 6),
+                    Text(area),
+                  ],
+                ),
+              ),
+          ],
+          offset: const Offset(0, 50),
+          child: Container(
+            width: _filterButtonSize,
+            height: _filterButtonSize,
+            decoration: BoxDecoration(
+              color: _filterButtonBg,
+              borderRadius: BorderRadius.circular(_searchRadius),
+            ),
+            // ── shows selected area name or default icon ──
+            child: _selectedArea != null
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Text(
+                        _selectedArea!,
+                        textAlign: TextAlign.center,
+                        textDirection: TextDirection.rtl,
+                        maxLines: 2,
+                        style: const TextStyle(
+                          color: BColors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  )
+                : const Icon(Icons.tune, color: BColors.white, size: 24),
           ),
-          child: const Icon(Icons.tune, color: BColors.white, size: 24),
         ),
         const SizedBox(width: _searchFilterGap),
         Expanded(
@@ -308,7 +472,7 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
 
     if (_filteredDoctors.isEmpty) {
       final q = _searchController.text.trim();
-      if (q.isEmpty) {
+      if (q.isEmpty && _selectedArea == null) {
         return const Center(child: Text("لا يوجد أطباء حالياً"));
       }
       return const Center(child: Text("لا توجد نتائج مطابقة"));
