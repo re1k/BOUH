@@ -25,4 +25,5 @@ public class appointmentDto {
     /** 0 = absent, 1 = present. */
     private Integer status;
     private String paymentIntentId;
+    private Boolean rated;
 }

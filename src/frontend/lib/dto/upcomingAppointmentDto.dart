@@ -8,12 +8,14 @@ class UpcomingAppointmentDto {
   final String? doctorName;
   final String? doctorAreaOfKnowledge;
   final String? doctorProfilePhotoURL;
+  final String? doctorId; //Doctor id used to submit rating.
   /// Caregiver display name; set when response is for doctor view.
   final String? caregiverName;
   final String? childName;
 
   /// 0 = لم يتم الحضور, 1 = تم الحضور. Integer only.
   final int? status;
+  final bool? isRated; //True if already rated by this caregiver.
   final String? meetingLink;
   final String? paymentIntentId;
 
@@ -25,9 +27,11 @@ class UpcomingAppointmentDto {
     this.doctorName,
     this.doctorAreaOfKnowledge,
     this.doctorProfilePhotoURL,
+    this.doctorId,
     this.caregiverName,
     this.childName,
     this.status,
+    this.isRated,
     this.meetingLink,
     this.paymentIntentId,
   });
@@ -42,9 +46,11 @@ class UpcomingAppointmentDto {
       doctorName: json['doctorName'] as String?,
       doctorAreaOfKnowledge: json['doctorAreaOfKnowledge'] as String?,
       doctorProfilePhotoURL: json['doctorProfilePhotoURL'] as String?,
+      doctorId: (json['doctorId'] ?? json['doctorID'])?.toString(),
       caregiverName: json['caregiverName'] as String?,
       childName: json['childName'] as String?,
       status: (json['status'] is num) ? (json['status'] as num).toInt() : null,
+      isRated: (json['rated'] ?? json['isRated']) as bool?,
       meetingLink: json['meetingLink'] as String?,
       paymentIntentId: json['paymentIntentId'] as String?,
     );

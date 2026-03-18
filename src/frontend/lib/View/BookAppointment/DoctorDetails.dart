@@ -42,7 +42,7 @@ class _DoctorDetailsViewState extends State<DoctorDetailsView> {
               builder: (context, snapshot) {
                 final doctorName = widget.doctor.name;
                 final doctorMajor = widget.doctor.areaOfKnowledge;
-                final rating = widget.doctor.rating;
+                final rating = snapshot.data?.averageRating ?? 0.0;
 
                 final years = snapshot.data?.yearsOfExperience ?? 0;
                 final qualifications = snapshot.data?.qualifications ?? [];

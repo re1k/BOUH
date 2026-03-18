@@ -4,6 +4,8 @@ import com.bouh.backend.config.TimeSlotConfig;
 import com.bouh.backend.model.Dto.appointmentDto;
 import com.bouh.backend.model.Dto.caregiverDto;
 import com.google.cloud.Timestamp;
+import com.google.cloud.firestore.DocumentReference;
+import com.google.cloud.firestore.DocumentSnapshot;
 import com.bouh.backend.model.Dto.doctorDto;
 import com.bouh.backend.model.Dto.upcomingAppointmentDto;
 import com.bouh.backend.model.repository.AppointmentRepo;
@@ -333,6 +335,9 @@ public class AppointmentsService {
             dto.setStatus(doc.getStatus() != null && doc.getStatus() == 1 ? 1 : 0);
             dto.setMeetingLink(doc.getMeetingLink());
             dto.setPaymentIntentId(doc.getPaymentIntentId());
+            dto.setDoctorId(doc.getDoctorId());
+            dto.setRated(doc.getRated()); //Rating
+            System.out.println("- is Rated -"+doc.getRated()+"-");
             result.add(dto);
         }
         return result;
@@ -435,6 +440,7 @@ public class AppointmentsService {
     dto.setAmount(request.getAmount());
     dto.setStatus(0);
     dto.setPaymentIntentId(request.getPaymentIntentId());
+    dto.setRated(false); //Rating
 
     // endTime اختياري للآن، لأن الواجهة تبنيه من slotIndex
     dto.setEndTime(null);

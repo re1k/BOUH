@@ -3,6 +3,8 @@ package com.bouh.backend.service.doctors;
 import com.bouh.backend.model.Dto.DoctorDetailsDto;
 import com.bouh.backend.model.Dto.DoctorScheduleDto;
 import com.bouh.backend.model.Dto.DoctorSummaryDto;
+import com.bouh.backend.model.Dto.doctorDto;
+import com.bouh.backend.model.Dto.DoctorBarInfoDto;
 import com.bouh.backend.model.repository.doctorRepo;
 import org.springframework.stereotype.Service;
 
@@ -33,4 +35,11 @@ public class DoctorsService {
     public DoctorScheduleDto getDoctorScheduleByDate(String doctorId, String date) throws Exception {
         return doctorRepo.getDoctorScheduleByDate(doctorId, date);
     }
+
+    // doctor bar info listner
+    public DoctorBarInfoDto getDoctorBarInfo(String doctorId) throws Exception {
+    doctorDto doctor = doctorRepo.findByUid(doctorId);
+    return new DoctorBarInfoDto(doctor.getName(), doctor.getAverageRating());
+    }
+
 }

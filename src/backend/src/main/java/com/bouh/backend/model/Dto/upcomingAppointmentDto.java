@@ -26,4 +26,6 @@ public class upcomingAppointmentDto {
     private Integer status;
     private String meetingLink;
     private String paymentIntentId;
+    private String doctorId;
+    private Boolean rated;
 }

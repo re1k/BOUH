@@ -134,11 +134,7 @@ public class doctorRepo {
             System.out.println("🔥 rating raw = " + raw);
             System.out.println("🔥 rating type = " + (raw == null ? "null" : raw.getClass()));
 
-            double avg = getDouble(doc, "rating");
-            if (avg == 0.0) { // لو ما لقا rating أو كان null
-                avg = getDouble(doc, "averageRating");
-            }
-            dto.setAverageRating(avg);
+            dto.setAverageRating(getDouble(doc, "averageRating"));
 
             dto.setProfilePhotoURL(getString(doc, "profilePhotoURL"));
 
@@ -186,11 +182,7 @@ public class doctorRepo {
         dto.setName(getString(doc, "name"));
         dto.setAreaOfKnowledge(getString(doc, "areaOfKnowledge"));
 
-        double avg = getDouble(doc, "rating");
-        if (avg == 0.0) { // لو ما لقا rating أو كان null
-            avg = getDouble(doc, "averageRating");
-        }
-        dto.setAverageRating(avg);
+        dto.setAverageRating(getDouble(doc, "averageRating"));
 
         Long years = doc.getLong("yearsOfExperience");
         dto.setYearsOfExperience(years == null ? 0 : years.intValue());
@@ -399,5 +391,28 @@ public class doctorRepo {
             log.error("Failed to extract path from URL: " + imageUrl);
             return null;
         }
+    }
+
+    //set a new rate from the caregiver and update the Avg
+    public void addRating(String doctorId, int rating) throws Exception {
+
+        DocumentReference doctorRef = firestore.collection("doctors").document(doctorId);
+        DocumentSnapshot snapshot = doctorRef.get().get();
+
+        double average = snapshot.getDouble("averageRating") == null
+                ? 0.0
+                : snapshot.getDouble("averageRating");
+
+        long total = snapshot.getLong("totalRatings") == null
+                ? 0
+                : snapshot.getLong("totalRatings");
+
+        double newAverage = ((average * total) + rating) / (total + 1);
+        newAverage = Math.round(newAverage * 10.0) / 10.0;
+
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("averageRating", newAverage);
+        updates.put("totalRatings", total + 1);
+        doctorRef.update(updates).get();
     }
 }

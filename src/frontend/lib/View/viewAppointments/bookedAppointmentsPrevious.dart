@@ -6,6 +6,7 @@ import 'package:bouh/authentication/AuthSession.dart';
 import 'package:bouh/authentication/AuthService.dart';
 import 'package:bouh/dto/upcomingAppointmentDto.dart';
 import 'package:bouh/services/appointmentsService.dart';
+import 'package:bouh/View/RateDoctor/rate_doctor_bottom_sheet.dart'; // <Rating feature>
 import 'package:bouh/widgets/loading_overlay.dart';
 import 'widgets/previousBookedAppointmentCard.dart';
 
@@ -424,12 +425,6 @@ class _BookedAppointmentsPreviousState
     );
   }
 
-  /// Returns the caregiver's rating for this doctor (0–5).
-  /// for Reem, next phase will implement
-  int? getRatingForAppointment(UpcomingAppointmentDto dto) {
-    return 3; // THIS IS A PLACEHOLDER
-  }
-
   Widget _buildCardFor(UpcomingAppointmentDto dto) {
     final dateStr = _formatDate(dto.date);
     final timeStr = _formatTimeRange(dto.startTime, dto.endTime);
@@ -439,8 +434,15 @@ class _BookedAppointmentsPreviousState
       profileImage = NetworkImage(dto.doctorProfilePhotoURL!);
     }
     final attendanceStatus = _statusToDisplay(dto.status);
-    // This function will return the rating (0–5) for the doctor
-    final rating = getRatingForAppointment(dto);
+    // <Rating feature> Only show rate button when:
+    // - attended (status == 1)
+    // - NOT rated yet (isRated == false / rated == false in DB)
+    // - doctorId exists (needed by POST /api/rate/add)
+    final doctorId = dto.doctorId?.trim();
+    final attended = dto.status == 1;
+    final isRated = dto.isRated ?? false;
+    final showRateButton =
+        attended && !isRated && (doctorId != null && doctorId.isNotEmpty);
     return PreviousBookedAppointmentCard(
       doctorName: dto.doctorName ?? '',
       specialty: dto.doctorAreaOfKnowledge ?? '',
@@ -449,7 +451,14 @@ class _BookedAppointmentsPreviousState
       time: timeStr,
       profileImage: profileImage,
       attendanceStatus: attendanceStatus,
-      rating: rating,
+      showRateButton: showRateButton,
+      onRateTap: showRateButton
+          ? () => RateDoctorBottomSheet.show(
+                context,
+                doctorId: doctorId!,
+                appointmentId: dto.appointmentId,
+              )
+          : null,
     );
   }
 

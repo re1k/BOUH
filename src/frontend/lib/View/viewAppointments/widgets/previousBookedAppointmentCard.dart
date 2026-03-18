@@ -19,7 +19,8 @@ class PreviousBookedAppointmentCard extends StatelessWidget {
     required this.time,
     required this.attendanceStatus,
     this.profileImage,
-    this.rating,
+    this.showRateButton = false,
+    this.onRateTap,
   });
 
   final String doctorName;
@@ -32,8 +33,9 @@ class PreviousBookedAppointmentCard extends StatelessWidget {
   final String attendanceStatus;
   final ImageProvider? profileImage;
 
-  /// 0–5; only shown when attendanceStatus == "تم الحضور".
-  final int? rating;
+  /// <Rating feature> When true, show the rate button (instead of stars).
+  final bool showRateButton;
+  final VoidCallback? onRateTap;
 
   // Match AppointmentCard exactly
   static const double _cardRadius = 16;
@@ -47,8 +49,7 @@ class PreviousBookedAppointmentCard extends StatelessWidget {
   static const Color _chipBackground = Color(0xFFA6BECB);
   static const Color _attendedBg = Color(0xFF4CAF50);
   static const Color _notAttendedBg = Color(0xFFE85D4F);
-  static const double _starSize = 15;
-  static const double _starOffsetY = 4;
+  static const double _rateOffsetY = 4;
 
   static const double _dateTimeTextOffsetY = 1;
   static const double _nameSpecialtyOffsetY = 4;
@@ -121,11 +122,12 @@ class PreviousBookedAppointmentCard extends StatelessWidget {
                           ],
                         ),
                       ),
-                      if (_isAttended) ...[
+                      // <Rating feature> Button appears only when parent allows it.
+                      if (_isAttended && showRateButton && onRateTap != null) ...[
                         const SizedBox(width: 8),
                         Transform.translate(
-                          offset: const Offset(0, _starOffsetY),
-                          child: _buildStarRow((rating ?? 0).clamp(0, 5)),
+                          offset: const Offset(0, _rateOffsetY),
+                          child: _buildRateButton(),
                         ),
                       ],
                     ],
@@ -149,21 +151,29 @@ class PreviousBookedAppointmentCard extends StatelessWidget {
     );
   }
 
-  Widget _buildStarRow(int filledCount) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      textDirection: TextDirection.rtl,
-      children: List.generate(5, (i) {
-        final filled = i < filledCount;
-        return Padding(
-          padding: const EdgeInsets.only(left: 2),
-          child: Icon(
-            filled ? Icons.star : Icons.star_border,
-            size: _starSize,
-            color: filled ? BColors.accent : BColors.darkGrey,
+  /// <Rating feature> Orange rate button (uses primary accent color).
+  Widget _buildRateButton() {
+    return GestureDetector(
+      onTap: onRateTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        width: _joinButtonWidth,
+        height: _joinButtonHeight,
+        decoration: BoxDecoration(
+          color: BColors.accent,
+          borderRadius: BorderRadius.circular(_joinButtonHeight / 2),
+        ),
+        alignment: Alignment.center,
+        child: const Text(
+          'قيم الموعد',
+          style: TextStyle(
+            fontFamily: 'Markazi Text',
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: BColors.white,
           ),
-        );
-      }),
+        ),
+      ),
     );
   }
 

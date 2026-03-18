@@ -3,6 +3,7 @@ package com.bouh.backend.controller;
 import com.bouh.backend.model.Dto.DoctorDetailsDto;
 import com.bouh.backend.model.Dto.DoctorScheduleDto;
 import com.bouh.backend.model.Dto.DoctorSummaryDto;
+import com.bouh.backend.model.Dto.DoctorBarInfoDto;
 import com.bouh.backend.service.doctors.DoctorsService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -41,5 +42,13 @@ public ResponseEntity<DoctorDetailsDto> getDoctorDetails(@PathVariable String do
             @RequestParam String date
     ) throws Exception {
         return ResponseEntity.ok(doctorsService.getDoctorScheduleByDate(doctorId, date));
+    }
+
+    // doctor bar info
+    @GetMapping("/doctors/{doctorId}/barInfo")
+    public ResponseEntity<DoctorBarInfoDto> getDoctorBarInfo(
+        @PathVariable String doctorId
+    ) throws Exception {
+    return ResponseEntity.ok(doctorsService.getDoctorBarInfo(doctorId));
     }
 }
