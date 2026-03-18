@@ -37,9 +37,6 @@ public class SecurityConfig {
                         .requestMatchers("/api/accounts/**").authenticated()
                         .requestMatchers("/api/admin/**").authenticated()
 
-                        // Gemini test endpoint (remove after testing)
-                        .requestMatchers("/api/gemini/**").permitAll()
-
                         // Any other request must also be authenticated
                         .anyRequest().authenticated()
                 )

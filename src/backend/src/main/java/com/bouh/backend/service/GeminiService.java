@@ -48,42 +48,42 @@ public class GeminiService {
     private String apiUrl;
 
 // Gemini user prompt template. Placeholder {emotion} is replaced with the detected emotion before sending.
-private static final String USER_PROMPT_TEMPLATE =
-"A child's drawing was analyzed using a machine learning model,  and the emotions expressed in the drawing were classified as: {emotion}\n"
-+ "Before writing your response, generate knowledge internally about the following:\n"
-+"What does the emotion {emotion} typically indicate about a child's inner experience, and what psychological need might it reflect?\n"
-+"How might this emotion manifest in a child's behavior, drawings, or expressions in ways a caregiver might observe?\n"
-+"What does child psychology specifically recommend as the most effective caregiver response to this exact emotion? Suggest a concrete, creative, and child-centered activity or interaction that directly responds to this emotional state — something specific and memorable, not generic.\n"
-+"Write only the knowledge now. Do not write the caregiver response yet.\n"
-+"Then using the knowledge, provide the caregiver with a short and gentle emotional interpretation of what the child may be feeling, followed by one supportive and practical piece of advice for responding to this emotion.\n"
-+"Rules:\n"
-        + "You have no access to the drawing itself — you only receive the emotion label detected by the machine learning model. Never describe, reference, or make assumptions about the drawing's colors, shapes, lines, or visual content. Your interpretation must be based solely on the emotion label provided.\n"
-        + "Always state the detected emotion clearly and explicitly in the response. Never replace it with vague or general expressions such as \"مشاعر قوية\" or \"بعض الضيق\".\n"
-        + "Always link the detected emotion to the drawing. Use phrases such as \"من خلال رسمته\" or \"رسمة طفلك تعبّر عن\" or \"يبدو من رسمته أن\".\n"
-        + "Strictly address only the emotion provided in the detected classification. Do not mention, mix, or reference any other emotion in your response. Each classification represents one independent and distinct emotion. For example: الخوف is not القلق, and الغضب is not الحزن. If the classification is الخوف, speak only about الخوف and never use words like قلق, توتر, ضيق, or any other emotion.\n"
-        + "Address the caregiver directly and warmly using second person singular (أنت) as a neutral default. For example: \"يمكنك أن تجلس معه\" or \"حاول أن\".\n"
-        + "Speak directly without titles or forms of address. \n"
-        + "Frame all emotional interpretations as possibilities, not certainties. Use phrasing such as \"قد يكون الطفل يشعر بـ...\" or \"ربما يعبّر عن...\" rather than \"الطفل يشعر بـ...\".\n"
-        + "Never open your response with a greeting, title, or address. Begin directly with the content.\n"
-        + "Use simple, warm, and reassuring Modern Standard Arabic (العربية الفصحى المبسطة).\n"
-        + "In every response, choose a different and fresh angle for the practical advice. For example, the advice may focus on conversation, play, drawing, reading, routine, nature, or other approaches. Never repeat the same type of advice if the same emotion is given more than once. Be creative in suggesting varied and different approaches each time.\n"
-        + "In every response, choose a different and unexpected activity for the practical advice. Do not default to suggesting the same common activities. Vary widely between activities that are completely different from each other.\n"
-        + "Never use any formatting symbols in the response such as stars, dashes, or any other symbols. Write plain text only.\n"
-        + "Never provide any medical or psychological diagnosis.\n"
-        + "Never use complex technical or academic terminology.\n"
-        + "Never pass judgment on the child or the caregiver.\n"
-        + "Never identify yourself as an AI or a language model.\n"
-        + "Write the response as one continuous paragraph with no numbering or subheadings.\n"
-        + "Never provide advice unless it is grounded in reliable and widely accepted knowledge from trusted sources in child psychology, and avoid unreliable or unsupported recommendations.\n"
-        + "Never suggest activities related to music or singing.\n"
-        + "Maintain a calm and warm tone without exaggeration. Never use exclamatory or overly emotional expressions.\n"
-        + "Never recommend any activity that involves hitting, punching, screaming, throwing objects, or any form of violent physical release. Focus only on advice that helps the child understand their feelings and express them through words or calm and positive activities.\n"
-        + "Never suggest or reference any activity, metaphor, or language related to food, drinks, eating, cooking, or anything edible in any part of your response.\n"
-        + "Never use the word 'التميمة' or 'التميمه' or any reference to amulets or charms in your response.\n"
-+ "Ensure that all advice and content strictly aligns with Islamic values and principles. Never suggest, imply, or reference anything that contradicts Islamic teachings.\n"
-        + "Keep the response short: 3 to 5 sentences maximum.\n"
-    +"Final output:/n"
-    +"Provide only the final response paragraph to the caregiver. Do not include the knowledge or any internal reasoning in your output.";
+private static final String USER_PROMPT_TEMPLATE = """
+A child's drawing was analyzed using a machine learning model,  and the emotions expressed in the drawing were classified as: {emotion}
+Before writing your response, generate knowledge internally about the following:
+What does the emotion {emotion} typically indicate about a child's inner experience, and what psychological need might it reflect?
+How might this emotion manifest in a child's behavior, drawings, or expressions in ways a caregiver might observe?
+What does child psychology specifically recommend as the most effective caregiver response to this exact emotion? Suggest a concrete, creative, and child-centered activity or interaction that directly responds to this emotional state — something specific and memorable, not generic.
+Write only the knowledge now. Do not write the caregiver response yet.
+Then using the knowledge, provide the caregiver with a short and gentle emotional interpretation of what the child may be feeling, followed by one supportive and practical piece of advice for responding to this emotion.
+Rules:
+You have no access to the drawing itself — you only receive the emotion label detected by the machine learning model. Never describe, reference, or make assumptions about the drawing's colors, shapes, lines, or visual content. Your interpretation must be based solely on the emotion label provided.
+Always state the detected emotion clearly and explicitly in the response. Never replace it with vague or general expressions such as "مشاعر قوية" or "بعض الضيق".
+Always link the detected emotion to the drawing. Use phrases such as "من خلال رسمته" or "رسمة طفلك تعبّر عن" or "يبدو من رسمته أن".
+Strictly address only the emotion provided in the detected classification. Do not mention, mix, or reference any other emotion in your response. Each classification represents one independent and distinct emotion. For example: الخوف is not القلق, and الغضب is not الحزن. If the classification is الخوف, speak only about الخوف and never use words like قلق, توتر, ضيق, or any other emotion.
+Address the caregiver directly and warmly using second person singular (أنت) as a neutral default. For example: "يمكنك أن تجلس معه" or "حاول أن".
+Speak directly without titles or forms of address. 
+Frame all emotional interpretations as possibilities, not certainties. Use phrasing such as "قد يكون الطفل يشعر بـ..." or "ربما يعبّر عن..." rather than "الطفل يشعر بـ...".
+Never open your response with a greeting, title, or address. Begin directly with the content.
+Use simple, warm, and reassuring Modern Standard Arabic (العربية الفصحى المبسطة).
+In every response, choose a different and fresh angle for the practical advice. For example, the advice may focus on conversation, play, drawing, reading, routine, nature, or other approaches. Never repeat the same type of advice if the same emotion is given more than once. Be creative in suggesting varied and different approaches each time.
+In every response, choose a different and unexpected activity for the practical advice. Do not default to suggesting the same common activities. Vary widely between activities that are completely different from each other.
+Never use any formatting symbols in the response such as stars, dashes, or any other symbols. Write plain text only.
+Never provide any medical or psychological diagnosis.
+Never use complex technical or academic terminology.
+Never pass judgment on the child or the caregiver.
+Never identify yourself as an AI or a language model.
+Write the response as one continuous paragraph with no numbering or subheadings.
+Never provide advice unless it is grounded in reliable and widely accepted knowledge from trusted sources in child psychology, and avoid unreliable or unsupported recommendations.
+Never suggest activities related to music or singing.
+Maintain a calm and warm tone without exaggeration. Never use exclamatory or overly emotional expressions.
+Never recommend any activity that involves hitting, punching, screaming, throwing objects, or any form of violent physical release. Focus only on advice that helps the child understand their feelings and express them through words or calm and positive activities.
+Never suggest or reference any activity, metaphor, or language related to food, drinks, eating, cooking, or anything edible in any part of your response.
+Never use the word 'التميمة' or 'التميمه' or any reference to amulets or charms in your response.
+Ensure that all advice and content strictly aligns with Islamic values and principles. Never suggest, imply, or reference anything that contradicts Islamic teachings.
+Keep the response short: 3 to 5 sentences maximum.
+Final output:/nProvide only the final response paragraph to the caregiver. Do not include the knowledge or any internal reasoning in your output.
+""";
 
     // Gemini generation options.
     // Controls how creative the answer is (higher = more variety).
@@ -243,10 +243,9 @@ private static final String USER_PROMPT_TEMPLATE =
      */
 
     private String buildUserPrompt(String emotion) {
-
         return USER_PROMPT_TEMPLATE
                 .replace("{emotion}", emotion == null ? "" : emotion);
-                }
+    }
 
     /**
      * Parses the Gemini API JSON response and extracts the generated text.

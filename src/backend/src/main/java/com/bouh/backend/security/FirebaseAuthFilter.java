@@ -21,14 +21,6 @@ import java.util.List;
 @Component // Registers this filter as a Spring-managed component
 public class FirebaseAuthFilter extends OncePerRequestFilter {
 
-
-    // remove this (after testing)
-    @Override
-    protected boolean shouldNotFilter(HttpServletRequest request) {
-        String path = request.getRequestURI();
-        return path.startsWith("/api/gemini/");
-    }
-
     /**
      * This method is executed ONCE for every incoming HTTP request.
      * It runs BEFORE the request reaches any Controller.
