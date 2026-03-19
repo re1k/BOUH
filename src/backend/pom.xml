@@ -98,17 +98,37 @@
     <groupId>com.stripe</groupId>
     <artifactId>stripe-java</artifactId>
     <version>31.3.0</version>
-</dependency>
+      </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-mail</artifactId>
         </dependency>
 
+   <!-- for image faster download -->
+   <dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-webflux</artifactId>
+   </dependency>
 
-       
+ <!-- env files reader -->
+   <dependency>
+     <groupId>me.paulschwarz</groupId>
+    <artifactId>spring-dotenv</artifactId>
+    <version>3.0.0</version>
+ </dependency>
+
     </dependencies>
-<build>
+    <build>
+        <!-- For PROTOBUF + GRPC -->
+     <extensions>
+        <extension>
+            <groupId>kr.motd.maven</groupId>
+            <artifactId>os-maven-plugin</artifactId>
+            <version>1.7.0</version>
+        </extension>
+     </extensions>
+
   <plugins>
     <plugin>
       <groupId>org.apache.maven.plugins</groupId>
@@ -131,6 +151,35 @@
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-maven-plugin</artifactId>
     </plugin>
+
+
+    <!-- PROTOBUF + GRPC -->
+        <plugin>
+            <groupId>org.xolstice.maven.plugins</groupId>
+            <artifactId>protobuf-maven-plugin</artifactId>
+            <version>0.6.1</version>
+
+            <configuration>
+                <protocArtifact>
+                    com.google.protobuf:protoc:3.25.3:exe:${os.detected.classifier}
+                </protocArtifact>
+
+                <pluginId>grpc-java</pluginId>
+
+                <pluginArtifact>
+                    io.grpc:protoc-gen-grpc-java:1.63.0:exe:${os.detected.classifier}
+                </pluginArtifact>
+            </configuration>
+            <executions>
+                <execution>
+                    <goals>
+                        <goal>compile</goal>
+                        <goal>compile-custom</goal>
+                    </goals>
+                </execution>
+            </executions>
+
+        </plugin>
   </plugins>
 </build>
 

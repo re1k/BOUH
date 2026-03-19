@@ -37,6 +37,9 @@ public class SecurityConfig {
                         .requestMatchers("/api/accounts/**").authenticated()
                         .requestMatchers("/api/admin/**").authenticated()
 
+                        // Classifier test endpoint (remove after testing)
+                        .requestMatchers("/api/classification/**").permitAll()
+
                         // Any other request must also be authenticated
                         .anyRequest().authenticated()
                 )
