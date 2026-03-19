@@ -451,7 +451,7 @@ class _VerifyEmailViewState extends State<VerifyEmailView> {
           );
         } else {
           _setInlineMessage(
-            'لم يتم تفعيل البريد بعد. يمكنك إعادة الإرسال بعد $_secondsUntilResend ثانية.',
+            '.لم يتم تفعيل البريد بعد',
             color: BColors.validationError,
           );
         }
