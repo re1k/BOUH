@@ -41,6 +41,8 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
   String? _lastDoctorId;
   bool _isLoadingMore = false;
   bool _isSearching = false;
+  Timer? _refreshTimer;
+  Timer? _defaultRefreshTimer;
   final DoctorSearchService _service = DoctorSearchService();
 
   static const double _titleTopPadding = 24;
@@ -81,6 +83,21 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
       }
     });
     _loadDoctorsForCaregiver();
+    _defaultRefreshTimer = Timer.periodic(const Duration(seconds: 3), (
+      _,
+    ) async {
+      if (!_isSearching && _selectedArea == null) {
+        try {
+          final (doctors, hasMore) = await _service.getTopRatedDoctors();
+          setState(() {
+            _allDoctors = doctors;
+            _filteredDoctors = doctors;
+            _hasMore = hasMore;
+            _lastDoctorId = doctors.isNotEmpty ? doctors.last.doctorId : null;
+          });
+        } catch (_) {}
+      }
+    });
   }
 
   Future<void> _loadDoctorsForCaregiver() async {
@@ -132,19 +149,20 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
   Future<void> _onAreaSelected(String area) async {
     // "الكل" clears the filter
     if (area == 'الكل') {
-      setState(() {
-        _selectedArea = null;
-        _filteredDoctors = _isSearching ? _searchResults : _allDoctors;
-      });
+      setState(() => _selectedArea = null);
+      if (!_isSearching)
+        await _loadDoctorsForCaregiver(); // ← fresh fetch
+      else
+        setState(() => _filteredDoctors = _searchResults);
       return;
     }
 
-    // toggle off if same area tapped again
     if (_selectedArea == area) {
-      setState(() {
-        _selectedArea = null;
-        _filteredDoctors = _isSearching ? _searchResults : _allDoctors;
-      });
+      setState(() => _selectedArea = null);
+      if (!_isSearching)
+        await _loadDoctorsForCaregiver(); // ← fresh fetch
+      else
+        setState(() => _filteredDoctors = _searchResults);
       return;
     }
 
@@ -161,6 +179,7 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
     }
 
     // no search active → call backend
+    _startRefreshTimer();
     setState(() {
       _isLoading = true;
       _error = null;
@@ -197,10 +216,12 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
                     .toList()
               : _allDoctors;
         });
+        if (_selectedArea == null) _refreshTimer?.cancel();
         return;
       }
 
       setState(() => _isSearching = true);
+      _startRefreshTimer();
 
       try {
         final results = await _service.searchDoctors(q);
@@ -218,8 +239,37 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
     });
   }
 
+  void _startRefreshTimer() {
+    _refreshTimer?.cancel();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
+      final q = _searchController.text.trim();
+
+      if (q.isNotEmpty) {
+        try {
+          final results = await _service.searchDoctors(q);
+          _searchResults = results;
+          final filtered = _selectedArea != null
+              ? results
+                    .where((d) => d.areaOfKnowledge == _selectedArea)
+                    .toList()
+              : results;
+          setState(() => _filteredDoctors = filtered);
+        } catch (_) {}
+      } else if (_selectedArea != null) {
+        try {
+          final results = await _service.filterDoctors(_selectedArea!);
+          setState(() => _filteredDoctors = results);
+        } catch (_) {}
+      } else {
+        _refreshTimer?.cancel();
+      }
+    });
+  }
+
   @override
   void dispose() {
+    _refreshTimer?.cancel();
+    _defaultRefreshTimer?.cancel();
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     _scrollController.dispose();
