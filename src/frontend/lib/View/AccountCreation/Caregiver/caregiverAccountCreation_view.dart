@@ -61,6 +61,8 @@ class _CaregiverSignupViewState extends State<CaregiverSignupView> {
   bool _passwordTouched = false;
   bool _confirmPasswordTouched = false;
   bool _nameTouched = false;
+  bool _showPassword = false;
+  bool _showConfirmPassword = false;
 
   @override
   void initState() {
@@ -291,9 +293,18 @@ class _CaregiverSignupViewState extends State<CaregiverSignupView> {
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.arrow_back_ios_new_rounded,
+                                  size: 20,
+                                  color: BColors.textDarkestBlue,
+                                ),
+                                onPressed: () => Navigator.pop(context),
+                              ),
+                              const SizedBox(width: 6),
                               const Expanded(
                                 child: Text(
-                                  'دقائق قليلة ويكتمل إنشاء الحساب',
+                                  'دقائق ويكتمل إنشاء الحساب',
                                   textAlign: TextAlign.right,
                                   style: TextStyle(
                                     fontSize: 16,
@@ -313,9 +324,26 @@ class _CaregiverSignupViewState extends State<CaregiverSignupView> {
                         ),
                         const SizedBox(height: 28),
 
+                        /// Name: first field in the form.
+                        _LabeledField(
+                          label: 'اسم مقدم الرعاية *',
+                          placeholder: 'سارة احمد',
+                          keyboardType: TextInputType.name,
+                          obscure: false,
+                          controller: _nameCtrl,
+                          focusNode: _nameFocusNode,
+                          fieldKey: _nameFieldKey,
+                          validator: (v) =>
+                              _nameTouched ? _validateName(v) : null,
+                          textInputAction: TextInputAction.next,
+                          onChanged: (_) => setState(() {}),
+                        ),
+                        const SizedBox(height: 14),
+
                         /// Email: error only after user leaves this field empty/invalid (or on Next).
                         _LabeledField(
                           label: 'البريد الإلكتروني * ',
+                          placeholder: 'example@gmail.com',
                           keyboardType: TextInputType.emailAddress,
                           obscure: false,
                           controller: _emailCtrl,
@@ -331,8 +359,19 @@ class _CaregiverSignupViewState extends State<CaregiverSignupView> {
                         /// Password: error only after user leaves this field (or on Next).
                         _LabeledField(
                           label: 'كلمة المرور *',
+                          placeholder: '••••••••',
                           keyboardType: TextInputType.text,
-                          obscure: true,
+                          obscure: !_showPassword,
+                          suffixIcon: IconButton(
+                            onPressed: () =>
+                                setState(() => _showPassword = !_showPassword),
+                            icon: Icon(
+                              _showPassword
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                              color: BColors.darkGrey,
+                            ),
+                          ),
                           controller: _passwordCtrl,
                           focusNode: _passwordFocusNode,
                           fieldKey: _passwordFieldKey,
@@ -348,8 +387,21 @@ class _CaregiverSignupViewState extends State<CaregiverSignupView> {
                         /// Confirm password: error only after user leaves this field (or on Next).
                         _LabeledField(
                           label: 'تأكيد كلمة المرور *',
+                          placeholder: '••••••••',
                           keyboardType: TextInputType.text,
-                          obscure: true,
+                          obscure: !_showConfirmPassword,
+                          suffixIcon: IconButton(
+                            onPressed: () => setState(
+                              () => _showConfirmPassword =
+                                  !_showConfirmPassword,
+                            ),
+                            icon: Icon(
+                              _showConfirmPassword
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                              color: BColors.darkGrey,
+                            ),
+                          ),
                           controller: _confirmPasswordCtrl,
                           focusNode: _confirmPasswordFocusNode,
                           fieldKey: _confirmPasswordFieldKey,
@@ -361,20 +413,6 @@ class _CaregiverSignupViewState extends State<CaregiverSignupView> {
                         ),
                         const SizedBox(height: 14),
 
-                        /// Name: error only after user leaves this field (or on Next).
-                        _LabeledField(
-                          label: 'اسم مقدم الرعاية *',
-                          keyboardType: TextInputType.name,
-                          obscure: false,
-                          controller: _nameCtrl,
-                          focusNode: _nameFocusNode,
-                          fieldKey: _nameFieldKey,
-                          validator: (v) =>
-                              _nameTouched ? _validateName(v) : null,
-                          textInputAction: TextInputAction.done,
-                          onFieldSubmitted: (_) => _handleNext(context),
-                          onChanged: (_) => setState(() {}),
-                        ),
                         const SizedBox(height: 30),
 
                         /// Next button.
@@ -413,20 +451,6 @@ class _CaregiverSignupViewState extends State<CaregiverSignupView> {
                 ),
               ),
 
-              /// Back arrow overlay (consistent across account creation flows).
-              Positioned(
-                top: 8,
-                right: 16,
-                child: IconButton(
-                  icon: const Icon(
-                    Icons.arrow_back_ios_new_rounded,
-                    size: 20,
-                    color: BColors.textDarkestBlue,
-                  ),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ),
-
               /// Decorative bottom wave (visual only).
               if (MediaQuery.of(context).viewInsets.bottom == 0)
                 Positioned(
@@ -456,6 +480,7 @@ class _CaregiverSignupViewState extends State<CaregiverSignupView> {
 /// validate this field when it loses focus (so error shows only after user leaves the field).
 class _LabeledField extends StatelessWidget {
   final String label;
+  final String? placeholder;
   final bool obscure;
   final TextInputType keyboardType;
 
@@ -474,11 +499,9 @@ class _LabeledField extends StatelessWidget {
   /// Enables keyboard navigation between fields.
   final TextInputAction? textInputAction;
 
-  /// Allows triggering submit logic directly from the keyboard.
-  final ValueChanged<String>? onFieldSubmitted;
-
   /// Keeps button state in sync with typing without changing UI.
   final ValueChanged<String> onChanged;
+  final Widget? suffixIcon;
 
   const _LabeledField({
     required this.label,
@@ -486,11 +509,12 @@ class _LabeledField extends StatelessWidget {
     required this.obscure,
     required this.controller,
     required this.onChanged,
+    this.placeholder,
     this.focusNode,
     this.fieldKey,
     this.validator,
     this.textInputAction,
-    this.onFieldSubmitted,
+    this.suffixIcon,
   });
 
   @override
@@ -498,10 +522,7 @@ class _LabeledField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 13, color: BColors.darkGrey),
-        ),
+        _buildLabel(),
         const SizedBox(height: 8),
 
         /// TextFormField: [fieldKey] allows parent to validate this field on unfocus; [focusNode] tracks focus.
@@ -514,9 +535,14 @@ class _LabeledField extends StatelessWidget {
           textAlign: TextAlign.right,
           validator: validator,
           textInputAction: textInputAction,
-          onFieldSubmitted: onFieldSubmitted,
           onChanged: onChanged,
           decoration: InputDecoration(
+            suffixIcon: suffixIcon,
+            hintText: placeholder,
+            hintStyle: const TextStyle(
+              color: BColors.darkGrey,
+              fontSize: 13,
+            ),
             filled: true,
             fillColor: BColors.white,
             contentPadding: const EdgeInsets.symmetric(
@@ -551,6 +577,31 @@ class _LabeledField extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildLabel() {
+    final trimmed = label.trim();
+    final hasRequiredStar = trimmed.endsWith('*');
+    if (!hasRequiredStar) {
+      return Text(
+        label,
+        style: const TextStyle(fontSize: 13, color: BColors.darkGrey),
+      );
+    }
+
+    final base = trimmed.substring(0, trimmed.length - 1).trimRight();
+    return RichText(
+      text: TextSpan(
+        style: const TextStyle(fontSize: 13, color: BColors.darkGrey),
+        children: [
+          TextSpan(text: '$base '),
+          const TextSpan(
+            text: '*',
+            style: TextStyle(color: BColors.validationError),
+          ),
+        ],
+      ),
     );
   }
 }

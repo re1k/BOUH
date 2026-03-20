@@ -365,20 +365,18 @@ public class doctorRepo {
 
     public void deleteAccountProfileImage(String imageUrl) {
 
-        String imagePath = extractPathFromUrl(imageUrl);
-
-        if (imagePath == null) {
+        if (imageUrl == null) {
             log.error("Invalid image URL");
             return;
         }
 
-        Blob blob = bucket.get(imagePath);
+        Blob blob = bucket.get(imageUrl);
 
         if (blob != null) {
             blob.delete();
-            log.info("Image deleted: {}", imagePath);
+            log.info("Image deleted: {}", imageUrl);
         } else {
-            log.warn("Image not found: {}", imagePath);
+            log.warn("Image not found: {}", imageUrl);
         }
     }
 
@@ -408,18 +406,6 @@ public class doctorRepo {
         } catch (Exception e) {
             log.error("Failed to update doctor FCM token for uid={}", uid, e);
             throw new RuntimeException("Failed to update doctor FCM token", e);
-        }
-    }
-
-    public String extractPathFromUrl(String imageUrl) {
-        try {
-
-            String path = imageUrl.substring(imageUrl.indexOf("/o/") + 3, imageUrl.indexOf("?"));
-            return URLDecoder.decode(path, StandardCharsets.UTF_8);
-
-        } catch (Exception e) {
-            log.error("Failed to extract path from URL: " + imageUrl);
-            return null;
         }
     }
 

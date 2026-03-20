@@ -167,14 +167,15 @@ class AuthService {
     }
 
     if (_pendingDoctorProfileImage != null) {
-      final imageUrl = await _uploadDoctorProfileImageToFirebaseStorage(
+      final storagePath = await _uploadDoctorProfileImageToFirebaseStorage(
         _pendingDoctorProfileImage!,
       );
       print(
-        '[AuthService] createPendingDoctorProfileIfAny: upload result imageUrl=${imageUrl.isEmpty ? "(empty)" : imageUrl}',
+        '[AuthService] createPendingDoctorProfileIfAny: upload result storagePath=${storagePath.isEmpty ? "(empty)" : storagePath}',
       );
-      if (imageUrl.isNotEmpty) {
-        dto.profilePhotoURL = imageUrl;
+      if (storagePath.isNotEmpty) {
+        // Keep existing DTO field name; value is path (not download URL).
+        dto.profilePhotoURL = storagePath;
       }
       _pendingDoctorProfileImage = null;
     }
@@ -238,7 +239,7 @@ class AuthService {
     return (resolvedRole, name);
   }
 
-  //Uploads doctor profile image to Firebase Storage and returns the download URL.
+  //Uploads doctor profile image to Firebase Storage and returns object fullPath.
   Future<String> _uploadDoctorProfileImageToFirebaseStorage(File file) async {
     print(
       '[AuthService] _uploadDoctorProfileImageToFirebaseStorage: file=${file.path}',
@@ -252,8 +253,7 @@ class AuthService {
         .child('doctorProfileImages')
         .child('${user.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg');
     await ref.putFile(file);
-    final url = await ref.getDownloadURL();
-    return url;
+    return ref.fullPath;
   }
 
   //Backend: POST /api/accounts/register/doctors to register doctor on backend.
@@ -271,6 +271,12 @@ class AuthService {
     final uri = Uri.parse('${ApiConfig.baseUrl}/api/accounts/register/doctors');
 
     final body = doctorDto.toJson()..['doctorId'] = user.uid;
+    final storagePath = (doctorDto.profilePhotoURL ?? '').trim();
+    if (storagePath.isNotEmpty) {
+      // Backend compatibility: keep expected image field name(s), value is path.
+      body['imageUrl'] = storagePath;
+      body['ImgaeUrl'] = storagePath;
+    }
 
     final response = await http.post(
       uri,

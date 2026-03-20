@@ -6,6 +6,7 @@ class DoctorSignupData {
   final String name;
   final String gender;
   final File? profileImage;
+  final String? profileImagePath;
 
   const DoctorSignupData({
     required this.email,
@@ -13,5 +14,6 @@ class DoctorSignupData {
     required this.name,
     required this.gender,
     this.profileImage,
+    this.profileImagePath,
   });
 }

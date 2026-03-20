@@ -60,13 +60,16 @@ class PasswordRequirementsText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      text,
-      textAlign: TextAlign.right,
-      style: const TextStyle(
-        fontSize: 12,
-        color: BColors.darkGrey,
-        height: 1.35,
+    const style = TextStyle(
+      fontSize: 12,
+      color: BColors.darkGrey,
+    );
+    return const Align(
+      alignment: Alignment.centerRight,
+      child: Text(
+        text,
+        textAlign: TextAlign.right,
+        style: style,
       ),
     );
   }
