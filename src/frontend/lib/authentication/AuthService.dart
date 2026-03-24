@@ -228,14 +228,15 @@ class AuthService {
 
     print('role: $role');
     print('name: $name');
-    
+
     if (role == null || (role != 'doctor' && role != 'caregiver')) {
       throw Exception('Invalid role from backend: $role');
     }
 
     //Doctor with PENDING registration
-    final resolvedRole =
-        (role == 'doctor' && registrationStatus == 'PENDING') ? 'pending' : role;
+    final resolvedRole = (role == 'doctor' && registrationStatus == 'PENDING')
+        ? 'pending'
+        : role;
     return (resolvedRole, name);
   }
 

@@ -9,13 +9,13 @@ initializeApp();
 const db = getFirestore();
 const messaging = getMessaging();
 
-// HTTP endpoint called by the Spring Boot backend after it decides a notification is needed.
+// HTTP endpoint called by the Spring Boot backend.
 //
 // Expected JSON body:
 //   targetUserId         - UID of the user who should receive the notification
 //   targetRole           - "caregiver" or "doctor" (determines which Firestore collection to query)
 //   notificationType     - "doctor_canceled" or "caregiver_canceled" (determines message content)
-//   appointmentStartTime - human-readable time string, e.g. "4:30 مساءً" (included in title)
+//   appointmentStartTime - Time string, e.g. "4:30 مساءً" (included in title)
 export const sendCancellationNotification = onRequest(async (req, res) => {
   // Only accept POST
   if (req.method !== "POST") {

@@ -9,8 +9,8 @@ class DoctorBarInfoDto {
     final double parsedRating = (rawRating is num)
         ? rawRating.toDouble()
         : (rawRating is String)
-            ? (double.tryParse(rawRating) ?? 0.0)
-            : 0.0;
+        ? (double.tryParse(rawRating) ?? 0.0)
+        : 0.0;
 
     return DoctorBarInfoDto(
       name: (json['name'] ?? json['doctorName'] ?? '').toString(),
@@ -18,4 +18,3 @@ class DoctorBarInfoDto {
     );
   }
 }
-

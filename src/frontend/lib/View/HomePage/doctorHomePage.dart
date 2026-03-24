@@ -512,8 +512,8 @@ class DoctorHomePageState extends State<DoctorHomePage>
                 final name = snapshot.data?.name.trim().isNotEmpty == true
                     ? snapshot.data!.name
                     : (AuthSession.instance.userName?.trim().isNotEmpty == true
-                        ? AuthSession.instance.userName!
-                        : '');
+                          ? AuthSession.instance.userName!
+                          : '');
                 final rating = snapshot.data?.averageRating ?? 0.0;
 
                 return Column(
@@ -628,12 +628,14 @@ class _RatingStars extends StatelessWidget {
               blendMode: BlendMode.srcIn,
               shaderCallback: (bounds) {
                 if (frac <= 0) {
-                  return LinearGradient(colors: [emptyColor, emptyColor])
-                      .createShader(bounds);
+                  return LinearGradient(
+                    colors: [emptyColor, emptyColor],
+                  ).createShader(bounds);
                 }
                 if (frac >= 1) {
-                  return LinearGradient(colors: [filledColor, filledColor])
-                      .createShader(bounds);
+                  return LinearGradient(
+                    colors: [filledColor, filledColor],
+                  ).createShader(bounds);
                 }
 
                 // One icon only; gradient simulates partial fill.
