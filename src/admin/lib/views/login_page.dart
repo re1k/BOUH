@@ -382,6 +382,7 @@ class _LoginPageState extends State<LoginPage> {
                           focusNode: _passwordFocusNode,
                           obscureText: _obscurePassword,
                           textAlign: TextAlign.right,
+                          textDirection: TextDirection.ltr,
                           textInputAction: TextInputAction.done,
                           onFieldSubmitted: (_) => _handleLogin(),
                           validator: (v) =>
