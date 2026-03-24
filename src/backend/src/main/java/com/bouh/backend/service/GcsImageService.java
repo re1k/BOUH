@@ -5,23 +5,24 @@ import org.springframework.stereotype.Service;
 import lombok.extern.slf4j.Slf4j;
 import com.google.cloud.storage.Blob;
 import com.google.cloud.storage.Bucket;
+import com.google.cloud.storage.Storage.SignUrlOption;
 import com.google.cloud.ReadChannel;
 import com.google.firebase.cloud.StorageClient;
 import java.io.InputStream;
 import java.nio.channels.Channels;
 import java.awt.image.BufferedImage;
 import javax.imageio.ImageIO;
+import java.net.URL;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
 public class GcsImageService {
 
     private final Bucket bucket;
-    private final String bucketName;
 
     public GcsImageService(@Value("${gcs.bucket.name}") String bucketName) {
         this.bucket = StorageClient.getInstance().bucket(bucketName);
-        this.bucketName = bucketName;
     }
 
     /**
@@ -33,15 +34,21 @@ public class GcsImageService {
             throw new IllegalArgumentException("Invalid image path");
         }
 
-        return String.format(
-                "https://storage.googleapis.com/%s/%s",
-                bucketName,
-                imagePath);
-    }
+        Blob blob = bucket.get(imagePath);
+        if (blob == null) {
+            throw new RuntimeException("Image not found: " + imagePath);
+        }
 
-    /**
+            /**
      * Download image (streaming)
      */
+        URL signedUrl = blob.signUrl(
+                604800L,
+                TimeUnit.SECONDS,
+                SignUrlOption.withV4Signature());
+        return signedUrl.toString();
+    }
+
     public BufferedImage downloadImage(String imagePath) throws Exception {
 
         // Fetch blob reference (no download yet)
@@ -61,6 +68,7 @@ public class GcsImageService {
             return ImageIO.read(inputStream);
         }
     }
+
 
     /**
      * Delete image
