@@ -460,7 +460,7 @@ class CaregiverHomepageState extends State<CaregiverHomepage>
                   offset: const Offset(0, -8),
                   child: Text(
                     AuthSession.instance.userName?.trim().isNotEmpty == true
-                        ? AuthSession.instance.userName!
+                        ? 'أهلًا ${AuthSession.instance.userName!}'
                         : 'أهلًا',
                     style: TextStyle(
                       fontFamily: 'Markazi Text',
