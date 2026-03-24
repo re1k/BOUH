@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:bouh/View/HomePage/doctorNavbar.dart';
 import 'package:bouh/View/Login/login_view.dart';
 import 'package:bouh/View/WelcomePage/welcomePage_view.dart';
@@ -25,7 +26,19 @@ class _LoginResolverViewState extends State<LoginResolverView> {
     //On app start, Firebase may already have a currentUser but our in-memory
     //AuthSession has no JWT yet. Refresh it so _session.idToken is populated
     //before we route based on the persisted role.
-    await AuthService.instance.refreshSession();
+    try {
+      await AuthService.instance.refreshSession();
+    } on FirebaseAuthException {
+      // Token refresh failed 
+      // Account was deleted or revoked.
+      // Clear the stale session and send the user to login.
+      await AuthService.instance.signOut();
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const LoginView()),
+      );
+      return;
+    }
 
     final role = await AuthService.instance.role;
 
