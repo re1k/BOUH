@@ -8,7 +8,8 @@ class AppointmentCard extends StatelessWidget {
   final String time;
   final String caregiverName;
   final String childName;
-  final AppointmentButtonType buttonType;
+  final AppointmentButtonType? buttonType;
+
   /// When set, the action button (بدء/إلغاء) is tappable and triggers this callback.
   final VoidCallback? onActionTap;
 
@@ -18,7 +19,7 @@ class AppointmentCard extends StatelessWidget {
     required this.time,
     required this.caregiverName,
     required this.childName,
-    required this.buttonType,
+    this.buttonType,
     this.onActionTap,
   });
 
@@ -122,13 +123,17 @@ class AppointmentCard extends StatelessWidget {
 
                   Align(
                     alignment: Alignment.centerLeft,
-                    child: onActionTap != null
-                        ? GestureDetector(
-                            onTap: onActionTap,
-                            behavior: HitTestBehavior.opaque,
-                            child: _actionButton(),
-                          )
-                        : _actionButton(),
+                    child:
+                        (buttonType == null ||
+                            buttonType == AppointmentButtonType.none)
+                        ? const SizedBox.shrink()
+                        : (onActionTap != null
+                              ? GestureDetector(
+                                  onTap: onActionTap,
+                                  behavior: HitTestBehavior.opaque,
+                                  child: _actionButton(),
+                                )
+                              : _actionButton()),
                   ),
                 ],
               ),
@@ -140,7 +145,7 @@ class AppointmentCard extends StatelessWidget {
   }
 
   Widget _actionButton() {
-    if (buttonType == AppointmentButtonType.none) {
+    if (buttonType == null || buttonType == AppointmentButtonType.none) {
       return const SizedBox.shrink();
     }
 
@@ -177,10 +182,7 @@ class AppointmentCard extends StatelessWidget {
           const SizedBox(width: 6),
           Text(
             text,
-            style: const TextStyle(
-              fontFamily: 'Markazi Text',
-              fontSize: 14,
-            ),
+            style: const TextStyle(fontFamily: 'Markazi Text', fontSize: 14),
           ),
         ],
       ),

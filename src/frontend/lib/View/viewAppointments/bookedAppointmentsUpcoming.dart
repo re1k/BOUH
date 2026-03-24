@@ -446,8 +446,8 @@ class _BookedAppointmentsUpcomingState
     final bool canCancel = !showJoin && _canCancelAppointment(dto);
 
     VoidCallback? onActionTap;
-    String actionLabel;
-    Color actionColor;
+    String? actionLabel;
+    Color? actionColor;
 
     if (showJoin) {
       actionLabel = 'انضمام';
@@ -534,6 +534,11 @@ class _BookedAppointmentsUpcomingState
       actionLabel = '';
      actionColor = BColors.darkGrey;
     }
+    //  else {
+    //   actionLabel = 'لا يمكن إلغاء الموعد قبل أقل من 30 دقيقة من وقت البدء';
+    //   actionColor = Colors.grey;
+    //   onActionTap = null;
+    // }
 
     return AppointmentCard(
       doctorName: dto.doctorName ?? '',

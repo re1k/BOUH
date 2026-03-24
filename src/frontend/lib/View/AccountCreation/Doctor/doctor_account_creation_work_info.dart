@@ -208,6 +208,7 @@ class _DoctorAccountCreationStep2State
       yearsOfExperience: _parseYears(_years!),
       scfhsNumber: _classificationCtrl.text.trim().replaceAll(RegExp(r'\s'), ''),
       iban: 'SA${_ibanSuffixCtrl.text.trim().replaceAll(RegExp(r'\s'), '')}',
+      profilePhotoURL: signupData.profileImagePath,
       registrationStatus: 'PENDING',
     );
 
@@ -315,9 +316,18 @@ class _DoctorAccountCreationStep2State
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
+                            IconButton(
+                              icon: const Icon(
+                                Icons.arrow_back_ios_new_rounded,
+                                size: 20,
+                                color: BColors.textDarkestBlue,
+                              ),
+                              onPressed: () => Navigator.pop(context),
+                            ),
+                            const SizedBox(width: 6),
                             const Expanded(
                               child: Text(
-                                'دقائق قليلة ويكتمل إنشاء الحساب',
+                                'دقائق ويكتمل إنشاء الحساب',
                                 textAlign: TextAlign.right,
                                 style: TextStyle(
                                   fontSize: 16,
@@ -346,9 +356,20 @@ class _DoctorAccountCreationStep2State
                       // ================= FIELDS (مؤهلات: dynamic list 1–12) =================
                       Align(
                         alignment: Alignment.centerRight,
-                        child: const Text(
-                          'المؤهلات *',
-                          style: TextStyle(fontSize: 13, color: BColors.darkGrey),
+                        child: RichText(
+                          text: const TextSpan(
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: BColors.darkGrey,
+                            ),
+                            children: [
+                              TextSpan(text: 'المؤهلات '),
+                              TextSpan(
+                                text: '*',
+                                style: TextStyle(color: BColors.validationError),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -365,7 +386,15 @@ class _DoctorAccountCreationStep2State
                                   focusNode: _qualificationFocusNodes[i],
                                   keyboardType: TextInputType.text,
                                   decoration: _inputDecorationWithCounter(
-                                      _qualificationCtrls[i], 70),
+                                    _qualificationCtrls[i],
+                                    70,
+                                  ).copyWith(
+                                    hintText: 'مثال: بكالوريوس علم نفس',
+                                    hintStyle: const TextStyle(
+                                      color: BColors.darkGrey,
+                                      fontSize: 13,
+                                    ),
+                                  ),
                                   textAlign: TextAlign.right,
                                   textDirection: TextDirection.rtl,
                                   maxLength: 70,
@@ -440,6 +469,7 @@ class _DoctorAccountCreationStep2State
                       _LabeledFormField(
                         fieldKey: _classificationFieldKey,
                         label: 'رقم التخصص *',
+                        placeholder: 'أدخل رقم التخصص (10 أرقام)',
                         controller: _classificationCtrl,
                         keyboardType: TextInputType.number,
                         decoration: _inputDecoration(),
@@ -462,7 +492,10 @@ class _DoctorAccountCreationStep2State
                         fieldKey: _ibanFieldKey,
                         controller: _ibanSuffixCtrl,
                         decoration: _inputDecorationWithCounter(
-                            _ibanSuffixCtrl, 22),
+                          _ibanSuffixCtrl,
+                          22,
+                        ),
+                        placeholder: 'أدخل 22 رقمًا بعد SA',
                         focusNode: _ibanFocusNode,
                         onChanged: (_) {
                           if (_ibanTouched) {
@@ -481,7 +514,7 @@ class _DoctorAccountCreationStep2State
                           Expanded(
                             child: _LabeledDropdown(
                               label: 'التخصص *',
-                              hint: '',
+                              hint: 'اختر التخصص',
                               value: _specialty,
                               items: _specialties,
                               onChanged: (v) => setState(() => _specialty = v),
@@ -491,7 +524,7 @@ class _DoctorAccountCreationStep2State
                           Expanded(
                             child: _LabeledDropdown(
                               label: 'سنوات الخبرة *',
-                              hint: '',
+                              hint: 'اختر عدد السنوات',
                               value: _years,
                               items: _yearsList,
                               onChanged: (v) => setState(() => _years = v),
@@ -546,20 +579,6 @@ class _DoctorAccountCreationStep2State
                     ],
                   ),
                 ),
-                ),
-              ),
-
-              // ================== BACK ARROW (ON TOP) ==================
-              Positioned(
-                top: 8,
-                right: 16,
-                child: IconButton(
-                  icon: const Icon(
-                    Icons.arrow_back_ios_new_rounded,
-                    size: 20,
-                    color: BColors.textDarkestBlue,
-                  ),
-                  onPressed: () => Navigator.pop(context),
                 ),
               ),
               if (_isSubmitting) BouhLoadingOverlay(),
@@ -664,6 +683,7 @@ class _MiniDots extends StatelessWidget {
 class _LabeledFormField extends StatelessWidget {
   final Key? fieldKey;
   final String label;
+  final String? placeholder;
   final TextEditingController controller;
   final TextInputType keyboardType;
   final InputDecoration decoration;
@@ -671,7 +691,6 @@ class _LabeledFormField extends StatelessWidget {
   final ValueChanged<String> onChanged;
   final String? Function(String?)? validator;
   final List<TextInputFormatter>? inputFormatters;
-  final int maxLines;
 
   const _LabeledFormField({
     required this.label,
@@ -679,11 +698,11 @@ class _LabeledFormField extends StatelessWidget {
     required this.keyboardType,
     required this.decoration,
     required this.onChanged,
+    this.placeholder,
     this.fieldKey,
     this.focusNode,
     this.validator,
     this.inputFormatters,
-    this.maxLines = 1,
   });
 
   @override
@@ -691,25 +710,51 @@ class _LabeledFormField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 13, color: BColors.darkGrey),
-        ),
+        _buildLabel(),
         const SizedBox(height: 8),
         TextFormField(
           key: fieldKey,
           controller: controller,
           focusNode: focusNode,
           keyboardType: keyboardType,
-          decoration: decoration,
+          decoration: decoration.copyWith(
+            hintText: placeholder,
+            hintStyle: const TextStyle(
+              color: BColors.darkGrey,
+              fontSize: 13,
+            ),
+          ),
           textAlign: TextAlign.right,
           textDirection: TextDirection.rtl,
           onChanged: onChanged,
           validator: validator,
           inputFormatters: inputFormatters,
-          maxLines: maxLines,
         ),
       ],
+    );
+  }
+
+  Widget _buildLabel() {
+    final trimmed = label.trim();
+    final hasRequiredStar = trimmed.endsWith('*');
+    if (!hasRequiredStar) {
+      return Text(
+        label,
+        style: const TextStyle(fontSize: 13, color: BColors.darkGrey),
+      );
+    }
+    final base = trimmed.substring(0, trimmed.length - 1).trimRight();
+    return RichText(
+      text: TextSpan(
+        style: const TextStyle(fontSize: 13, color: BColors.darkGrey),
+        children: [
+          TextSpan(text: '$base '),
+          const TextSpan(
+            text: '*',
+            style: TextStyle(color: BColors.validationError),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -720,6 +765,7 @@ class _IbanField extends StatelessWidget {
   final TextEditingController controller;
   final InputDecoration decoration;
   final FocusNode? focusNode;
+  final String? placeholder;
   final ValueChanged<String> onChanged;
   final String? Function(String?)? validator;
 
@@ -728,6 +774,7 @@ class _IbanField extends StatelessWidget {
     required this.decoration,
     required this.onChanged,
     required this.validator,
+    this.placeholder,
     this.fieldKey,
     this.focusNode,
   });
@@ -737,9 +784,17 @@ class _IbanField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'رقم الايبان *',
-          style: TextStyle(fontSize: 13, color: BColors.darkGrey),
+        RichText(
+          text: const TextSpan(
+            style: TextStyle(fontSize: 13, color: BColors.darkGrey),
+            children: [
+              TextSpan(text: 'رقم الايبان '),
+              TextSpan(
+                text: '*',
+                style: TextStyle(color: BColors.validationError),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 8),
         Row(
@@ -752,7 +807,13 @@ class _IbanField extends StatelessWidget {
                 controller: controller,
                 focusNode: focusNode,
                 keyboardType: TextInputType.number,
-                decoration: decoration,
+                decoration: decoration.copyWith(
+                  hintText: placeholder,
+                  hintStyle: const TextStyle(
+                    color: BColors.darkGrey,
+                    fontSize: 13,
+                  ),
+                ),
                 textAlign: TextAlign.right,
                 onChanged: onChanged,
                 validator: validator,
@@ -810,10 +871,7 @@ class _LabeledDropdown extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 13, color: BColors.darkGrey),
-        ),
+        _buildLabel(),
         const SizedBox(height: 8),
         Container(
           height: 46,
@@ -867,6 +925,30 @@ class _LabeledDropdown extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildLabel() {
+    final trimmed = label.trim();
+    final hasRequiredStar = trimmed.endsWith('*');
+    if (!hasRequiredStar) {
+      return Text(
+        label,
+        style: const TextStyle(fontSize: 13, color: BColors.darkGrey),
+      );
+    }
+    final base = trimmed.substring(0, trimmed.length - 1).trimRight();
+    return RichText(
+      text: TextSpan(
+        style: const TextStyle(fontSize: 13, color: BColors.darkGrey),
+        children: [
+          TextSpan(text: '$base '),
+          const TextSpan(
+            text: '*',
+            style: TextStyle(color: BColors.validationError),
+          ),
+        ],
+      ),
     );
   }
 }

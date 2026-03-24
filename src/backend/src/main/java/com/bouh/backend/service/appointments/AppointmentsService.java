@@ -396,18 +396,7 @@ public class AppointmentsService {
         throw new IllegalArgumentException("paymentIntentId is required");
     }
 
-    // 1) check caregiver doesn't have another appointment at the same date and slot
-    boolean hasConflict = appointmentRepo.caregiverHasConflict(
-            caregiverId,
-            request.getDate(),
-            request.getSlotIndex()
-    );
-
-    if (hasConflict) {
-        throw new IllegalStateException("يوجد لديك موعد آخر في نفس التاريخ والوقت");
-    }
-
-    // 2) check doctor availability for the requested date and slot
+  
     AvailabilityDayDto day = availabilityScheduleRepo.getDay(request.getDoctorId(), request.getDate());
 
     if (day == null || day.getSlots() == null || day.getSlots().isEmpty()) {
@@ -430,7 +419,6 @@ public class AppointmentsService {
         throw new IllegalStateException("تم حجز هذا الموعد مسبقًا");
     }
 
-    // 3) prepare appointment DTO
     appointmentDto dto = new appointmentDto();
     dto.setCaregiverId(caregiverId);
     dto.setDoctorId(request.getDoctorId());
@@ -445,10 +433,10 @@ public class AppointmentsService {
     // endTime اختياري للآن، لأن الواجهة تبنيه من slotIndex
     dto.setEndTime(null);
 
-    // 4) Save the appointment
-    appointmentDto created = appointmentRepo.create(dto, request.getDate(), request.getSlotIndex());
+    // atomic create appointment and mark slot as booked, with concurrency check on the slot
+    appointmentDto created = appointmentRepo.createAtomically(dto, request.getDate(), request.getSlotIndex());
 
-    // 5) update availability schedule to mark the slot as booked
+    // for update the frontend cache immediately, even though the slot is already marked as booked in the createAtomically method, we mark it here as well to update the local variable before sending to the repo update method.
     targetSlot.setBooked(true);
 
     Map<String, AvailabilityDayDto> daysToUpdate = new HashMap<>();
@@ -460,11 +448,108 @@ public class AppointmentsService {
             new HashSet<>()
     );
 
-    // Notify the doctor if the appointment is within the next hour.
     notifyDoctorAboutNewBooking(created, request.getDate(), request.getSlotIndex());
 
     return created;
 }
+//     public appointmentDto createAppointment(String caregiverId, appointmentCreateRequestDto request)
+//         throws ExecutionException, InterruptedException {
+
+//     if (caregiverId == null || caregiverId.isBlank()) {
+//         throw new IllegalArgumentException("Caregiver not authenticated");
+//     }
+
+//     if (request.getDoctorId() == null || request.getDoctorId().isBlank()) {
+//         throw new IllegalArgumentException("doctorId is required");
+//     }
+
+//     if (request.getChildId() == null || request.getChildId().isBlank()) {
+//         throw new IllegalArgumentException("childId is required");
+//     }
+
+//     if (request.getDate() == null || request.getDate().isBlank()) {
+//         throw new IllegalArgumentException("date is required");
+//     }
+
+//     if (request.getSlotIndex() == null ||
+//             request.getSlotIndex() < 0 ||
+//             request.getSlotIndex() >= TimeSlotConfig.SLOT_COUNT) {
+//         throw new IllegalArgumentException("Invalid slotIndex");
+//     }
+
+//     if (request.getPaymentIntentId() == null || request.getPaymentIntentId().isBlank()) {
+//         throw new IllegalArgumentException("paymentIntentId is required");
+//     }
+
+//     // 1) check caregiver doesn't have another appointment at the same date and slot
+//     boolean hasConflict = appointmentRepo.caregiverHasConflict(
+//             caregiverId,
+//             request.getDate(),
+//             request.getSlotIndex()
+//     );
+
+//     if (hasConflict) {
+//         throw new IllegalStateException("يوجد لديك موعد آخر في نفس التاريخ والوقت");
+//     }
+
+//     // 2) check doctor availability for the requested date and slot
+//     AvailabilityDayDto day = availabilityScheduleRepo.getDay(request.getDoctorId(), request.getDate());
+
+//     if (day == null || day.getSlots() == null || day.getSlots().isEmpty()) {
+//         throw new IllegalStateException("هذا الموعد غير متاح");
+//     }
+
+//     AvailabilityStoredSlotDto targetSlot = null;
+//     for (AvailabilityStoredSlotDto slot : day.getSlots()) {
+//         if (slot.getIndex() == request.getSlotIndex()) {
+//             targetSlot = slot;
+//             break;
+//         }
+//     }
+
+//     if (targetSlot == null) {
+//         throw new IllegalStateException("هذا الموعد غير متاح");
+//     }
+
+//     if (targetSlot.isBooked()) {
+//         throw new IllegalStateException("تم حجز هذا الموعد مسبقًا");
+//     }
+
+//     // 3) prepare appointment DTO
+//     appointmentDto dto = new appointmentDto();
+//     dto.setCaregiverId(caregiverId);
+//     dto.setDoctorId(request.getDoctorId());
+//     dto.setChildId(request.getChildId());
+//     dto.setTimeSlotId(String.valueOf(request.getSlotIndex()));
+//     dto.setMeetingLink("");
+//     dto.setAmount(request.getAmount());
+//     dto.setStatus(0);
+//     dto.setPaymentIntentId(request.getPaymentIntentId());
+
+//     // endTime اختياري للآن، لأن الواجهة تبنيه من slotIndex
+//     dto.setEndTime(null);
+
+//     // 4) Save the appointment
+//     appointmentDto created = appointmentRepo.create(dto, request.getDate(), request.getSlotIndex());
+
+//     // 5) update availability schedule to mark the slot as booked
+//     targetSlot.setBooked(true);
+
+//     Map<String, AvailabilityDayDto> daysToUpdate = new HashMap<>();
+//     daysToUpdate.put(request.getDate(), day);
+
+//     availabilityScheduleRepo.update(
+//             request.getDoctorId(),
+//             daysToUpdate,
+//             new HashSet<>()
+//     );
+
+//     // Notify the doctor if the appointment is within the next hour.
+//     notifyDoctorAboutNewBooking(created, request.getDate(), request.getSlotIndex());
+
+//     return created;
+// }
+
 public void cancelAppointment(String caregiverId, String appointmentId)
         throws ExecutionException, InterruptedException {
 
@@ -544,7 +629,8 @@ if (!isCaregiverOwner && !isDoctorOwner) {
         );
     }
 
-    appointmentRepo.deleteById(appointmentId);
+    // appointmentRepo.deleteById(appointmentId);
+    appointmentRepo.deleteByIdAtomically(appointmentId);
 }
 
     // ─────────────────────────────────────────────────────────────

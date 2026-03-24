@@ -10,20 +10,43 @@ import 'package:bouh/authentication/AuthSession.dart';
 /// Shell that holds the caregiver bottom nav index and switches between
 /// home (0), drawings (1), appointments (2), and profile (3).
 class CaregiverNavbar extends StatefulWidget {
-  const CaregiverNavbar({super.key});
+  const CaregiverNavbar({
+    super.key,
+    this.initialIndex = 0,
+    this.initialAppointmentsSubIndex = 0,
+    this.initialBookedSubIndex = 0,
+  });
+
+  final int initialIndex;
+
+  /// داخل Tab المواعيد:
+  /// 0 = Available (متاحة)
+  /// 1 = Booked (محجوزة)
+  final int initialAppointmentsSubIndex;
+
+  /// داخل booked:
+  /// 0 = Upcoming (القادمة)
+  /// 1 = Previous (السابقة)
+  final int initialBookedSubIndex;
 
   @override
   State<CaregiverNavbar> createState() => _CaregiverNavbarState();
 }
 
 class _CaregiverNavbarState extends State<CaregiverNavbar> {
-  int _currentIndex = 0;
+  late int _currentIndex;
 
   // Key to access caregiver homepage state for refresh on re-tap.
   final GlobalKey<CaregiverHomepageState> _homeKey = GlobalKey();
 
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex.clamp(0, 3);
+  }
+
   void _onTap(int index) {
-    if (index == _currentIndex) return; // already on this tab
+    if (index == _currentIndex) return;
     setState(() => _currentIndex = index);
   }
 
@@ -35,9 +58,18 @@ class _CaregiverNavbarState extends State<CaregiverNavbar> {
       child: IndexedStack(
         index: stackIndex,
         children: [
-          CaregiverHomepage(key: _homeKey, currentIndex: _currentIndex, onTap: _onTap),
+          CaregiverHomepage(
+            key: _homeKey,
+            currentIndex: _currentIndex,
+            onTap: _onTap,
+          ),
           RequestAnalysisPage(currentIndex: _currentIndex, onTap: _onTap),
-          _AppointmentsTabContent(currentIndex: _currentIndex, onTap: _onTap),
+          _AppointmentsTabContent(
+            currentIndex: _currentIndex,
+            onTap: _onTap,
+            initialSubIndex: widget.initialAppointmentsSubIndex,
+            initialBookedSubIndex: widget.initialBookedSubIndex,
+          ),
           CaregiverAccountView(currentIndex: _currentIndex, onTap: _onTap),
         ],
       ),
@@ -50,10 +82,18 @@ class _AppointmentsTabContent extends StatefulWidget {
   const _AppointmentsTabContent({
     required this.currentIndex,
     required this.onTap,
+    this.initialSubIndex = 0,
+    this.initialBookedSubIndex = 0,
   });
 
   final int currentIndex;
   final ValueChanged<int> onTap;
+
+  /// 0 = متاحة ، 1 = محجوزة
+  final int initialSubIndex;
+
+  /// يمرر إلى booked
+  final int initialBookedSubIndex;
 
   @override
   State<_AppointmentsTabContent> createState() =>
@@ -62,7 +102,13 @@ class _AppointmentsTabContent extends StatefulWidget {
 
 class _AppointmentsTabContentState extends State<_AppointmentsTabContent> {
   /// 0 = Available (متاحة), 1 = Booked (محجوزة). IndexedStack = instant, no transition.
-  int _subIndex = 0;
+  late int _subIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _subIndex = widget.initialSubIndex.clamp(0, 1);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -78,6 +124,7 @@ class _AppointmentsTabContentState extends State<_AppointmentsTabContent> {
           currentIndex: widget.currentIndex,
           onTap: widget.onTap,
           onSwitchToAvailable: () => setState(() => _subIndex = 0),
+          initialBookedSubIndex: widget.initialBookedSubIndex,
         ),
       ],
     );
@@ -90,11 +137,15 @@ class _BookedTabContent extends StatefulWidget {
     required this.currentIndex,
     required this.onTap,
     required this.onSwitchToAvailable,
+    this.initialBookedSubIndex = 0,
   });
 
   final int currentIndex;
   final ValueChanged<int> onTap;
   final VoidCallback onSwitchToAvailable;
+
+  /// 0 = القادمة ، 1 = السابقة
+  final int initialBookedSubIndex;
 
   @override
   State<_BookedTabContent> createState() => _BookedTabContentState();
@@ -102,7 +153,13 @@ class _BookedTabContent extends StatefulWidget {
 
 class _BookedTabContentState extends State<_BookedTabContent> {
   /// 0 = Upcoming (القادمة), 1 = Previous (السابقة).
-  int _bookedSubIndex = 0;
+  late int _bookedSubIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _bookedSubIndex = widget.initialBookedSubIndex.clamp(0, 1);
+  }
 
   @override
   Widget build(BuildContext context) {

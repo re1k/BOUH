@@ -297,7 +297,7 @@ class _VerifyEmailViewState extends State<VerifyEmailView> {
   bool _isSending = false;
 
   String? _inlineMessage;
-  Color _inlineMessageColor = BColors.darkGrey;
+  Color _inlineMessageColor = BColors.textDarkestBlue;
 
   static const int _cooldownSeconds = 60;
   int _secondsUntilResend = 0;
@@ -315,7 +315,7 @@ class _VerifyEmailViewState extends State<VerifyEmailView> {
         force: true,
         messageOnSuccess:
             'تم إرسال رابط التحقق إلى بريدك الإلكتروني، يرجى تفعيل حسابك عبر الرابط المرسل إليك، وفي حال عدم وصوله تحقق من البريد غير المرغوب فيه.',
-        messageColorOnSuccess: BColors.darkGrey,
+        messageColorOnSuccess: BColors.textDarkestBlue,
       );
     });
   }
@@ -351,7 +351,7 @@ class _VerifyEmailViewState extends State<VerifyEmailView> {
   Future<void> _sendVerificationEmail({
     required bool force,
     String? messageOnSuccess,
-    Color messageColorOnSuccess = BColors.darkGrey,
+    Color messageColorOnSuccess = BColors.textDarkestBlue,
   }) async {
     var user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -367,7 +367,10 @@ class _VerifyEmailViewState extends State<VerifyEmailView> {
 
       // If already verified, do NOT send again.
       if (user.emailVerified) {
-        _setInlineMessage('تم تفعيل البريد بالفعل ✅', color: BColors.darkGrey);
+        _setInlineMessage(
+          'تم تفعيل البريد بالفعل ',
+          color: BColors.textDarkestBlue,
+        );
         return;
       }
 
@@ -427,8 +430,8 @@ class _VerifyEmailViewState extends State<VerifyEmailView> {
           // Optional: show a friendly message if there was nothing pending.
           if (!didDoctor && !didCaregiver) {
             _setInlineMessage(
-              'تم تفعيل البريد ✅ يمكنك تسجيل الدخول الآن.',
-              color: BColors.darkGrey,
+              'تم تفعيل البريد ويمكنك تسجيل الدخول الآن.',
+              color: BColors.textDarkestBlue,
             );
           }
 
@@ -451,7 +454,7 @@ class _VerifyEmailViewState extends State<VerifyEmailView> {
           );
         } else {
           _setInlineMessage(
-            'لم يتم تفعيل البريد بعد. يمكنك إعادة الإرسال بعد $_secondsUntilResend ثانية.',
+            '.لم يتم تفعيل البريد بعد',
             color: BColors.validationError,
           );
         }
@@ -494,7 +497,17 @@ class _VerifyEmailViewState extends State<VerifyEmailView> {
                   width: 280,
                   fit: BoxFit.contain,
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 20),
+                const Text(
+                  'يرجى تفعيل البريد الإلكتروني للمتابعة',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: BColors.textDarkestBlue,
+                  ),
+                ),
+                const SizedBox(height: 16),
 
                 if (_inlineMessage != null) ...[
                   const SizedBox(height: 14),
@@ -502,7 +515,7 @@ class _VerifyEmailViewState extends State<VerifyEmailView> {
                     _inlineMessage!,
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      fontSize: 13,
+                      fontSize: 14,
                       fontWeight: FontWeight.w600,
                       color: _inlineMessageColor,
                       height: 1.35,
@@ -519,7 +532,7 @@ class _VerifyEmailViewState extends State<VerifyEmailView> {
                             force: false,
                             messageOnSuccess:
                                 'تم إرسال رابط التحقق إلى بريدك الإلكتروني، يرجى تفعيل حسابك عبر الرابط المرسل إليك، وفي حال عدم وصوله تحقق من البريد غير المرغوب فيه.',
-                            messageColorOnSuccess: BColors.darkGrey,
+                            messageColorOnSuccess: BColors.textDarkestBlue,
                           );
                         }
                       : null,
@@ -529,7 +542,9 @@ class _VerifyEmailViewState extends State<VerifyEmailView> {
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
-                        color: _canResend ? BColors.primary : BColors.darkGrey,
+                        color: _canResend
+                            ? BColors.primary
+                            : BColors.textDarkestBlue.withOpacity(0.65),
                       ),
                       children: [
                         const TextSpan(text: 'لم يصلني رابط التحقق '),
@@ -543,7 +558,7 @@ class _VerifyEmailViewState extends State<VerifyEmailView> {
                                 : TextDecoration.underline,
                             decorationColor: _canResend
                                 ? BColors.primary
-                                : BColors.darkGrey,
+                                : BColors.textDarkestBlue.withOpacity(0.65),
                           ),
                         ),
                         if (_secondsUntilResend > 0 && !_isSending)

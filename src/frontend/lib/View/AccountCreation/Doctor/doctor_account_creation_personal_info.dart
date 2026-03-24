@@ -41,9 +41,12 @@ class _DoctorAccountCreationStep1State
   bool _passwordTouched = false;
   bool _confirmTouched = false;
   bool _nameTouched = false;
+  bool _showPassword = false;
+  bool _showConfirmPassword = false;
 
   String _gender = 'female';
   File? _profileImage;
+  String? _profileImagePath;
 
   final ImagePicker _picker = ImagePicker();
 
@@ -203,7 +206,11 @@ class _DoctorAccountCreationStep1State
         return;
       }
       print('[DoctorReg Step1] _pickImage: callback returned file path=${file.path}');
-      setState(() => _profileImage = file);
+      final purePath = _toPurePath(file.path);
+      setState(() {
+        _profileImagePath = purePath;
+        _profileImage = File(purePath);
+      });
       print('[DoctorReg Step1] _pickImage: _profileImage set from callback');
       return;
     }
@@ -214,8 +221,21 @@ class _DoctorAccountCreationStep1State
       return;
     }
     print('[DoctorReg Step1] _pickImage: picked path=${x.path}');
-    setState(() => _profileImage = File(x.path));
+    final purePath = _toPurePath(x.path);
+    setState(() {
+      _profileImagePath = purePath;
+      _profileImage = File(purePath);
+    });
     print('[DoctorReg Step1] _pickImage: _profileImage set from gallery');
+  }
+
+  String _toPurePath(String rawPath) {
+    final trimmed = rawPath.trim();
+    if (trimmed.isEmpty) return trimmed;
+    if (trimmed.startsWith('file://')) {
+      return Uri.parse(trimmed).toFilePath();
+    }
+    return trimmed.replaceAll('\\', '/');
   }
 
   void _handleNext() {
@@ -239,6 +259,7 @@ class _DoctorAccountCreationStep1State
       name: _nameCtrl.text.trim(),
       gender: _gender,
       profileImage: _profileImage,
+      profileImagePath: _profileImagePath,
     );
     print('[DoctorReg Step1] _handleNext: signupData created with profileImage=${_profileImage != null ? _profileImage!.path : "null"}');
     Navigator.push(
@@ -308,9 +329,18 @@ class _DoctorAccountCreationStep1State
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.arrow_back_ios_new_rounded,
+                                  size: 20,
+                                  color: BColors.textDarkestBlue,
+                                ),
+                                onPressed: () => Navigator.pop(context),
+                              ),
+                              const SizedBox(width: 6),
                               const Expanded(
                                 child: Text(
-                                  'دقائق قليلة ويكتمل إنشاء الحساب',
+                                  'دقائق ويكتمل إنشاء الحساب',
                                   textAlign: TextAlign.right,
                                   style: TextStyle(
                                     fontSize: 16,
@@ -338,52 +368,8 @@ class _DoctorAccountCreationStep1State
                         const SizedBox(height: 18),
 
                         _LabeledFormField(
-                          label: 'البريد الإلكتروني *',
-                          controller: _emailCtrl,
-                          keyboardType: TextInputType.emailAddress,
-                          obscure: false,
-                          decoration: _inputDecoration(),
-                          focusNode: _emailFocusNode,
-                          fieldKey: _emailFieldKey,
-                          validator: (v) =>
-                              _emailTouched ? _validateEmail(v) : null,
-                          onChanged: (_) => setState(() {}),
-                        ),
-                        const SizedBox(height: 14),
-
-                        _LabeledFormField(
-                          label: 'كلمة المرور *',
-                          controller: _passCtrl,
-                          keyboardType: TextInputType.text,
-                          obscure: true,
-                          decoration: _inputDecoration(),
-                          focusNode: _passwordFocusNode,
-                          fieldKey: _passwordFieldKey,
-                          validator: (v) =>
-                              _passwordTouched ? _validatePassword(v) : null,
-                          onChanged: (_) => setState(() {}),
-                        ),
-                        const SizedBox(height: 8),
-                        PasswordStrengthWidget(password: _passCtrl.text),
-                        const SizedBox(height: 14),
-
-                        _LabeledFormField(
-                          label: 'تأكيد كلمة المرور *',
-                          controller: _confirmCtrl,
-                          keyboardType: TextInputType.text,
-                          obscure: true,
-                          decoration: _inputDecoration(),
-                          focusNode: _confirmFocusNode,
-                          fieldKey: _confirmPasswordFieldKey,
-                          validator: (v) => _confirmTouched
-                              ? _validateConfirmPassword(v)
-                              : null,
-                          onChanged: (_) => setState(() {}),
-                        ),
-                        const SizedBox(height: 14),
-
-                        _LabeledFormField(
                           label: 'الاسم *',
+                          placeholder: 'مثال: د. أحمد القحطاني',
                           controller: _nameCtrl,
                           keyboardType: TextInputType.name,
                           obscure: false,
@@ -399,13 +385,98 @@ class _DoctorAccountCreationStep1State
                         ),
                         const SizedBox(height: 14),
 
+                        _LabeledFormField(
+                          label: 'البريد الإلكتروني *',
+                          placeholder: 'example@gmail.com',
+                          controller: _emailCtrl,
+                          keyboardType: TextInputType.emailAddress,
+                          obscure: false,
+                          decoration: _inputDecoration(),
+                          focusNode: _emailFocusNode,
+                          fieldKey: _emailFieldKey,
+                          validator: (v) =>
+                              _emailTouched ? _validateEmail(v) : null,
+                          onChanged: (_) => setState(() {}),
+                        ),
+                        const SizedBox(height: 14),
+
+                        _LabeledFormField(
+                          label: 'كلمة المرور *',
+                          placeholder: '••••••••',
+                          controller: _passCtrl,
+                          keyboardType: TextInputType.text,
+                          obscure: !_showPassword,
+                          decoration: _inputDecoration(
+                            suffixIcon: IconButton(
+                              onPressed: () => setState(
+                                () => _showPassword = !_showPassword,
+                              ),
+                              icon: Icon(
+                                _showPassword
+                                    ? Icons.visibility_off
+                                    : Icons.visibility,
+                                color: BColors.darkGrey,
+                              ),
+                            ),
+                          ),
+                          focusNode: _passwordFocusNode,
+                          fieldKey: _passwordFieldKey,
+                          validator: (v) =>
+                              _passwordTouched ? _validatePassword(v) : null,
+                          onChanged: (_) => setState(() {}),
+                        ),
+                        const SizedBox(height: 8),
+                        PasswordStrengthWidget(password: _passCtrl.text),
+                        const SizedBox(height: 14),
+
+                        _LabeledFormField(
+                          label: 'تأكيد كلمة المرور *',
+                          placeholder: '••••••••',
+                          controller: _confirmCtrl,
+                          keyboardType: TextInputType.text,
+                          obscure: !_showConfirmPassword,
+                          decoration: _inputDecoration(
+                            suffixIcon: IconButton(
+                              onPressed: () => setState(
+                                () => _showConfirmPassword =
+                                    !_showConfirmPassword,
+                              ),
+                              icon: Icon(
+                                _showConfirmPassword
+                                    ? Icons.visibility_off
+                                    : Icons.visibility,
+                                color: BColors.darkGrey,
+                              ),
+                            ),
+                          ),
+                          focusNode: _confirmFocusNode,
+                          fieldKey: _confirmPasswordFieldKey,
+                          validator: (v) => _confirmTouched
+                              ? _validateConfirmPassword(v)
+                              : null,
+                          onChanged: (_) => setState(() {}),
+                        ),
+                        const SizedBox(height: 14),
+
+                        const SizedBox(height: 14),
+
                         Align(
                           alignment: Alignment.centerRight,
-                          child: const Text(
-                            'الجنس *',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: BColors.darkGrey,
+                          child: RichText(
+                            text: const TextSpan(
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: BColors.darkGrey,
+                              ),
+                              children: [
+                                TextSpan(text: 'الجنس '),
+                                TextSpan(
+                                  text: '*',
+                                  style: TextStyle(
+                                    color: BColors.validationError,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
@@ -495,20 +566,6 @@ class _DoctorAccountCreationStep1State
                       ],
                     ),
                   ),
-                ),
-              ),
-
-              // ================== BACK ARROW (ON TOP) ==================
-              Positioned(
-                top: 8,
-                right: 16,
-                child: IconButton(
-                  icon: const Icon(
-                    Icons.arrow_back_ios_new_rounded,
-                    size: 20,
-                    color: BColors.textDarkestBlue,
-                  ),
-                  onPressed: () => Navigator.pop(context),
                 ),
               ),
             ],
@@ -715,6 +772,7 @@ class _DoctorNamePrefixFormatter extends TextInputFormatter {
 
 class _LabeledFormField extends StatelessWidget {
   final String label;
+  final String? placeholder;
   final TextEditingController controller;
   final bool obscure;
   final TextInputType keyboardType;
@@ -732,6 +790,7 @@ class _LabeledFormField extends StatelessWidget {
     required this.obscure,
     required this.decoration,
     required this.onChanged,
+    this.placeholder,
     this.focusNode,
     this.fieldKey,
     this.validator,
@@ -743,10 +802,7 @@ class _LabeledFormField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 13, color: BColors.darkGrey),
-        ),
+        _buildLabel(),
         const SizedBox(height: 8),
         TextFormField(
           key: fieldKey,
@@ -754,13 +810,44 @@ class _LabeledFormField extends StatelessWidget {
           focusNode: focusNode,
           keyboardType: keyboardType,
           obscureText: obscure,
-          decoration: decoration,
+          decoration: decoration.copyWith(
+            hintText: placeholder,
+            hintStyle: const TextStyle(
+              color: BColors.darkGrey,
+              fontSize: 13,
+            ),
+          ),
           validator: validator,
           textAlign: TextAlign.right,
           onChanged: onChanged,
           inputFormatters: inputFormatters,
         ),
       ],
+    );
+  }
+
+  Widget _buildLabel() {
+    final trimmed = label.trim();
+    final hasRequiredStar = trimmed.endsWith('*');
+    if (!hasRequiredStar) {
+      return Text(
+        label,
+        style: const TextStyle(fontSize: 13, color: BColors.darkGrey),
+      );
+    }
+
+    final base = trimmed.substring(0, trimmed.length - 1).trimRight();
+    return RichText(
+      text: TextSpan(
+        style: const TextStyle(fontSize: 13, color: BColors.darkGrey),
+        children: [
+          TextSpan(text: '$base '),
+          const TextSpan(
+            text: '*',
+            style: TextStyle(color: BColors.validationError),
+          ),
+        ],
+      ),
     );
   }
 }

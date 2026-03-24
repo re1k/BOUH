@@ -8,7 +8,10 @@ import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.*;
 import com.google.firebase.auth.FirebaseAuth;
 import lombok.extern.slf4j.Slf4j;
-
+import org.springframework.context.ApplicationContext;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Repository;
 import java.util.HashMap;
 import java.util.List;
@@ -28,10 +31,18 @@ public class doctorRepo {
     // Spring Boot will inject the globally created Firestore bean (from Config)
     private final Firestore firestore;
     private final AppointmentRepo appointment;
+    private final Bucket bucket;
+    @Autowired
+    private ApplicationContext context;
 
-    public doctorRepo(Firestore firestore, AppointmentRepo appointment) {
+    public doctorRepo(
+            Firestore firestore,
+            AppointmentRepo appointment,
+            @Value("${gcs.bucket.name}") String bucketName) {
+
         this.firestore = firestore;
         this.appointment = appointment;
+        this.bucket = StorageClient.getInstance().bucket(bucketName);
     }
 
     public void createDoctor(String uid, doctorDto dto) {
@@ -303,37 +314,87 @@ public class doctorRepo {
     }
 
     public String deleteDoctor(String uid) {
-        try {
 
+        try {
             doctorDto doctor = findByUid(uid);
+
             if (doctor == null) {
-                throw new RuntimeException("Doctor not found. Aborting deletion.");
+                throw new RuntimeException("Doctor not found");
             }
 
+            // only check
             List<appointmentDto> upcoming = appointment.findByDoctorIdAndDateFromToday(uid);
+
             if (!upcoming.isEmpty()) {
                 return "upcoming-appointment-found";
             }
-            DocumentReference doctorRef = firestore.collection("doctors").document(uid);
 
-            // delete all doctor appointments
-            deleteByDoctorId(uid);
-
-            // delete doctor profile image if exists
-            String ImagePathToDelete = doctor.getProfilePhotoURL();
-            if (ImagePathToDelete != null) {
-                deleteAccountProfileImage(ImagePathToDelete);
-            }
-
-            firestore.recursiveDelete(doctorRef).get();
-
-            // delete Firebase Authentication account
-            FirebaseAuth.getInstance().deleteUser(uid);
+           // async call via proxy
+           context.getBean(doctorRepo.class).deleteDoctorAsync(uid, doctor);
 
             return "deleted";
+
         } catch (Exception e) {
-            throw new RuntimeException("Failed to delete doctor account", e);
+            log.error("Failed to delete doctor with uid={}", uid, e);
+            throw new RuntimeException("Failed to delete doctor", e);
         }
+    }
+    @Async
+    public void deleteDoctorAsync(String uid, doctorDto doctor) {
+        try {
+
+            // 1. delete appointments
+            deleteByDoctorId(uid);
+
+            // 2. delete image
+            if (doctor.getProfilePhotoURL() != null) {
+                deleteAccountProfileImage(doctor.getProfilePhotoURL());
+            }
+
+            // 3. delete doctor + subcollections (ONLY HERE)
+            firestore.recursiveDelete(
+                    firestore.collection("doctors").document(uid));
+
+            // 4. delete auth
+            FirebaseAuth.getInstance().deleteUser(uid);
+
+        } catch (Exception e) {
+            log.error("Async delete failed for uid={}", uid, e);
+        }
+    }
+
+    public void deleteAccountProfileImage(String imageUrl) {
+
+        if (imageUrl == null) {
+            log.error("Invalid image URL");
+            return;
+        }
+
+        Blob blob = bucket.get(imageUrl);
+
+        if (blob != null) {
+            blob.delete();
+            log.info("Image deleted: {}", imageUrl);
+        } else {
+            log.warn("Image not found: {}", imageUrl);
+        }
+    }
+
+    public void deleteByDoctorId(String uid) throws Exception {
+
+        ApiFuture<QuerySnapshot> future = firestore.collection("appointments")
+                .whereEqualTo("doctorId", uid)
+                .get();
+
+        List<QueryDocumentSnapshot> docs = future.get().getDocuments();
+
+        docs.parallelStream().forEach(doc -> {
+            try {
+                doc.getReference().delete().get();
+            } catch (Exception e) {
+                log.error("Failed to delete appointment {}", doc.getId(), e);
+            }
+        });
     }
 
     public void updateFcmToken(String uid, String fcmToken) {
@@ -348,52 +409,7 @@ public class doctorRepo {
         }
     }
 
-    public void deleteAccountProfileImage(String imageUrl) {
-
-        String imagePath = extractPathFromUrl(imageUrl);
-
-        if (imagePath == null) {
-            log.error("Invalid image URL");
-            return;
-        }
-
-        Bucket bucket = StorageClient.getInstance().bucket("bouh-94761.firebasestorage.app");
-        Blob blob = bucket.get(imagePath);
-
-        if (blob != null) {
-            blob.delete();
-            log.info("Image deleted successfully: " + imagePath);
-        } else {
-            log.error("Image not found: " + imagePath);
-        }
-    }
-
-    public void deleteByDoctorId(String uid) throws Exception {
-
-        ApiFuture<QuerySnapshot> future = firestore.collection("appointments")
-                .whereEqualTo("doctorId", uid)
-                .get();
-
-        List<QueryDocumentSnapshot> docs = future.get().getDocuments();
-
-        for (QueryDocumentSnapshot doc : docs) {
-            doc.getReference().delete().get();
-        }
-    }
-
-    public String extractPathFromUrl(String imageUrl) {
-        try {
-
-            String path = imageUrl.substring(imageUrl.indexOf("/o/") + 3, imageUrl.indexOf("?"));
-            return URLDecoder.decode(path, StandardCharsets.UTF_8);
-
-        } catch (Exception e) {
-            log.error("Failed to extract path from URL: " + imageUrl);
-            return null;
-        }
-    }
-
-    //set a new rate from the caregiver and update the Avg
+    // set a new rate from the caregiver and update the Avg
     public void addRating(String doctorId, int rating) throws Exception {
 
         DocumentReference doctorRef = firestore.collection("doctors").document(doctorId);

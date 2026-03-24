@@ -267,18 +267,23 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
   Widget _buildCard(UpcomingAppointmentDto dto, {required bool isFirst}) {
     final dateStr = _formatDate(dto.date);
     final timeStr = _formatTimeRange(dto.startTime, dto.endTime);
-    final showJoin = isFirst && _isJoinEnabled(dto);
-    final buttonType = showJoin
-        ? AppointmentButtonType.start
-        : AppointmentButtonType.cancel;
 
+    final showJoin = isFirst && _isJoinEnabled(dto);
+    final canCancel = !showJoin && _canCancelAppointment(dto);
+
+    AppointmentButtonType? buttonType;
     VoidCallback? onActionTap;
+
     if (showJoin) {
+      buttonType = AppointmentButtonType.start;
+
       if (dto.meetingLink != null && dto.meetingLink!.trim().isNotEmpty) {
         final link = dto.meetingLink!.trim();
         onActionTap = () => _openMeetingLink(link);
       }
-    } else {
+    } else if (canCancel) {
+      buttonType = AppointmentButtonType.cancel;
+
       onActionTap = _refundLoading
           ? null
           : () async {
@@ -348,7 +353,10 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
               }
             };
     }
-
+    print('appointment: ${dto.appointmentId}');
+    print('showJoin: $showJoin');
+    print('canCancel: $canCancel');
+    print('start: ${dto.startTime}, end: ${dto.endTime}');
     return AppointmentCard(
       date: dateStr,
       time: timeStr,
@@ -457,6 +465,19 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
     } finally {
       if (mounted) setState(() => _refundLoading = false);
     }
+  }
+
+  static bool _canCancelAppointment(UpcomingAppointmentDto dto) {
+    final now = DateTime.now();
+    final start = AppointmentsService.parseAppointmentTime(
+      dto.date,
+      dto.startTime,
+    );
+
+    if (start == null) return false;
+
+    final cancelDeadline = start.subtract(const Duration(minutes: 30));
+    return now.isBefore(cancelDeadline);
   }
 }
 

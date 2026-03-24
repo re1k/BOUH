@@ -1,3 +1,5 @@
+import 'package:bouh/View/caregiverHomepage/caregiverHomepage.dart';
+import 'package:bouh/View/caregiverHomepage/caregivernavbar.dart';
 import 'package:flutter/material.dart';
 import 'package:bouh/theme/base_themes/colors.dart';
 import 'payment_sheet.dart';
@@ -122,9 +124,10 @@ class _AppointmentDetailsViewState extends State<AppointmentDetailsView> {
 
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(
-          builder: (_) => BookedAppointmentsUpcoming(
-            caregiverId: AuthSession.instance.userId,
-            currentIndex: 2,
+          builder: (_) => const CaregiverNavbar(
+            initialIndex: 2,
+            initialAppointmentsSubIndex: 1,
+            initialBookedSubIndex: 0,
           ),
         ),
         (route) => false,

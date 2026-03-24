@@ -198,7 +198,7 @@ class AppointmentCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 0),
-                    _buildJoinButton(),
+                    if (actionLabel != null) _buildJoinButton(),
                   ],
                 ),
               ],
@@ -263,8 +263,13 @@ class AppointmentCard extends StatelessWidget {
   }
 
   Widget _buildJoinButton() {
-    final label = actionLabel ?? 'انضمام';
+    if (actionLabel == null) {
+      return const SizedBox.shrink();
+    }
+
+    final label = actionLabel!;
     final color = actionColor ?? BColors.accent;
+
     final child = Container(
       width: _joinButtonWidth,
       height: _joinButtonHeight,
@@ -275,7 +280,7 @@ class AppointmentCard extends StatelessWidget {
       alignment: Alignment.center,
       child: Text(
         label,
-        style: TextStyle(
+        style: const TextStyle(
           fontFamily: 'Markazi Text',
           fontSize: 13,
           fontWeight: FontWeight.w500,
@@ -283,6 +288,7 @@ class AppointmentCard extends StatelessWidget {
         ),
       ),
     );
+
     if (onActionTap != null) {
       return GestureDetector(
         onTap: onActionTap,
@@ -290,6 +296,7 @@ class AppointmentCard extends StatelessWidget {
         child: child,
       );
     }
+
     return child;
   }
 }

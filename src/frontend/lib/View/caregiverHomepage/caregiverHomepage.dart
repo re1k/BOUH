@@ -7,29 +7,22 @@ import 'package:bouh/dto/upcomingAppointmentDto.dart';
 import 'package:bouh/authentication/AuthSession.dart';
 import 'package:bouh/authentication/AuthService.dart';
 import 'package:bouh/services/appointmentsService.dart';
-import 'package:bouh/dto/payment/RefundResponseDto.dart';
 import 'package:bouh/services/payment/RefundService.dart';
 import 'package:bouh/widgets/confirmation_popup.dart';
 import 'package:bouh/widgets/loading_overlay.dart';
 import 'widgets/suggestedDoctorCard.dart';
 import 'widgets/caregiverBottomNav.dart';
 
-/// When used inside [CaregiverNavbar], pass [currentIndex] and [onTap] so the
-/// bottom nav reflects the active tab and handles tab changes.
 class CaregiverHomepage extends StatefulWidget {
   const CaregiverHomepage({super.key, this.currentIndex = 0, this.onTap});
 
-  /// Active bottom nav index (0 = home). Used when embedded in shell.
   final int currentIndex;
-
-  /// Called when a bottom nav item is tapped. Used when embedded in shell.
   final ValueChanged<int>? onTap;
 
   @override
   State<CaregiverHomepage> createState() => CaregiverHomepageState();
 }
 
-/// State exposed so [CaregiverNavbar] can trigger refresh when home is tapped.
 class CaregiverHomepageState extends State<CaregiverHomepage>
     with WidgetsBindingObserver {
   static const double _sectionGap = 24;
@@ -52,7 +45,6 @@ class CaregiverHomepageState extends State<CaregiverHomepage>
   @override
   void initState() {
     super.initState();
-    // Register lifecycle observer so we re-subscribe when app resumes.
     WidgetsBinding.instance.addObserver(this);
     _prepareSessionAndLoad();
   }
@@ -67,13 +59,11 @@ class CaregiverHomepageState extends State<CaregiverHomepage>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // When the app comes back to the foreground, re-subscribe to get fresh data.
     if (state == AppLifecycleState.resumed) {
       _prepareSessionAndLoad();
     }
   }
 
-  /// Call when home nav is tapped to refresh today's appointments.
   void refresh() {
     _prepareSessionAndLoad();
   }
@@ -131,11 +121,13 @@ class CaregiverHomepageState extends State<CaregiverHomepage>
   void _startTicker() {
     _ticker?.cancel();
     if (_list.isEmpty) return;
+
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) {
         _ticker?.cancel();
         return;
       }
+
       setState(() {
         final now = DateTime.now();
         _list.removeWhere((dto) {
@@ -146,6 +138,7 @@ class CaregiverHomepageState extends State<CaregiverHomepage>
           return end != null && !now.isBefore(end);
         });
       });
+
       if (_list.isEmpty) _ticker?.cancel();
     });
   }
@@ -163,7 +156,6 @@ class CaregiverHomepageState extends State<CaregiverHomepage>
     }).toList();
   }
 
-  /// Returns today's date as 'yyyy-MM-dd' (device local date).
   static String get _todayString {
     final now = DateTime.now();
     final y = now.year.toString().padLeft(4, '0');
@@ -179,8 +171,22 @@ class CaregiverHomepageState extends State<CaregiverHomepage>
       dto.startTime,
     );
     final end = AppointmentsService.parseAppointmentTime(dto.date, dto.endTime);
+
     if (start == null || end == null) return false;
     return !now.isBefore(start) && now.isBefore(end);
+  }
+
+  static bool _canCancelAppointment(UpcomingAppointmentDto dto) {
+    final now = DateTime.now();
+    final start = AppointmentsService.parseAppointmentTime(
+      dto.date,
+      dto.startTime,
+    );
+
+    if (start == null) return false;
+
+    final cancelDeadline = start.subtract(const Duration(minutes: 30));
+    return now.isBefore(cancelDeadline);
   }
 
   static String _formatDate(String date) {
@@ -201,26 +207,98 @@ class CaregiverHomepageState extends State<CaregiverHomepage>
   Widget _buildCardFor(UpcomingAppointmentDto dto, {required bool isFirst}) {
     final dateStr = _formatDate(dto.date);
     final timeStr = _formatTimeRange(dto.startTime, dto.endTime);
+
     ImageProvider? profileImage;
     if (dto.doctorProfilePhotoURL != null &&
         dto.doctorProfilePhotoURL!.isNotEmpty) {
       profileImage = NetworkImage(dto.doctorProfilePhotoURL!);
     }
+
     final bool showJoin = isFirst && _isJoinEnabled(dto);
+    final bool canCancel = !showJoin && _canCancelAppointment(dto);
 
     VoidCallback? onActionTap;
+    String? actionLabel;
+    Color? actionColor;
+
     if (showJoin) {
+      actionLabel = 'انضمام';
+      actionColor = BColors.accent;
+
       if (dto.meetingLink != null && dto.meetingLink!.trim().isNotEmpty) {
         final link = dto.meetingLink!.trim();
         onActionTap = () => _openMeetingLink(link);
       }
-    } else {
+    } else if (canCancel) {
+      actionLabel = 'الغاء';
+      actionColor = _cancelRed;
+
       onActionTap = _refundLoading
           ? null
           : () async {
               final refundSucceeded = await _refundAppointment(dto);
-              if (refundSucceeded) {
-                /* caregiver home cancel callback */
+              if (!refundSucceeded) return;
+
+              try {
+                await _appointmentsService.cancelAppointment(
+                  appointmentId: dto.appointmentId,
+                );
+
+                if (!mounted) return;
+
+                setState(() {
+                  _list.removeWhere(
+                    (x) => x.appointmentId == dto.appointmentId,
+                  );
+                });
+
+                await showDialog(
+                  context: context,
+                  builder: (_) => Directionality(
+                    textDirection: TextDirection.rtl,
+                    child: AlertDialog(
+                      backgroundColor: BColors.white,
+                      actionsAlignment: MainAxisAlignment.center,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      title: const Text(
+                        'تم الإلغاء بنجاح',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: BColors.textDarkestBlue,
+                        ),
+                      ),
+                      content: const Text(
+                        'تم إلغاء الموعد واسترجاع المبلغ بنجاح.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: BColors.darkGrey,
+                          height: 1.4,
+                        ),
+                      ),
+                      actions: [
+                        ElevatedButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: BColors.primary,
+                            foregroundColor: BColors.white,
+                          ),
+                          child: const Text('حسناً'),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              } catch (e) {
+                if (!mounted) return;
+
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text("فشل إلغاء الموعد: $e")));
               }
             };
     }
@@ -232,8 +310,8 @@ class CaregiverHomepageState extends State<CaregiverHomepage>
       date: dateStr,
       time: timeStr,
       profileImage: profileImage,
-      actionLabel: showJoin ? 'انضمام' : 'الغاء',
-      actionColor: showJoin ? BColors.accent : _cancelRed,
+      actionLabel: actionLabel,
+      actionColor: actionColor,
       onActionTap: onActionTap,
     );
   }
@@ -451,6 +529,7 @@ class CaregiverHomepageState extends State<CaregiverHomepage>
     if (_loading) {
       return const Center(child: BouhLoadingOverlay(showBarrier: false));
     }
+
     if (_error != null) {
       return const Center(
         child: Padding(
@@ -491,6 +570,7 @@ class CaregiverHomepageState extends State<CaregiverHomepage>
       if (i > 0) children.add(const SizedBox(height: _cardGap));
       children.add(_buildCardFor(todayList[i], isFirst: i == 0));
     }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: children,
@@ -516,7 +596,6 @@ class CaregiverHomepageState extends State<CaregiverHomepage>
     );
   }
 
-  /// Section header with title and "View All" link. Used for suggested doctors.
   Widget _buildSectionWithViewAll(String title) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
