@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:bouh/View/caregiverHomepage/caregiverHomepage.dart';
 import 'package:bouh/View/viewAppointments/appointmentspage.dart';
 import 'package:bouh/View/viewAppointments/bookedAppointmentsUpcoming.dart';
@@ -6,6 +8,8 @@ import 'package:bouh/View/viewAppointments/bookedAppointmentsPrevious.dart';
 import 'package:bouh/View/DrawingAnalysis/RequestAnalysisPage.dart';
 import 'package:bouh/View/Profile/CaregiverProfile.dart';
 import 'package:bouh/authentication/AuthSession.dart';
+import 'package:bouh/authentication/AuthService.dart';
+import 'package:bouh/View/Login/login_view.dart';
 
 /// Shell that holds the caregiver bottom nav index and switches between
 /// home (0), drawings (1), appointments (2), and profile (3).
@@ -39,10 +43,39 @@ class _CaregiverNavbarState extends State<CaregiverNavbar> {
   // Key to access caregiver homepage state for refresh on re-tap.
   final GlobalKey<CaregiverHomepageState> _homeKey = GlobalKey();
 
+  StreamSubscription<DocumentSnapshot>? _accountListener;
+
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.initialIndex.clamp(0, 3);
+    final uid = AuthSession.instance.userId;
+    if (uid != null) {
+      _accountListener = FirebaseFirestore.instance
+          .collection('caregivers')
+          .doc(uid)
+          .snapshots()
+          .listen((snapshot) {
+            if (!snapshot.exists && mounted) {
+              _forceLogout();
+            }
+          });
+    }
+  }
+
+  Future<void> _forceLogout() async {
+    await AuthService.instance.signOut();
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginView()),
+      (route) => false,
+    );
+  }
+
+  @override
+  void dispose() {
+    _accountListener?.cancel();
+    super.dispose();
   }
 
   void _onTap(int index) {
