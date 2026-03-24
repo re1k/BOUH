@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+
 import '../../../theme/base_themes/colors.dart';
 
 /// Reusable bottom navigation bar for the caregiver view.
 ///
 /// Displays four items (RTL): الرئيسية, الرسومات, المواعيد, حسابي.
-/// The active item is highlighted with a circular background (circle.png).
+/// The active item is highlighted with a circular background (circle.svg).
 ///
 /// Optional parameters:
 /// - [currentIndex]: Which item is active (0 = home). Defaults to 0. Clamped to 0..3.
@@ -45,16 +47,16 @@ class CaregiverBottomNav extends StatelessWidget {
   static const double _navItemPaddingV = 10;
 
   static const List<_NavItemData> _items = [
-    _NavItemData(label: 'الرئيسية', iconAsset: 'assets/images/home icon.png'),
+    _NavItemData(label: 'الرئيسية', iconAsset: 'assets/images/home icon.svg'),
     _NavItemData(
       label: 'الرسومات',
-      iconAsset: 'assets/images/drawings icon.png',
+      iconAsset: 'assets/images/drawings icon.svg',
     ),
     _NavItemData(
       label: 'المواعيد',
-      iconAsset: 'assets/images/calendar icon.png',
+      iconAsset: 'assets/images/calendar icon.svg',
     ),
-    _NavItemData(label: 'حسابي', iconAsset: 'assets/images/profile icon.png'),
+    _NavItemData(label: 'حسابي', iconAsset: 'assets/images/profile icon.svg'),
   ];
 
   @override
@@ -104,22 +106,18 @@ class CaregiverBottomNav extends StatelessWidget {
     VoidCallback? onTap,
   }) {
     final color = BColors.textBlack;
-    final iconWidget = Image.asset(
+    final iconWidget = SvgPicture.asset(
       iconAsset,
       width: _navIconSize,
       height: _navIconSize,
       fit: BoxFit.contain,
-      filterQuality: FilterQuality.high,
-      isAntiAlias: true,
+      colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
     );
     final content = Column(
       mainAxisSize: MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        ColorFiltered(
-          colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
-          child: iconWidget,
-        ),
+        iconWidget,
         SizedBox(height: _navLabelGap),
         Text(
           label,
@@ -133,20 +131,23 @@ class CaregiverBottomNav extends StatelessWidget {
     );
 
     final child = active
-        ? Container(
+        ? SizedBox(
             width: _navActivePillWidth,
             height: _navActivePillHeight,
-            clipBehavior: Clip.none,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              image: DecorationImage(
-                image: AssetImage('assets/images/circle.png'),
-                fit: BoxFit.contain,
-                alignment: Alignment.center,
-                filterQuality: FilterQuality.high,
-              ),
+            // Stack + SvgPicture: BoxDecoration cannot paint SVG like PNG/JPEG.
+            child: Stack(
+              alignment: Alignment.center,
+              clipBehavior: Clip.none,
+              children: [
+                SvgPicture.asset(
+                  'assets/images/circle.svg',
+                  width: _navActivePillWidth,
+                  height: _navActivePillHeight,
+                  fit: BoxFit.contain,
+                ),
+                content,
+              ],
             ),
-            child: content,
           )
         : Padding(
             padding: const EdgeInsets.symmetric(vertical: _navItemPaddingV),
