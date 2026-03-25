@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'views/login_page.dart';
-import 'views/homepage.dart';
+import 'views/AdminDashboardView.dart';
 import 'firebase_options.dart';
 
 void main() async {
@@ -33,7 +33,7 @@ class AdminApp extends StatelessWidget {
         useMaterial3: true,
       ),
       home: FirebaseAuth.instance.currentUser != null
-          ? const HomePage()
+          ? const AdminDashboardView()
           : const LoginPage(),
     );
   }
