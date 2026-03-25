@@ -2,7 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../theme/colors.dart';
 import '../services/auth_service.dart';
-import 'homepage.dart';
+import 'AdminDashboardView.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -134,9 +134,9 @@ class _LoginPageState extends State<LoginPage> {
 
       if (!mounted) return;
 
-      Navigator.of(
-        context,
-      ).pushReplacement(MaterialPageRoute(builder: (_) => const HomePage()));
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const AdminDashboardView()),
+      );
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -382,6 +382,7 @@ class _LoginPageState extends State<LoginPage> {
                           focusNode: _passwordFocusNode,
                           obscureText: _obscurePassword,
                           textAlign: TextAlign.right,
+                          textDirection: TextDirection.ltr,
                           textInputAction: TextInputAction.done,
                           onFieldSubmitted: (_) => _handleLogin(),
                           validator: (v) =>

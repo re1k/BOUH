@@ -16,7 +16,13 @@ import java.io.IOException;
 public class AdminAuthFilter extends OncePerRequestFilter {
 
     private final adminRepo adminRepository;
-
+    // remove this (after testing)
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        return path.startsWith("/api/classification/");
+    }
+    
     public AdminAuthFilter(adminRepo adminRepository) {
         this.adminRepository = adminRepository;
     }

@@ -8,6 +8,7 @@ import 'package:bouh/View/BookAppointment/DoctorDetails.dart';
 
 import 'package:bouh/dto/doctorSummaryDto.dart';
 import 'package:bouh/services/DoctorSearchService.dart';
+import 'package:bouh/widgets/loading_overlay.dart';
 
 class AppointmentsPage extends StatefulWidget {
   const AppointmentsPage({
@@ -41,6 +42,7 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
   String? _lastDoctorId;
   bool _isLoadingMore = false;
   bool _isSearching = false;
+  final Map<String, String> _cachedPhotoUrls = {};
   Timer? _refreshTimer;
   Timer? _defaultRefreshTimer;
   final DoctorSearchService _service = DoctorSearchService();
@@ -89,6 +91,13 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
       if (!_isSearching && _selectedArea == null) {
         try {
           final (doctors, hasMore) = await _service.getTopRatedDoctors();
+          for (final doc in doctors) {
+            if (doc.profilePhotoURL != null &&
+                doc.profilePhotoURL!.isNotEmpty &&
+                !_cachedPhotoUrls.containsKey(doc.doctorId)) {
+              _cachedPhotoUrls[doc.doctorId!] = doc.profilePhotoURL!;
+            }
+          }
           setState(() {
             _allDoctors = doctors;
             _filteredDoctors = doctors;
@@ -310,7 +319,13 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
                       if (_isLoadingMore)
                         const Padding(
                           padding: EdgeInsets.symmetric(vertical: 16),
-                          child: Center(child: CircularProgressIndicator()),
+                          child: Center(
+                            child: BouhOvalLoadingIndicator(
+                              width: 28,
+                              height: 20,
+                              strokeWidth: 2.5,
+                            ),
+                          ),
                         ),
                       SizedBox(height: CaregiverBottomNav.barHeight + _cardGap),
                     ],
@@ -511,7 +526,9 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
 
   Widget _buildDoctorList() {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+        child: BouhLoadingOverlay(showBarrier: false, size: 48),
+      );
     }
 
     if (_error != null) {
@@ -538,6 +555,15 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
               name: _filteredDoctors[i].name,
               specialty: _filteredDoctors[i].areaOfKnowledge,
               rating: _filteredDoctors[i].rating.toInt(),
+              profileImage:
+                  (_cachedPhotoUrls[_filteredDoctors[i].doctorId] ??
+                          _filteredDoctors[i].profilePhotoURL) !=
+                      null
+                  ? NetworkImage(
+                      _cachedPhotoUrls[_filteredDoctors[i].doctorId] ??
+                          _filteredDoctors[i].profilePhotoURL!,
+                    )
+                  : null,
             ),
           ),
           if (i < _filteredDoctors.length - 1) const SizedBox(height: _cardGap),

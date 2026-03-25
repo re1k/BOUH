@@ -14,10 +14,12 @@ import java.util.stream.Collectors;
 public class DoctorSearchService {
 
     private final DoctorSearchRepository doctorSearchRepository;
+    private final GcsImageService gcsImageService;
     private static final int PAGE_SIZE = 20;
 
-    public DoctorSearchService(DoctorSearchRepository doctorSearchRepository) {
+    public DoctorSearchService(DoctorSearchRepository doctorSearchRepository, GcsImageService gcsImageService) {
         this.doctorSearchRepository = doctorSearchRepository;
+        this.gcsImageService = gcsImageService;
     }
 
     public List<DoctorSearchDTO> searchByName(String name)
@@ -68,11 +70,21 @@ public class DoctorSearchService {
 
     // reusable mapping method — no duplication
     private DoctorSearchDTO toDTO(QueryDocumentSnapshot doc) {
+        String profilePath = doc.getString("profilePhotoURL");
+        String photoUrl = null;
+        try {
+            photoUrl = profilePath != null && !profilePath.isBlank()
+                    ? gcsImageService.generateDownloadUrl(profilePath)
+                    : null;
+        } catch (Exception e) {
+            photoUrl = null;
+        }
+
         return new DoctorSearchDTO(
                 doc.getId(),
                 doc.getString("name"),
                 doc.getString("areaOfKnowledge"),
                 doc.getDouble("averageRating") != null ? doc.getDouble("averageRating") : 0.0,
-                doc.getString("profilePhotoURL") != null ? doc.getString("profilePhotoURL") : "");
+                photoUrl);
     }
 }

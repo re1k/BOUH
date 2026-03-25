@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../theme/base_themes/colors.dart';
 import 'package:bouh/View/viewAppointments/widgets/appointmentCard.dart';
@@ -12,6 +13,7 @@ import 'package:bouh/dto/payment/RefundResponseDto.dart';
 import 'package:bouh/services/payment/RefundService.dart';
 import 'package:bouh/widgets/confirmation_popup.dart';
 import 'package:bouh/widgets/loading_overlay.dart';
+import 'package:bouh/View/Login/login_view.dart';
 
 /// Booked appointments – upcoming
 ///
@@ -78,6 +80,9 @@ class _BookedAppointmentsUpcomingState
   // Holds the active Firestore stream subscription so we can cancel it later.
   StreamSubscription<List<UpcomingAppointmentDto>>? _subscription;
 
+  // Listens to the caregiver's own Firestore document; forces logout if deleted.
+  StreamSubscription<DocumentSnapshot>? _accountListener;
+
   // Periodic timer that ticks every second to keep the UI in sync with the clock.
   // Each tick re-evaluates Join/Cancel button state and removes expired appointments.
   Timer? _ticker;
@@ -103,6 +108,30 @@ class _BookedAppointmentsUpcomingState
     if (!mounted) return;
     // Start the realtime stream for this user's appointments
     _subscribeToStream(_userId);
+    _startAccountListener(_userId);
+  }
+
+  void _startAccountListener(String? uid) {
+    _accountListener?.cancel();
+    if (uid == null) return;
+    _accountListener = FirebaseFirestore.instance
+        .collection('caregivers')
+        .doc(uid)
+        .snapshots()
+        .listen((snapshot) {
+      if (!snapshot.exists && mounted) {
+        _forceLogout();
+      }
+    });
+  }
+
+  Future<void> _forceLogout() async {
+    await AuthService.instance.signOut();
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginView()),
+      (route) => false,
+    );
   }
 
   /// Cancel the old stream and timer, then start a fresh Firestore stream.
@@ -201,6 +230,7 @@ class _BookedAppointmentsUpcomingState
     // This prevents memory leaks and errors from callbacks on a disposed widget.
     _subscription?.cancel();
     _ticker?.cancel();
+    _accountListener?.cancel();
     super.dispose();
   }
 

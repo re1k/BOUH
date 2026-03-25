@@ -28,17 +28,59 @@ public class EmailService {
             helper.setTo(toEmail);
             helper.setSubject("تم حذف حسابك");
             helper.setText(
-                "<div dir='rtl' style='text-align: right; font-family: Arial, sans-serif;'>" +
-                "<p>مرحبًا " + name + "،</p>" +
-                "<p>نود إعلامك بأنه تم حذف حسابك من تطبيق بوح من قبل المسؤول.</p>" +
-                "<p>إذا كان لديك أي استفسار، يرجى التواصل معنا.</p>" +
-                "<p>فريق بوح</p>" +
-                "</div>",
-                true
-            );
+                    "<div dir='rtl' style='text-align: right; font-family: Arial, sans-serif;'>" +
+                            "<p>مرحبًا " + name + "،</p>" +
+                            "<p>نود إعلامك بأنه تم حذف حسابك من تطبيق بوح من قبل المسؤول.</p>" +
+                            "<p>إذا كان لديك أي استفسار، يرجى التواصل معنا.</p>" +
+                            "<p>فريق بوح</p>" +
+                            "</div>",
+                    true);
             mailSender.send(mimeMessage);
         } catch (Exception e) {
             log.error("Failed to send account deletion email to {}: {}", toEmail, e.getMessage());
         }
     }
+
+    public void sendRegistrationAcceptedEmail(String toEmail, String name) {
+        try {
+            MimeMessage mimeMessage = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, false, "UTF-8");
+            helper.setFrom(fromEmail, "Bouh بوح");
+            helper.setTo(toEmail);
+            helper.setSubject(" قبول طلب التسجيل");
+            helper.setText(
+                    "<div dir='rtl' style='text-align: right; font-family: Arial, sans-serif;'>" +
+                            "<p>مرحبًا " + name + "،</p>" +
+                            "<p>يسعدنا إعلامك بأنه تم قبول طلب تسجيلك في تطبيق بوح.</p>" +
+                            "<p>يمكنك الآن تسجيل الدخول والبدء في استخدام التطبيق.</p>" +
+                            "<p>فريق بوح</p>" +
+                            "</div>",
+                    true);
+            mailSender.send(mimeMessage);
+        } catch (Exception e) {
+            log.error("Failed to send registration accepted email to {}: {}", toEmail, e.getMessage());
+        }
+    }
+
+    public void sendRegistrationRejectedEmail(String toEmail, String name) {
+        try {
+            MimeMessage mimeMessage = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, false, "UTF-8");
+            helper.setFrom(fromEmail, "Bouh بوح");
+            helper.setTo(toEmail);
+            helper.setSubject(" رفض طلب التسجيل ");
+            helper.setText(
+                    "<div dir='rtl' style='text-align: right; font-family: Arial, sans-serif;'>" +
+                            "<p>مرحبًا " + name + "،</p>" +
+                            "<p>نأسف لإعلامك بأنه تم رفض طلب تسجيلك في تطبيق بوح.</p>" +
+                            "<p>إذا كان لديك أي استفسار، يرجى التواصل معنا.</p>" +
+                            "<p>فريق بوح</p>" +
+                            "</div>",
+                    true);
+            mailSender.send(mimeMessage);
+        } catch (Exception e) {
+            log.error("Failed to send registration rejected email to {}: {}", toEmail, e.getMessage());
+        }
+    }
+
 }

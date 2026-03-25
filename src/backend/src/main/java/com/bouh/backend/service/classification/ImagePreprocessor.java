@@ -1,16 +1,8 @@
 package com.bouh.backend.service.classification;
-
-import javax.imageio.ImageIO;
 import org.springframework.stereotype.Service;
-import com.google.firebase.cloud.StorageClient;
-import com.google.cloud.storage.Bucket;
-import org.springframework.beans.factory.annotation.Value;
-import com.google.cloud.ReadChannel;
-import com.google.cloud.storage.Blob;
+import com.bouh.backend.service.GcsImageService;
 import lombok.extern.slf4j.Slf4j;
 import java.awt.image.BufferedImage;
-import java.io.InputStream;
-import java.nio.channels.Channels;
 import java.awt.Graphics2D;
 import java.awt.Image;
 
@@ -36,33 +28,17 @@ public class ImagePreprocessor {
     private static final float[] MEAN = { 0.485f, 0.456f, 0.406f };
     private static final float[] STD = { 0.229f, 0.224f, 0.225f };
 
-    private final Bucket bucket;
-        public ImagePreprocessor(@Value("${gcs.bucket.name}") String bucketName) {
-        this.bucket = StorageClient.getInstance().bucket(bucketName);
-    }
+   private final GcsImageService gcsImageService;
+
+public ImagePreprocessor(GcsImageService gcsImageService) {
+    this.gcsImageService = gcsImageService;
+}
 
     /**
      * Step 1: Download image from Google Cloud Storage
      */
-    public BufferedImage downloadImage(String imagePath) throws Exception {
-
-        // Fetch blob reference (no download yet)
-        Blob blob = bucket.get(imagePath);
-
-        if (blob == null) {
-            throw new RuntimeException("Image not found: " + imagePath);
-        }
-
-        // Stream the image instead of loading full byte[]
-        // Benefits:
-        // - Lower memory usage
-        // - Better for large files / high concurrency
-        // - Starts decoding while downloading
-        try (ReadChannel reader = blob.reader();
-                InputStream inputStream = Channels.newInputStream(reader)) {
-
-            return ImageIO.read(inputStream);
-        }
+    public BufferedImage downloadDrawing(String imagePath) throws Exception {
+        return gcsImageService.downloadImage(imagePath);
     }
 
     /**
@@ -114,9 +90,8 @@ public class ImagePreprocessor {
             max = Math.max(max, v);
         }
 
-        log.info("[[.. tensor size: " + tensor.length + " ..]]]");
-        log.info("[[[ ... min: " + min + " ... ]]]");
-        log.info("[[ ... max: " + max + " ... ]]]");
+        log.info("[[.. tensor size: " + tensor.length + " ..]]");
+
         return tensor;
     }
 }

@@ -32,7 +32,7 @@ public class ClassificationService {
         try {
             // Download image
             long downStart = System.currentTimeMillis();
-            BufferedImage image = imagePreprocessor.downloadImage(imagePath);
+            BufferedImage image = imagePreprocessor.downloadDrawing(imagePath);
             log.info("[[. . image downloaded . .]]");
 
             long downEnd = System.currentTimeMillis();

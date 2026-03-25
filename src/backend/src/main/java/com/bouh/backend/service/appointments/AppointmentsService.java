@@ -17,6 +17,7 @@ import com.bouh.backend.model.Dto.appointmentCreateRequestDto;
 import com.bouh.backend.model.Dto.AvailabilitySchedule.AvailabilityDayDto;
 import com.bouh.backend.model.Dto.AvailabilitySchedule.AvailabilityStoredSlotDto;
 import com.bouh.backend.model.repository.AvailabilityScheduleRepo;
+import com.bouh.backend.service.GcsImageService;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -62,18 +63,21 @@ public class AppointmentsService {
     private final childrenRepo childrenRepo;
     private final caregiverRepo caregiverRepo;
     private final AvailabilityScheduleRepo availabilityScheduleRepo;
+    private final GcsImageService gcsImageService;
 
    public AppointmentsService(
         AppointmentRepo appointmentRepo,
         doctorRepo doctorRepo,
         childrenRepo childrenRepo,
         caregiverRepo caregiverRepo,
-        AvailabilityScheduleRepo availabilityScheduleRepo) {
+        AvailabilityScheduleRepo availabilityScheduleRepo,
+        GcsImageService gcsImageService) {
     this.appointmentRepo = appointmentRepo;
     this.doctorRepo = doctorRepo;
     this.childrenRepo = childrenRepo;
     this.caregiverRepo = caregiverRepo;
     this.availabilityScheduleRepo = availabilityScheduleRepo;
+    this.gcsImageService = gcsImageService;
     this.httpClient = HttpClient.newHttpClient();
 }
 
@@ -330,7 +334,11 @@ public class AppointmentsService {
             dto.setEndTime(displayTimes[1]);
             dto.setDoctorName(doctor != null ? doctor.getName() : null);
             dto.setDoctorAreaOfKnowledge(doctor != null ? doctor.getAreaOfKnowledge() : null);
-            dto.setDoctorProfilePhotoURL(doctor != null ? doctor.getProfilePhotoURL() : null);
+            String profilePath = doctor != null ? doctor.getProfilePhotoURL() : null;
+            dto.setDoctorProfilePhotoURL(
+                    profilePath != null && !profilePath.isBlank()
+                            ? gcsImageService.generateDownloadUrl(profilePath)
+                            : null);
             dto.setChildName(childName);
             dto.setStatus(doc.getStatus() != null && doc.getStatus() == 1 ? 1 : 0);
             dto.setMeetingLink(doc.getMeetingLink());

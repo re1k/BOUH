@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import '../../../theme/base_themes/colors.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+
+import 'package:bouh/theme/base_themes/colors.dart';
 
 /// Reusable bottom navigation bar for the doctor view.
 ///
@@ -27,7 +29,6 @@ class DoctorBottomNav extends StatelessWidget {
 
   // --- Layout constants ---
   static const double _bottomNavHeight = barHeight;
-  static const double _navIconSize = 24;
   static const double _navLabelGap = 4;
   static const double _navActivePillWidth = 130;
   static const double _navActivePillHeight = 60;
@@ -35,12 +36,12 @@ class DoctorBottomNav extends StatelessWidget {
   static const double _navItemPaddingV = 10;
 
   static const List<_NavItemData> _items = [
-    _NavItemData(label: 'الرئيسية', iconAsset: 'assets/images/home icon.png'),
+    _NavItemData(label: 'الرئيسية', iconAsset: 'assets/images/home icon.svg'),
     _NavItemData(
       label: 'المواعيد',
-      iconAsset: 'assets/images/calendar icon.png',
+      iconAsset: 'assets/images/calendar icon.svg',
     ),
-    _NavItemData(label: 'حسابي', iconAsset: 'assets/images/profile icon.png'),
+    _NavItemData(label: 'حسابي', iconAsset: 'assets/images/profile icon.svg'),
   ];
 
   @override
@@ -90,22 +91,12 @@ class DoctorBottomNav extends StatelessWidget {
     VoidCallback? onTap,
   }) {
     final color = BColors.textBlack;
-    final iconWidget = Image.asset(
-      iconAsset,
-      width: _navIconSize,
-      height: _navIconSize,
-      fit: BoxFit.contain,
-      filterQuality: FilterQuality.high,
-      isAntiAlias: true,
-    );
+    final iconWidget = _NavTabSvgIcon(assetPath: iconAsset, color: color);
     final content = Column(
       mainAxisSize: MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        ColorFiltered(
-          colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
-          child: iconWidget,
-        ),
+        iconWidget,
         SizedBox(height: _navLabelGap),
         Text(
           label,
@@ -119,20 +110,22 @@ class DoctorBottomNav extends StatelessWidget {
     );
 
     final child = active
-        ? Container(
+        ? SizedBox(
             width: _navActivePillWidth,
             height: _navActivePillHeight,
-            clipBehavior: Clip.none,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              image: DecorationImage(
-                image: AssetImage('assets/images/circle.png'),
-                fit: BoxFit.contain,
-                alignment: Alignment.center,
-                filterQuality: FilterQuality.high,
-              ),
+            child: Stack(
+              alignment: Alignment.center,
+              clipBehavior: Clip.none,
+              children: [
+                SvgPicture.asset(
+                  'assets/images/circle.svg',
+                  width: _navActivePillWidth,
+                  height: _navActivePillHeight,
+                  fit: BoxFit.contain,
+                ),
+                content,
+              ],
             ),
-            child: content,
           )
         : Padding(
             padding: const EdgeInsets.symmetric(vertical: _navItemPaddingV),
@@ -154,4 +147,34 @@ class _NavItemData {
   const _NavItemData({required this.label, required this.iconAsset});
   final String label;
   final String iconAsset;
+}
+
+class _NavTabSvgIcon extends StatelessWidget {
+  const _NavTabSvgIcon({required this.assetPath, required this.color});
+
+  static const double _box = 25;
+
+  final String assetPath;
+  final Color color;
+
+  bool _isDrawingsAsset() => assetPath.toLowerCase().contains('drawings');
+
+  @override
+  Widget build(BuildContext context) {
+    final useContain = _isDrawingsAsset();
+    final fit = useContain ? BoxFit.contain : BoxFit.cover;
+    return SizedBox(
+      width: _box,
+      height: _box,
+      child: SvgPicture.asset(
+        assetPath,
+        width: _box,
+        height: _box,
+        fit: fit,
+        alignment: Alignment.center,
+        clipBehavior: useContain ? Clip.none : Clip.hardEdge,
+        colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+      ),
+    );
+  }
 }

@@ -14,6 +14,7 @@ class DoctorSearchService {
     name: dto.name,
     areaOfKnowledge: dto.areaOfKnowledge,
     rating: dto.averageRating,
+    profilePhotoURL: dto.profilePhotoURL,
   );
 
   // ── auth header ─────────────────────────────────────────────────────────────

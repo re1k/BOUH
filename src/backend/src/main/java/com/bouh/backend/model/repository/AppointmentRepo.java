@@ -48,7 +48,8 @@ public class AppointmentRepo {
     }
 
     /**
-     * Returns appointments for the given caregiver with date >= today, ordered by start time ascending.
+     * Returns appointments for the given caregiver with date >= today, ordered by
+     * start time ascending.
      */
     public List<appointmentDto> findByCaregiverIdAndDateFromToday(String caregiverId)
             throws ExecutionException, InterruptedException {
@@ -75,14 +76,14 @@ public class AppointmentRepo {
 
         list.sort(Comparator.comparing(
                 appointmentDto::getStartDateTime,
-                Comparator.nullsLast(Comparator.naturalOrder())
-        ));
+                Comparator.nullsLast(Comparator.naturalOrder())));
 
         return list;
     }
 
     /**
-     * Returns appointments for the given caregiver with date < today, ordered by start time descending.
+     * Returns appointments for the given caregiver with date < today, ordered by
+     * start time descending.
      */
     public List<appointmentDto> findByCaregiverIdAndDateBeforeToday(String caregiverId)
             throws ExecutionException, InterruptedException {
@@ -109,14 +110,14 @@ public class AppointmentRepo {
 
         list.sort(Comparator.comparing(
                 appointmentDto::getStartDateTime,
-                Comparator.nullsLast(Comparator.reverseOrder())
-        ));
+                Comparator.nullsLast(Comparator.reverseOrder())));
 
         return list;
     }
 
     /**
-     * Returns appointments for the given doctor with date >= today, ordered by start time ascending.
+     * Returns appointments for the given doctor with date >= today, ordered by
+     * start time ascending.
      */
     public List<appointmentDto> findByDoctorIdAndDateFromToday(String doctorId)
             throws ExecutionException, InterruptedException {
@@ -143,14 +144,14 @@ public class AppointmentRepo {
 
         list.sort(Comparator.comparing(
                 appointmentDto::getStartDateTime,
-                Comparator.nullsLast(Comparator.naturalOrder())
-        ));
+                Comparator.nullsLast(Comparator.naturalOrder())));
 
         return list;
     }
 
     /**
-     * Returns appointments for the given doctor with date < today, ordered by start time descending.
+     * Returns appointments for the given doctor with date < today, ordered by start
+     * time descending.
      */
     public List<appointmentDto> findByDoctorIdAndDateBeforeToday(String doctorId)
             throws ExecutionException, InterruptedException {
@@ -177,8 +178,7 @@ public class AppointmentRepo {
 
         list.sort(Comparator.comparing(
                 appointmentDto::getStartDateTime,
-                Comparator.nullsLast(Comparator.reverseOrder())
-        ));
+                Comparator.nullsLast(Comparator.reverseOrder())));
 
         return list;
     }
@@ -410,6 +410,8 @@ public class AppointmentRepo {
         dto.setMeetingLink(getString(doc, "meetingLink"));
         dto.setAmount(doc.getLong("amount"));
         dto.setPaymentIntentId(getString(doc, "paymentIntentId"));
+        dto.setRated(doc.getBoolean("rated")); //Rating
+
         return dto;
     }
 
@@ -500,5 +502,15 @@ public class AppointmentRepo {
     private static String getString(DocumentSnapshot doc, String field) {
         Object v = doc.get(field);
         return v == null ? null : v.toString();
+    }
+
+    // Update Rating
+    public void updateRating(String appointmentId) {
+        DocumentReference appointmentRef = firestore.collection(COLLECTION).document(appointmentId);
+
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("rated", true);
+
+        appointmentRef.update(updates);
     }
 }

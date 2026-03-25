@@ -4,25 +4,20 @@ import com.bouh.backend.model.Dto.DoctorScheduleDto;
 import com.bouh.backend.model.Dto.appointmentDto;
 import com.bouh.backend.model.Dto.doctorDto;
 import com.bouh.backend.model.Dto.AvailabilitySchedule.AvailabilityStoredSlotDto;
+import com.bouh.backend.service.GcsImageService;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.*;
 import com.google.firebase.auth.FirebaseAuth;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationContext;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Repository;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
-import com.google.firebase.cloud.StorageClient;
-import com.google.cloud.storage.Bucket;
-import com.google.cloud.storage.Blob;
 
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
 
 @Slf4j // for log debugging
 @Repository
@@ -31,18 +26,19 @@ public class doctorRepo {
     // Spring Boot will inject the globally created Firestore bean (from Config)
     private final Firestore firestore;
     private final AppointmentRepo appointment;
-    private final Bucket bucket;
+    private final GcsImageService gcsImageService;
+
     @Autowired
     private ApplicationContext context;
 
     public doctorRepo(
             Firestore firestore,
             AppointmentRepo appointment,
-            @Value("${gcs.bucket.name}") String bucketName) {
+            GcsImageService gcsImageService) {
 
         this.firestore = firestore;
         this.appointment = appointment;
-        this.bucket = StorageClient.getInstance().bucket(bucketName);
+        this.gcsImageService = gcsImageService;
     }
 
     public void createDoctor(String uid, doctorDto dto) {
@@ -313,7 +309,7 @@ public class doctorRepo {
                 .toList();
     }
 
-    public String deleteDoctor(String uid) {
+        public String deleteDoctor(String uid) {
 
         try {
             doctorDto doctor = findByUid(uid);
@@ -339,6 +335,7 @@ public class doctorRepo {
             throw new RuntimeException("Failed to delete doctor", e);
         }
     }
+
     @Async
     public void deleteDoctorAsync(String uid, doctorDto doctor) {
         try {
@@ -346,9 +343,9 @@ public class doctorRepo {
             // 1. delete appointments
             deleteByDoctorId(uid);
 
-            // 2. delete image
-            if (doctor.getProfilePhotoURL() != null) {
-                deleteAccountProfileImage(doctor.getProfilePhotoURL());
+             // 2. delete image
+           if (doctor.getProfilePhotoURL() != null) {
+                 gcsImageService.deleteImage(doctor.getProfilePhotoURL());
             }
 
             // 3. delete doctor + subcollections (ONLY HERE)
@@ -360,23 +357,7 @@ public class doctorRepo {
 
         } catch (Exception e) {
             log.error("Async delete failed for uid={}", uid, e);
-        }
-    }
 
-    public void deleteAccountProfileImage(String imageUrl) {
-
-        if (imageUrl == null) {
-            log.error("Invalid image URL");
-            return;
-        }
-
-        Blob blob = bucket.get(imageUrl);
-
-        if (blob != null) {
-            blob.delete();
-            log.info("Image deleted: {}", imageUrl);
-        } else {
-            log.warn("Image not found: {}", imageUrl);
         }
     }
 

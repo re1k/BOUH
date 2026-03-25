@@ -3,12 +3,14 @@ class DoctorSummaryDto {
   final String areaOfKnowledge;
   final double rating;
   final String? doctorId;
+  final String? profilePhotoURL;
 
   DoctorSummaryDto({
     required this.name,
     required this.areaOfKnowledge,
     required this.rating,
     this.doctorId,
+    this.profilePhotoURL,
   });
 
   factory DoctorSummaryDto.fromJson(Map<String, dynamic> json) {
@@ -25,6 +27,7 @@ class DoctorSummaryDto {
       name: (json['name'] ?? '').toString(),
       areaOfKnowledge: (json['areaOfKnowledge'] ?? '').toString(),
       rating: parsed,
+      profilePhotoURL: json['profilePhotoURL'],
     );
   }
 }

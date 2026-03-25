@@ -99,7 +99,8 @@ class DoctorsService {
 
     while (true) {
       final current = await getDoctorBarInfo(doctorId: doctorId);
-      final changed = last == null ||
+      final changed =
+          last == null ||
           last!.name != current.name ||
           last!.averageRating != current.averageRating;
       if (changed) {

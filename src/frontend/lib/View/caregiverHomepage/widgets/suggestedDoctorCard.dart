@@ -151,7 +151,20 @@ class SuggestedDoctorCard extends StatelessWidget {
         child: SizedBox(
           width: _avatarSize,
           height: _avatarSize,
-          child: Image(image: profileImage!, fit: BoxFit.cover),
+          child: Image(
+            image: profileImage!,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) => Container(
+              width: _avatarSize,
+              height: _avatarSize,
+              color: BColors.softGrey,
+              child: Icon(
+                Icons.person,
+                color: BColors.darkGrey,
+                size: _avatarSize * 0.5,
+              ),
+            ),
+          ),
         ),
       );
     }
