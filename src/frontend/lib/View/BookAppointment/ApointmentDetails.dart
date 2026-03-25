@@ -8,6 +8,7 @@ import 'package:bouh/services/appointmentsService.dart';
 import 'package:bouh/dto/bookAppointmentRequestDto.dart';
 import 'package:bouh/View/viewAppointments/bookedAppointmentsUpcoming.dart';
 import 'package:bouh/authentication/AuthSession.dart';
+import 'package:bouh/widgets/loading_overlay.dart';
 
 class AppointmentDetailsView extends StatefulWidget {
   const AppointmentDetailsView({
@@ -353,13 +354,10 @@ class _AppointmentDetailsViewState extends State<AppointmentDetailsView> {
                       ),
                     ),
                     child: _isSubmitting
-                        ? const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              color: Colors.white,
-                            ),
+                        ? const BouhOvalLoadingIndicator(
+                            width: 28,
+                            height: 20,
+                            strokeWidth: 2.5,
                           )
                         : const Text(
                             "دفع",
