@@ -8,6 +8,7 @@ import org.springframework.stereotype.Repository;
 import com.bouh.backend.model.Dto.profiles.caregiverProfileResponseDto;
 import com.bouh.backend.model.Dto.profiles.doctorProfileResponseDto;
 import com.bouh.backend.model.Dto.profiles.doctorUpdateDto;
+import com.bouh.backend.service.GcsImageService;
 import com.google.cloud.firestore.DocumentReference;
 import com.google.cloud.firestore.DocumentSnapshot;
 import com.google.cloud.firestore.Firestore;
@@ -21,6 +22,7 @@ import lombok.extern.slf4j.Slf4j;
 public class ProfilesRepo {
 
     private final Firestore firestore;
+    private final GcsImageService imageStorageService;
 
     /** Adds field to map only if value is not null. */
     private void putIfNotNull(Map<String, Object> map, String key, Object value) {
@@ -102,7 +104,7 @@ public class ProfilesRepo {
                     .yearsOfExperience(snapshot.getLong("yearsOfExperience") != null
                             ? snapshot.getLong("yearsOfExperience").intValue()
                             : null)
-                    .profilePhotoURL(snapshot.getString("profilePhotoURL"))
+                    .profilePhotoURL(imageStorageService.generateDownloadUrl(snapshot.getString("profilePhotoURL")) )
                     .iban(snapshot.getString("iban"))
                     .scfhsNumber(snapshot.getString("scfhsNumber"))
                     .build();

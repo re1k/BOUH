@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:bouh/theme/base_themes/colors.dart';
 import 'package:bouh/View/HomePage/widgets/doctorBottomNav.dart';
@@ -8,6 +11,8 @@ import 'package:bouh/authentication/AuthService.dart';
 import 'package:bouh/View/Login/login_view.dart';
 import 'package:bouh/widgets/confirmation_popup.dart';
 import 'package:bouh/widgets/loading_overlay.dart';
+import 'package:bouh/services/profileService.dart';
+import 'package:bouh/dto/doctorUpdateDto.dart';
 
 class DoctorProfileView extends StatefulWidget {
   const DoctorProfileView({
@@ -66,18 +71,33 @@ class DoctorProfileView extends StatefulWidget {
 }
 
 class _DoctorProfileViewState extends State<DoctorProfileView> {
+  final ProfileService _profileService = ProfileService();
+
   bool _isEditing = false;
   String? _deleteError;
   bool _isDeletingAccount = false;
   Timer? _deleteErrorTimer;
 
+  bool _loadingProfile = true;
+  bool _saving = false;
+  String? _loadError;
+  String? _saveError;
+
+  /// Signed photo URL from GET profile (display).
+  String? _photoUrl;
+  int? _yearsOfExperience;
+
   late final TextEditingController _emailCtrl;
   late final TextEditingController _nameCtrl;
   late final TextEditingController _ibanCtrl;
   late final TextEditingController _specNoCtrl;
-  late final TextEditingController _expCtrl;
-  late final TextEditingController _specCtrl;
-  late final TextEditingController _qualCtrl;
+  late final TextEditingController _areaCtrl;
+
+  /// Same pattern as doctor registration step 2: one field per qualification (1–12).
+  final List<TextEditingController> _qualificationCtrls = [];
+  final List<FocusNode> _qualificationFocusNodes = [];
+  String? _qualificationsError;
+  bool _qualificationsTouched = false;
 
   late String _gender;
 
@@ -86,8 +106,15 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
 
   final ImagePicker _picker = ImagePicker();
 
-  final List<String> _specialties = const ['توتر وقلق', 'غضب', 'حزن', 'تفاؤل'];
-  final List<String> _yearsList = const ['1', '2', '3', '4', '5+'];
+  static final List<int> _experienceYears = List.generate(50, (i) => i + 1);
+
+  static const int _minQualifications = 1;
+  static const int _maxQualifications = 12;
+  static const int _qualMaxLength = 70;
+
+  static final RegExp _arabicOnlyRegex = RegExp(
+    r'^[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF\s]+$',
+  );
 
   @override
   void initState() {
@@ -97,15 +124,26 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
     _nameCtrl = TextEditingController(text: widget.initialName ?? '');
     _ibanCtrl = TextEditingController(text: widget.initialIban ?? '');
     _specNoCtrl = TextEditingController(text: widget.initialSpecNo ?? '');
-    _expCtrl = TextEditingController(text: widget.initialExperience ?? '');
-    _specCtrl = TextEditingController(text: widget.initialSpecialty ?? '');
-    _qualCtrl = TextEditingController(
-      text: widget.initialQualificationsText ?? '',
-    );
+    _areaCtrl = TextEditingController(text: widget.initialSpecialty ?? '');
+
+    final initialQ = widget.initialQualificationsText
+            ?.split('\n')
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty)
+            .toList() ??
+        const <String>[];
+    _replaceQualificationEditors(initialQ);
 
     _gender = widget.initialGender ?? 'male';
     _defaultAvatarAsset =
         widget.defaultAvatarAsset ?? 'assets/images/doctor.jpg';
+
+    final exp = int.tryParse(widget.initialExperience ?? '');
+    if (exp != null && _experienceYears.contains(exp)) {
+      _yearsOfExperience = exp;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadProfile());
   }
 
   @override
@@ -115,10 +153,285 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
     _nameCtrl.dispose();
     _ibanCtrl.dispose();
     _specNoCtrl.dispose();
-    _expCtrl.dispose();
-    _specCtrl.dispose();
-    _qualCtrl.dispose();
+    _areaCtrl.dispose();
+    _disposeQualificationEditors();
     super.dispose();
+  }
+
+  void _disposeQualificationEditors() {
+    for (final c in _qualificationCtrls) {
+      c.dispose();
+    }
+    for (final f in _qualificationFocusNodes) {
+      f.dispose();
+    }
+    _qualificationCtrls.clear();
+    _qualificationFocusNodes.clear();
+  }
+
+  void _appendQualificationEditor(String initialText) {
+    final ctrl = TextEditingController(text: initialText);
+    final focusNode = FocusNode();
+    focusNode.addListener(() {
+      if (!focusNode.hasFocus) {
+        _qualificationsTouched = true;
+        _qualificationsError = _validateQualificationsList();
+        if (mounted) setState(() {});
+      }
+    });
+    _qualificationCtrls.add(ctrl);
+    _qualificationFocusNodes.add(focusNode);
+  }
+
+  /// Rebuilds qualification fields from server (or initial) data.
+  void _replaceQualificationEditors(List<String> qualifications) {
+    _disposeQualificationEditors();
+    _qualificationsError = null;
+    _qualificationsTouched = false;
+    final trimmed =
+        qualifications.map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+    if (trimmed.isEmpty) {
+      _appendQualificationEditor('');
+    } else {
+      for (final q in trimmed) {
+        _appendQualificationEditor(q);
+      }
+    }
+  }
+
+  void _addQualificationRow() {
+    if (_qualificationCtrls.length >= _maxQualifications) return;
+    setState(() {
+      _appendQualificationEditor('');
+      _qualificationsError = _validateQualificationsList();
+    });
+  }
+
+  void _removeQualificationRow(int index) {
+    if (_qualificationCtrls.length <= _minQualifications) return;
+    setState(() {
+      _qualificationCtrls[index].dispose();
+      _qualificationFocusNodes[index].dispose();
+      _qualificationCtrls.removeAt(index);
+      _qualificationFocusNodes.removeAt(index);
+      _qualificationsError = _validateQualificationsList();
+    });
+  }
+
+  String? _validateQualificationsList() {
+    final nonEmpty = _qualificationCtrls
+        .map((c) => c.text.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+    if (nonEmpty.isEmpty) {
+      return 'يرجى إدخال مؤهل واحد على الأقل';
+    }
+    for (final s in nonEmpty) {
+      if (!_arabicOnlyRegex.hasMatch(s)) {
+        return 'يرجى إدخال المؤهلات باللغة العربية فقط';
+      }
+    }
+    return null;
+  }
+
+  List<String> _qualificationsForSubmit() {
+    return _qualificationCtrls
+        .map((c) => c.text.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+  }
+
+  String _qualificationsTextForCallback() {
+    return _qualificationsForSubmit().join('\n');
+  }
+
+  InputDecoration _qualificationsInputDecoration() {
+    return InputDecoration(
+      filled: true,
+      fillColor: BColors.white,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: BColors.grey),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: BColors.primary.withOpacity(0.6)),
+      ),
+      errorStyle: const TextStyle(
+        color: BColors.validationError,
+        fontSize: 12,
+        fontWeight: FontWeight.w500,
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: BColors.validationError),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(
+          color: BColors.validationError,
+          width: 1.5,
+        ),
+      ),
+    );
+  }
+
+  InputDecoration _qualificationsDecorationWithCounter(
+    TextEditingController ctrl,
+  ) {
+    return _qualificationsInputDecoration().copyWith(
+      counterText: '',
+      counter: Align(
+        alignment: Alignment.centerRight,
+        child: Text(
+          '${ctrl.text.length}/$_qualMaxLength',
+          style: const TextStyle(
+            fontSize: 12,
+            color: BColors.darkGrey,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQualificationsEditor() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ...List.generate(_qualificationCtrls.length, (i) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              textDirection: TextDirection.rtl,
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _qualificationCtrls[i],
+                    focusNode: _qualificationFocusNodes[i],
+                    keyboardType: TextInputType.text,
+                    decoration: _qualificationsDecorationWithCounter(
+                      _qualificationCtrls[i],
+                    ).copyWith(
+                      hintText: 'مثال: بكالوريوس علم نفس',
+                      hintStyle: const TextStyle(
+                        color: BColors.darkGrey,
+                        fontSize: 13,
+                      ),
+                    ),
+                    textAlign: TextAlign.right,
+                    textDirection: TextDirection.rtl,
+                    maxLength: _qualMaxLength,
+                    inputFormatters: [
+                      LengthLimitingTextInputFormatter(_qualMaxLength),
+                    ],
+                    onChanged: (_) {
+                      if (_qualificationsTouched) {
+                        _qualificationsError = _validateQualificationsList();
+                      }
+                      setState(() {});
+                    },
+                  ),
+                ),
+                if (_qualificationCtrls.length > _minQualifications) ...[
+                  const SizedBox(width: 8),
+                  IconButton(
+                    onPressed: () => _removeQualificationRow(i),
+                    icon: const Icon(
+                      Icons.remove_circle_outline,
+                      color: BColors.validationError,
+                      size: 20,
+                    ),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 40,
+                      minHeight: 46,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          );
+        }),
+        if (_qualificationCtrls.length < _maxQualifications)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: _addQualificationRow,
+                icon: const Icon(
+                  Icons.add_circle_outline,
+                  size: 20,
+                  color: BColors.primary,
+                ),
+                label: const Text(
+                  'إضافة مؤهل',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: BColors.primary,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        if (_qualificationsError != null) ...[
+          const SizedBox(height: 4),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              _qualificationsError!,
+              style: const TextStyle(
+                color: BColors.validationError,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _loadProfile({bool silent = false}) async {
+    if (!silent) {
+      setState(() {
+        _loadingProfile = true;
+        _loadError = null;
+      });
+    }
+    try {
+      final p = await _profileService.fetchDoctorProfile();
+      if (!mounted) return;
+      _replaceQualificationEditors(p.qualifications);
+      setState(() {
+        _emailCtrl.text = p.email ?? '';
+        _nameCtrl.text = p.name ?? '';
+        _ibanCtrl.text = p.iban ?? '';
+        _specNoCtrl.text = p.scfhsNumber ?? '';
+        _areaCtrl.text = p.areaOfKnowledge ?? '';
+        final g = (p.gender ?? '').toLowerCase();
+        _gender = (g == 'female' || g == 'f' || g == 'أنثى') ? 'female' : 'male';
+        _yearsOfExperience = p.yearsOfExperience;
+        if (_yearsOfExperience != null &&
+            !_experienceYears.contains(_yearsOfExperience)) {
+          _yearsOfExperience = null;
+        }
+        _photoUrl = p.profilePhotoURL?.trim();
+        if (!silent) _pickedImageFile = null;
+        if (!silent) _loadingProfile = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        if (!silent) {
+          _loadingProfile = false;
+          _loadError = e.toString();
+        }
+      });
+    }
   }
 
   void _toggleEdit() {
@@ -192,20 +505,85 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
 
   Future<void> _save() async {
     if (widget.onSave != null) {
+      setState(() {
+        _qualificationsTouched = true;
+        _qualificationsError = _validateQualificationsList();
+      });
+      if (_qualificationsError != null) return;
+
       await widget.onSave!(
         email: _emailCtrl.text.trim(),
         name: _nameCtrl.text.trim(),
         iban: _ibanCtrl.text.trim(),
         specNo: _specNoCtrl.text.trim(),
-        experience: _expCtrl.text.trim(),
-        specialty: _specCtrl.text.trim(),
-        qualificationsText: _qualCtrl.text,
+        experience: _yearsOfExperience?.toString() ?? '',
+        specialty: _areaCtrl.text.trim(),
+        qualificationsText: _qualificationsTextForCallback(),
         gender: _gender,
         pickedImage: _pickedImageFile,
       );
+      if (!mounted) return;
+      setState(() => _isEditing = false);
+      return;
     }
 
-    setState(() => _isEditing = false);
+    final name = _nameCtrl.text.trim();
+    if (name.isEmpty) {
+      setState(() => _saveError = 'الرجاء إدخال الاسم');
+      return;
+    }
+
+    setState(() {
+      _qualificationsTouched = true;
+      _qualificationsError = _validateQualificationsList();
+      _saveError = null;
+    });
+    if (_qualificationsError != null) {
+      return;
+    }
+
+    setState(() => _saving = true);
+
+    try {
+      String? newStoragePath;
+      if (_pickedImageFile != null) {
+        final uploadedPath =
+            await _uploadDoctorProfilePhotoToStorage(_pickedImageFile!);
+        if (uploadedPath.isEmpty) {
+          throw Exception('تعذر رفع صورة الملف الشخصي');
+        }
+        newStoragePath = uploadedPath;
+      }
+
+      final qualLines = _qualificationsForSubmit();
+
+      final dto = DoctorUpdateDto(
+        name: name,
+        gender: _gender,
+        qualifications: qualLines,
+        yearsOfExperience: _yearsOfExperience,
+        profilePhotoURL: newStoragePath,
+        iban: _ibanCtrl.text.trim(),
+      );
+
+      final result = await _profileService.updateDoctor(dto);
+      if (!result.success) {
+        throw Exception(result.message ?? 'فشل تحديث الملف الشخصي');
+      }
+
+      // Refetch profile so `profilePhotoURL` is a fresh signed URL from the backend.
+      await _loadProfile(silent: true);
+      if (!mounted) return;
+      setState(() {
+        _isEditing = false;
+        _pickedImageFile = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _saveError = e.toString());
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   bool _isImagePath(String path) {
@@ -215,6 +593,18 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
         p.endsWith('.png') ||
         p.endsWith('.webp') ||
         p.endsWith('.heic');
+  }
+
+  /// Same storage path contract as registration: Firebase object path for backend `profilePhotoURL`.
+  Future<String> _uploadDoctorProfilePhotoToStorage(File file) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return '';
+    final ref = FirebaseStorage.instance
+        .ref()
+        .child('doctorProfileImages')
+        .child('${user.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg');
+    await ref.putFile(file);
+    return ref.fullPath;
   }
 
   Future<void> _pickDoctorImage() async {
@@ -286,20 +676,49 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
     );
   }
 
+  Widget _buildAvatarImage() {
+    const double size = 120;
+    if (_pickedImageFile != null) {
+      return ClipOval(
+        child: Image.file(
+          _pickedImageFile!,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+        ),
+      );
+    }
+    final url = _photoUrl;
+    if (url != null && url.isNotEmpty) {
+      return ClipOval(
+        child: Image.network(
+          url,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => Image.asset(
+            _defaultAvatarAsset,
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+          ),
+        ),
+      );
+    }
+    return ClipOval(
+      child: Image.asset(
+        _defaultAvatarAsset,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final ImageProvider avatarProvider = _pickedImageFile != null
-        ? FileImage(_pickedImageFile!)
-        : AssetImage(_defaultAvatarAsset);
-
-    final String expText = _expCtrl.text.trim();
-    final String specText = _specCtrl.text.trim();
-
-    final String? currentYearsValue = _yearsList.contains(expText)
-        ? expText
-        : null;
-    final String? currentSpecialtyValue = _specialties.contains(specText)
-        ? specText
+    final String? yearsDropdownValue = _yearsOfExperience != null
+        ? '${_yearsOfExperience}'
         : null;
 
     return Directionality(
@@ -388,7 +807,8 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
                                   ),
                                   child: CircleAvatar(
                                     radius: 60,
-                                    backgroundImage: avatarProvider,
+                                    backgroundColor: BColors.white,
+                                    child: _buildAvatarImage(),
                                   ),
                                 ),
                                 if (_isEditing)
@@ -462,71 +882,98 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      if (_loadError != null && !_loadingProfile) ...[
+                        Text(
+                          _loadError!,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: BColors.validationError,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Center(
+                          child: TextButton(
+                            onPressed: _loadProfile,
+                            child: const Text('إعادة المحاولة'),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
                       _label('البريد الإلكتروني'),
-                      _isEditing
-                          ? _editField(_emailCtrl)
-                          : _viewField(_emailCtrl.text),
+                      _viewField(_emailCtrl.text),
 
                       _label('الاسم'),
                       _isEditing
                           ? _editField(_nameCtrl)
                           : _viewField(_nameCtrl.text),
-
-                      _label('المؤهلات'),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (_isEditing)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 10, bottom: 4),
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: RichText(
+                              text: const TextSpan(
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: BColors.darkGrey,
+                                ),
+                                children: [
+                                  TextSpan(text: 'المؤهلات '),
+                                  TextSpan(
+                                    text: '*',
+                                    style: TextStyle(
+                                      color: BColors.validationError,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        )
+                      else
+                        _label('المؤهلات'),
+                      if (_isEditing) const SizedBox(height: 8),
                       _isEditing
-                          ? _editQualificationsBox(_qualCtrl)
-                          : _viewQualificationsBox(_qualCtrl.text),
+                          ? _buildQualificationsEditor()
+                          : _viewQualificationsList(_qualificationsForSubmit()),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 22),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _label('رقم الايبان'),
+                      _isEditing
+                          ? _editField(_ibanCtrl)
+                          : _viewField(_ibanCtrl.text),
 
-                      const SizedBox(height: 10),
-
-                      Row(
-                        children: [
-                          Expanded(
-                            flex: 2,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                _label('رقم الايبان'),
-                                _isEditing
-                                    ? _editField(_ibanCtrl)
-                                    : _viewField(_ibanCtrl.text),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            flex: 1,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                _label('رقم التخصص'),
-                                _isEditing
-                                    ? _editField(_specNoCtrl)
-                                    : _viewField(_specNoCtrl.text),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
+                      _label('رقم التخصص'),
+                      _isEditing
+                          ? _editField(_specNoCtrl)
+                          : _viewField(_specNoCtrl.text),
 
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                _label('التخصص'),
-                                _isEditing
-                                    ? _editDropdownField(
-                                        context,
-                                        value: currentSpecialtyValue,
-                                        items: _specialties,
-                                        onChanged: (v) {
-                                          if (v == null) return;
-                                          setState(() => _specCtrl.text = v);
-                                        },
-                                      )
-                                    : _viewField(_specCtrl.text),
+                                _label('مجال المعرفة'),
+                                _viewField(_areaCtrl.text),
                               ],
                             ),
                           ),
@@ -539,14 +986,23 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
                                 _isEditing
                                     ? _editDropdownField(
                                         context,
-                                        value: currentYearsValue,
-                                        items: _yearsList,
+                                        value: yearsDropdownValue,
+                                        items: _experienceYears
+                                            .map((e) => '$e')
+                                            .toList(),
                                         onChanged: (v) {
                                           if (v == null) return;
-                                          setState(() => _expCtrl.text = v);
+                                          setState(
+                                            () => _yearsOfExperience =
+                                                int.tryParse(v),
+                                          );
                                         },
                                       )
-                                    : _viewField(_expCtrl.text),
+                                    : _viewField(
+                                        _yearsOfExperience != null
+                                            ? '${_yearsOfExperience}'
+                                            : '',
+                                      ),
                               ],
                             ),
                           ),
@@ -564,13 +1020,28 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
 
                       const SizedBox(height: 14),
 
+                      if (_saveError != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          _saveError!,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: BColors.validationError,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+
                       if (_isEditing)
                         Center(
                           child: SizedBox(
                             width: 220,
                             height: 46,
                             child: ElevatedButton(
-                              onPressed: _save,
+                              onPressed: (_loadingProfile || _saving)
+                                  ? null
+                                  : _save,
                               style: ElevatedButton.styleFrom(
                                 elevation: 0,
                                 backgroundColor: BColors.secondary,
@@ -641,7 +1112,8 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
             ),
           ),
         ),
-          if (_isDeletingAccount) BouhLoadingOverlay(),
+          if (_isDeletingAccount || _loadingProfile || _saving)
+            BouhLoadingOverlay(),
         ],
         ),
         bottomNavigationBar: widget.onTap != null
@@ -721,13 +1193,10 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
     ),
   );
 
-  static Widget _viewQualificationsBox(String text) {
-    final items = text
-        .split('\n')
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toList();
-
+  static Widget _viewQualificationsList(List<String> items) {
+    if (items.isEmpty) {
+      return _viewField('—');
+    }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
@@ -770,30 +1239,6 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
       ),
     );
   }
-
-  static Widget _editQualificationsBox(TextEditingController c) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: BColors.grey),
-      color: BColors.white,
-    ),
-    child: TextField(
-      controller: c,
-      textAlign: TextAlign.right,
-      style: const TextStyle(
-        fontSize: 13,
-        color: BColors.textDarkestBlue,
-        fontWeight: FontWeight.w600,
-      ),
-      maxLines: null,
-      decoration: const InputDecoration(
-        border: InputBorder.none,
-        isDense: true,
-        contentPadding: EdgeInsets.zero,
-      ),
-    ),
-  );
 
   static Widget _genderReadOnly({required String selected}) {
     final isMale = selected == 'male';

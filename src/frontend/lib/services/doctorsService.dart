@@ -93,7 +93,7 @@ class DoctorsService {
   //Polls the backend and emits only when (name/rating) changed.
   static Stream<DoctorBarInfoDto> streamDoctorBarInfo({
     required String doctorId,
-    Duration interval = const Duration(seconds: 1),
+    Duration interval = const Duration(seconds: 60),
   }) async* {
     DoctorBarInfoDto? last;
 

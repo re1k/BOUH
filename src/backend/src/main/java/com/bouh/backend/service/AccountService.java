@@ -154,7 +154,7 @@ public class AccountService {
         String role = resolveAuthState(uid).getRole();
 
         try {
-            log.info("Fetching profile for uid={}, role={}", uid, role);
+            log.info("[[ .. Fetching profile for uid={}, role={} .. ]]", uid, role);
 
             if ("doctor".equals(role)) {
 
