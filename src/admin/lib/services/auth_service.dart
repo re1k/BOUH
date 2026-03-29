@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -75,23 +76,16 @@ class AdminAuthService {
   }
 
   /// Send password reset email
-  Future<String?> sendPasswordResetEmail({required String email}) async {
+  Future<void> sendPasswordResetEmail({required String email}) async {
     try {
-      await _auth.sendPasswordResetEmail(email: email.trim());
-      return null;
-    } on FirebaseAuthException catch (e) {
-      switch (e.code) {
-        case 'invalid-email':
-          return 'صيغة البريد الإلكتروني غير صحيحة.';
-        case 'user-not-found':
-          return 'لا يوجد حساب مسجل بهذا البريد الإلكتروني.';
-        case 'too-many-requests':
-          return 'تم تجاوز عدد المحاولات. انتظر دقيقة ثم حاول مرة أخرى.';
-        default:
-          return 'تعذر إرسال رابط استعادة كلمة المرور.';
-      }
+      final uri = Uri.parse('${ApiConfig.baseUrl}/api/admin/forgot-password');
+      await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email.trim()}),
+      );
     } catch (_) {
-      return 'لا يوجد اتصال بالإنترنت.';
+      // silently ignore
     }
   }
 }

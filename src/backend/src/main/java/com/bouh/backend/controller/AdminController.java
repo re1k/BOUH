@@ -18,6 +18,13 @@ public class AdminController {
         this.adminService = adminService;
     }
 
+    @PostMapping("/forgot-password")
+    public ResponseEntity<Void> forgotPassword(@RequestBody Map<String, String> body) {
+        String email = body.get("email");
+        if (email != null && !email.isBlank()) adminService.forgotPassword(email);
+        return ResponseEntity.ok().build();
+    }
+
     @GetMapping("/me")
     public ResponseEntity<Map<String, Object>> me(@AuthenticationPrincipal String firebaseDocUID) {
         // If we reach here, AdminAuthFilter already verified the user is an admin

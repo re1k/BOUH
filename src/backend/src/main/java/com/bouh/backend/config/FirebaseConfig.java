@@ -8,6 +8,7 @@ import com.google.firebase.cloud.FirestoreClient;
 import io.github.cdimascio.dotenv.Dotenv;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.web.client.RestTemplate;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -48,4 +49,9 @@ public class FirebaseConfig {
     public Firestore firestore(FirebaseApp app) {
         return FirestoreClient.getFirestore(app);
     } //making an instance available for the Dev env
+
+    @Bean
+    public RestTemplate restTemplate() {
+        return new RestTemplate();
+    }
 }

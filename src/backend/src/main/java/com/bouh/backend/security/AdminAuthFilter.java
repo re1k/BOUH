@@ -20,7 +20,8 @@ public class AdminAuthFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI();
-        return path.startsWith("/api/classification/");
+        return path.startsWith("/api/classification/")
+                || path.equals("/api/admin/forgot-password");
     }
     
     public AdminAuthFilter(adminRepo adminRepository) {
