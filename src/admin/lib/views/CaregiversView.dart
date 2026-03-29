@@ -54,17 +54,8 @@ class _CaregiversViewState extends State<CaregiversView> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(msg, textDirection: TextDirection.rtl),
-        backgroundColor: isSuccess
-            ? const Color(0xFF1E6B3A)
-            : BColors.validationError,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        margin: const EdgeInsets.only(
-          top: 16,
-          left: 16,
-          right: 16,
-          bottom: 600,
-        ),
+        backgroundColor:
+            isSuccess ? BColors.primary : BColors.validationError,
       ),
     );
   }
@@ -219,13 +210,26 @@ class _CaregiversViewState extends State<CaregiversView> {
                                   context: context,
                                   builder: (_) => ConfirmDeleteDialog(
                                     name: cg.name,
-                                    onConfirm: () {
-                                      // Remaz part
-                                      Navigator.pop(context);
-                                      _showSnackBar(
-                                        'تم حذف حساب ${cg.name} بنجاح',
-                                        isSuccess: true,
-                                      );
+                                    onConfirm: () async {
+                                      try {
+                                        await CaregiverInfoService.instance
+                                            .deleteCaregiver(context, cg.uid);
+                                        if (!mounted) return;
+                                        Navigator.pop(context);
+                                        setState(() => _caregivers.removeWhere(
+                                            (c) => c.uid == cg.uid));
+                                        _showSnackBar(
+                                          'تم حذف حساب ${cg.name} بنجاح',
+                                          isSuccess: true,
+                                        );
+                                      } catch (e) {
+                                        if (!mounted) return;
+                                        Navigator.pop(context);
+                                        final msg = e is Exception
+                                            ? e.toString().replaceFirst('Exception: ', '')
+                                            : 'تعذّر الاتصال بالخادم، تحقق من الاتصال';
+                                        _showSnackBar(msg, isSuccess: false);
+                                      }
                                     },
                                   ),
                                 ),

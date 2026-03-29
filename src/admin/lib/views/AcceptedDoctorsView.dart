@@ -54,17 +54,7 @@ class _AcceptedDoctorsViewState extends State<AcceptedDoctorsView> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(msg, textDirection: TextDirection.rtl),
-        backgroundColor: isSuccess
-            ? const Color(0xFF1E6B3A)
-            : BColors.validationError,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        margin: const EdgeInsets.only(
-          top: 16,
-          left: 16,
-          right: 16,
-          bottom: 600,
-        ),
+        backgroundColor: isSuccess ? BColors.primary : BColors.validationError,
       ),
     );
   }
@@ -259,13 +249,29 @@ class _AcceptedDoctorsViewState extends State<AcceptedDoctorsView> {
                                       context: context,
                                       builder: (_) => ConfirmDeleteDialog(
                                         name: doc.name,
-                                        onConfirm: () {
-                                          // Remaz part
-                                          Navigator.pop(context);
-                                          _showSnackBar(
-                                            'تم حذف حساب ${doc.name} بنجاح',
-                                            isSuccess: true,
-                                          );
+                                        onConfirm: () async {
+                                          try {
+                                            await DoctorService.instance
+                                                .deleteDoctor(context, doc.uid);
+                                            if (!mounted) return;
+                                            Navigator.pop(context);
+                                            setState(
+                                              () => _doctors.removeWhere(
+                                                (d) => d.uid == doc.uid,
+                                              ),
+                                            );
+                                            _showSnackBar(
+                                              'تم حذف حساب ${doc.name} بنجاح',
+                                              isSuccess: true,
+                                            );
+                                          } catch (_) {
+                                            if (!mounted) return;
+                                            Navigator.pop(context);
+                                            _showSnackBar(
+                                              'تعذّر الاتصال بالخادم، تحقق من الاتصال',
+                                              isSuccess: false,
+                                            );
+                                          }
                                         },
                                       ),
                                     ),

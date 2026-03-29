@@ -314,6 +314,8 @@ class _LoginPageState extends State<LoginPage> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: BColors.primary,
                   foregroundColor: BColors.white,
+                  disabledBackgroundColor: BColors.primary,
+                  disabledForegroundColor: BColors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
