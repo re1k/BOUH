@@ -1,8 +1,12 @@
+import 'dart:convert';
 import 'package:bouh/theme/base_themes/colors.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:bouh/View/Profile/ChildrenManagementView.dart';
 import 'package:bouh/View/caregiverHomepage/widgets/caregiverBottomNav.dart';
 import 'package:bouh/authentication/AuthService.dart';
+import 'package:bouh/authentication/AuthSession.dart';
+import 'package:bouh/config/api_config.dart';
 import 'package:bouh/View/Login/login_view.dart';
 import 'package:bouh/widgets/confirmation_popup.dart';
 import 'package:bouh/widgets/loading_overlay.dart';
@@ -25,8 +29,37 @@ class CaregiverAccountView extends StatefulWidget {
 }
 
 class _CaregiverAccountViewState extends State<CaregiverAccountView> {
+  static const double _kControlHeight = 56;
+  static const double _kControlRadius = 10;
+  static const String _profileLoadFallbackErrorMessage =
+      'حدث خطأ في استرجاع البيانات، تأكد من اتصالك بالشبكة وحاول مرة اخرى';
+  static final RegExp _nameArabicOrEnglishRegex = RegExp(
+    r'^[A-Za-z\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\s]+$',
+  );
+
+  final TextEditingController _nameCtrl = TextEditingController();
+  String _name = '';
+  String _email = '';
+  bool _isEditingName = false;
+  bool _loadingProfile = true;
+  bool _savingName = false;
   String? _deleteError;
+  String? _profileError;
+  String? _nameError;
   bool _isDeletingAccount = false;
+  bool get _hasNameChanged => _nameCtrl.text.trim() != _name.trim();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCaregiverProfile();
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -51,35 +84,6 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
                     alignment: Alignment.topCenter,
                   ),
 
-
-                      SafeArea(
-                        bottom: false,
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 10, left: 16),
-                          child: Align(
-                            alignment: Alignment.topLeft,
-                            child: _LogoutButton(
-                              onTap: () => _handleLogout(context),
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      const Positioned(
-                        bottom: 0,
-                        left: 0,
-                        right: 0,
-                        child: Center(
-                          child: Text(
-                            "المعلومات الشخصية",
-                            style: TextStyle(
-                              fontSize: 32,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black,
-                            ),
-                          ),
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -92,104 +96,79 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         const SizedBox(height: 20),
-
-                        _label("البريد الالكتروني"),
-                        const SizedBox(height: 6),
-                        _field(text: "lobaaliayhya@gmail.com"),
-
-                        const SizedBox(height: 18),
-
-                        _label("الاسم"),
-                        const SizedBox(height: 6),
-                        _field(
-                          text: "لبى آل يحيى",
-                          trailing: _editIcon(onTap: () {}),
-                        ),
-
-                        const SizedBox(height: 24),
-
-                        SizedBox(
-                          height: 56,
-                          child: ElevatedButton(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      const ChildrenManagementView(),
-                                ),
-                              );
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: BColors.primary,
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
+                        _settingsCard(
+                          children: [
+                            _sectionFieldItem(
+                              label: 'البريد الالكتروني',
+                              child: _field(
+                                text: _email.isEmpty ? '—' : _email,
+                                textColor: BColors.darkGrey,
+                                backgroundColor: const Color(0xFFF5F5F5),
                               ),
                             ),
-                            child: Row(
-                              children: const [
-                                Text(
-                                  "ادارة الاطفال",
-                                  style: TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                                Spacer(),
-                                Icon(
-                                  Icons.arrow_forward_ios_outlined,
-                                  color: Colors.white,
-                                ),
-                              ],
+                            _sectionFieldItem(
+                              label: 'الاسم',
+                              child: _editableNameField(),
+                            ),
+                            _childrenManagementItem(context),
+                          ],
+                        ),
+                        if (_nameError != null) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            _nameError!,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: BColors.validationError,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                        ),
+                        ],
+                        if (_profileError != null) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            _profileError!,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: BColors.validationError,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
 
                         const Spacer(),
-
-                    Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          SizedBox(
-                            width: 180,
-                            height: 40,
-                            child: ElevatedButton(
-                              onPressed: () => _handleDeleteAccount(context),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFFE4573D),
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                              ),
-                              child: const Text(
-                                "حذف الحساب",
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
+                        _settingsCard(
+                          children: [
+                            _settingsItem(
+                              title: 'تسجيل الخروج',
+                              titleColor: BColors.textDarkestBlue,
+                              icon: Icons.logout,
+                              iconColor: BColors.primary,
+                              onTap: () => _handleLogout(context),
                             ),
-                          ),
-                          if (_deleteError != null) ...[
-                            const SizedBox(height: 8),
-                            Text(
-                              _deleteError!,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                fontSize: 13,
-                                color: BColors.validationError,
-                                fontWeight: FontWeight.w600,
-                              ),
+                            _settingsItem(
+                              title: 'حذف الحساب',
+                              titleColor: BColors.validationError,
+                              icon: Icons.delete_outline,
+                              iconColor: BColors.validationError,
+                              onTap: () => _handleDeleteAccount(context),
                             ),
                           ],
+                        ),
+                        if (_deleteError != null) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            _deleteError!,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: BColors.validationError,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ],
-                      ),
-                    ),
 
                         const SizedBox(height: 150),
                       ],
@@ -198,7 +177,7 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
                 ),
               ],
             ),
-            if (_isDeletingAccount) BouhLoadingOverlay(),
+            if (_isDeletingAccount || _loadingProfile) BouhLoadingOverlay(),
           ],
         ),
         bottomNavigationBar: widget.onTap != null
@@ -270,26 +249,152 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
     }
   }
 
+  Uri _url(String path) => Uri.parse('${ApiConfig.baseUrl}$path');
+
+  Map<String, String> _authHeaders({bool json = false}) {
+    final token = AuthSession.instance.idToken;
+    if (token == null || token.isEmpty) {
+      throw StateError('No JWT (idToken). User not logged in.');
+    }
+    return {
+      if (json) 'Content-Type': 'application/json',
+      'Authorization': 'Bearer $token',
+    };
+  }
+
+  Future<Map<String, dynamic>> _fetchProfileMap() async {
+    var res = await http.get(
+      _url('/api/accounts/profile'),
+      headers: _authHeaders(json: true),
+    );
+
+    if (res.statusCode == 401) {
+      await AuthService.instance.refreshSession();
+      res = await http.get(
+        _url('/api/accounts/profile'),
+        headers: _authHeaders(json: true),
+      );
+    }
+
+    if (res.statusCode == 401 || res.statusCode == 403) {
+      throw Exception('UNAUTHORIZED');
+    }
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception(
+        res.body.isNotEmpty ? res.body : 'Failed to load caregiver profile',
+      );
+    }
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  Future<void> _loadCaregiverProfile() async {
+    setState(() {
+      _loadingProfile = true;
+      _profileError = null;
+    });
+    try {
+      final map = await _fetchProfileMap();
+      if (!mounted) return;
+      setState(() {
+        _email = map['email']?.toString() ?? '';
+        _name = map['name']?.toString() ?? '';
+        _nameCtrl.text = _name;
+        _loadingProfile = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loadingProfile = false;
+        _profileError = _profileLoadFallbackErrorMessage;
+      });
+    }
+  }
+
+  String? _validateName(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return 'يرجى إدخال الاسم';
+    if (!_nameArabicOrEnglishRegex.hasMatch(trimmed)) {
+      return 'يرجى إدخال الاسم بحروف عربية أو إنجليزية فقط';
+    }
+    return null;
+  }
+
+  Future<void> _saveNameInline() async {
+    final candidate = _nameCtrl.text.trim();
+    final validation = _validateName(candidate);
+    if (validation != null) {
+      setState(() => _nameError = validation);
+      return;
+    }
+    if (candidate == _name) {
+      setState(() => _isEditingName = false);
+      return;
+    }
+
+    setState(() {
+      _savingName = true;
+      _nameError = null;
+    });
+    try {
+      var res = await http.patch(
+        _url('/api/accounts/caregiver/update'),
+        headers: _authHeaders(json: true),
+        body: jsonEncode({'name': candidate}),
+      );
+
+      if (res.statusCode == 401) {
+        await AuthService.instance.refreshSession();
+        res = await http.patch(
+          _url('/api/accounts/caregiver/update'),
+          headers: _authHeaders(json: true),
+          body: jsonEncode({'name': candidate}),
+        );
+      }
+
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        throw Exception('Failed to update caregiver name');
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _name = candidate;
+        _isEditingName = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _nameError = 'تعذر تحديث الاسم. حاول مرة أخرى.';
+      });
+    } finally {
+      if (mounted) setState(() => _savingName = false);
+    }
+  }
+
   // Helpers  (EASIER IF WE WANT TO CHANGE LATER THE FIELDS OR LABELS)
 
   static Widget _label(String text) {
     return Text(
       text,
       style: TextStyle(
-        fontSize: 18,
+        fontSize: 16,
         fontWeight: FontWeight.w600,
         color: Colors.black.withOpacity(0.45),
       ),
     );
   }
 
-  static Widget _field({required String text, Widget? trailing}) {
+  Widget _field({
+    required String text,
+    Widget? trailing,
+    Color textColor = Colors.black,
+    Color backgroundColor = Colors.white,
+  }) {
     return Container(
-      height: 56,
+      height: _kControlHeight,
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(5),
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(_kControlRadius),
         border: Border.all(color: Colors.black.withOpacity(0.1)),
       ),
       child: Row(
@@ -297,7 +402,11 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
           Expanded(
             child: Text(
               text,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: textColor,
+              ),
             ),
           ),
           if (trailing != null) trailing,
@@ -322,30 +431,200 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
       ),
     );
   }
-}
 
-class _LogoutButton extends StatelessWidget {
-  const _LogoutButton({required this.onTap});
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: const [
-          Icon(Icons.logout, color: Colors.white, size: 22),
-          SizedBox(height: 4),
-          Text(
-            "تسجيل الخروج",
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
+  Widget _editableNameField() {
+    return Container(
+      height: _kControlHeight,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(_kControlRadius),
+        border: Border.all(color: Colors.black.withOpacity(0.1)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _nameCtrl,
+              readOnly: !_isEditingName || _savingName,
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.black,
+              ),
+              decoration: const InputDecoration(
+                isDense: true,
+                border: InputBorder.none,
+                hintText: '—',
+              ),
+              onChanged: (_) {
+                setState(() {
+                  if (_nameError != null) _nameError = null;
+                });
+              },
             ),
           ),
+          if (_isEditingName) ...[
+            if (_savingName)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 8),
+                child: BouhOvalLoadingIndicator(
+                  width: 30,
+                  height: 20,
+                  strokeWidth: 2.5,
+                ),
+              )
+            else ...[
+              IconButton(
+                onPressed: !_hasNameChanged ? null : _saveNameInline,
+                icon: Icon(
+                  Icons.check,
+                  color: _hasNameChanged ? BColors.primary : BColors.grey,
+                ),
+              ),
+              IconButton(
+                onPressed: () {
+                  setState(() {
+                    _isEditingName = false;
+                    _nameError = null;
+                    _nameCtrl.text = _name;
+                  });
+                },
+                icon: const Icon(Icons.close, color: Colors.grey),
+              ),
+            ],
+          ] else
+            _editIcon(
+              onTap: () {
+                setState(() {
+                  _isEditingName = true;
+                  _nameError = null;
+                  _nameCtrl.text = _name;
+                });
+              },
+            ),
         ],
+      ),
+    );
+  }
+
+  Widget _settingsCard({required List<Widget> children}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: BColors.white,
+        borderRadius: BorderRadius.circular(_kControlRadius),
+        border: Border.all(color: BColors.grey.withOpacity(0.6)),
+        boxShadow: [
+          BoxShadow(
+            blurRadius: 12,
+            color: Colors.black.withOpacity(0.04),
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          for (int i = 0; i < children.length; i++) ...[
+            if (i > 0) Divider(height: 1, color: BColors.grey.withOpacity(0.5)),
+            children[i],
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _settingsItem({
+    required String title,
+    required Color titleColor,
+    required IconData icon,
+    required Color iconColor,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: SizedBox(
+            height: _kControlHeight,
+            child: Row(
+              children: [
+                Icon(icon, size: 20, color: iconColor),
+                const SizedBox(width: 10),
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: titleColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _sectionFieldItem({
+    required String label,
+    required Widget child,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _label(label),
+          const SizedBox(height: 6),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _childrenManagementItem(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const ChildrenManagementView(),
+            ),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: SizedBox(
+            height: _kControlHeight,
+            child: Row(
+              children: const [
+                Icon(Icons.family_restroom, size: 20, color: BColors.primary),
+                SizedBox(width: 10),
+                Text(
+                  "ادارة الاطفال",
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: BColors.textDarkestBlue,
+                  ),
+                ),
+                Spacer(),
+                Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  size: 18,
+                  color: BColors.primary,
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
