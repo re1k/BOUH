@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:bouh/authentication/AuthService.dart';
 import 'package:bouh/authentication/AuthSession.dart';
@@ -77,9 +78,10 @@ class ProfileService {
     return DoctorProfileResponseDto.fromJson(map);
   }
 
-  //PATCH /api/accounts/doctor/update` (Spring: `AccountController#updateDoctor`).
+  //PATCH /api/accounts/doctor/update
   Future<AccountUpdateResult> updateDoctor(DoctorUpdateDto dto) async {
     final body = dto.toJson();
+    debugPrint('[[[..ProfileService..]]] PATCH /api/accounts/doctor/update body: ${jsonEncode(body)}');
     if (body.isEmpty) {
       throw StateError('No fields to update');
     }

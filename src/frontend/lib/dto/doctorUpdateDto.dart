@@ -20,7 +20,12 @@ class DoctorUpdateDto {
     final map = <String, dynamic>{};
     if (name != null) map['name'] = name;
     if (gender != null) map['gender'] = gender;
-    if (qualifications != null) map['qualifications'] = qualifications;
+    if (qualifications != null) {
+      map['qualifications'] = qualifications!
+          .map((q) => q.trim())
+          .where((q) => q.isNotEmpty)
+          .toList(growable: false);
+    }
     if (yearsOfExperience != null) map['yearsOfExperience'] = yearsOfExperience;
     if (profilePhotoURL != null) map['profilePhotoURL'] = profilePhotoURL;
     if (iban != null) map['iban'] = iban;

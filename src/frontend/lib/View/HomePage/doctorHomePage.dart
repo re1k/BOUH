@@ -13,6 +13,7 @@ import 'package:bouh/widgets/confirmation_popup.dart';
 import 'package:bouh/widgets/loading_overlay.dart';
 import 'package:bouh/services/doctorsService.dart';
 import 'package:bouh/dto/doctorBarInfoDto.dart';
+import 'package:bouh/services/profileService.dart';
 
 /// When used inside [DoctorNavbar], pass [currentIndex] and [onTap] so the
 /// bottom nav reflects the active tab and handles tab changes.
@@ -45,6 +46,15 @@ class DoctorHomePageState extends State<DoctorHomePage>
   StreamSubscription<List<UpcomingAppointmentDto>>? _subscription;
   Timer? _ticker;
   String? _doctorId;
+  final ProfileService _profileService = ProfileService();
+  String? _headerDoctorName;
+  String? _headerDoctorPhotoUrl;
+
+  String? _normalizePhotoUrl(String? raw) {
+    final v = (raw ?? '').trim();
+    if (v.isEmpty || v.toLowerCase() == 'null') return null;
+    return v;
+  }
 
   @override
   void initState() {
@@ -72,7 +82,39 @@ class DoctorHomePageState extends State<DoctorHomePage>
 
   /// Call when home nav is tapped to refresh today's appointments.
   void refresh() {
-    _prepareSessionAndLoad();
+    refreshAppointmentsOnly();
+    refreshHeaderFromBackend();
+  }
+
+  /// Lightweight refresh for home tab taps: updates appointments only.
+  Future<void> refreshAppointmentsOnly() async {
+    await AuthService.instance.refreshSession();
+    final String? doctorId = AuthSession.instance.userId;
+    if (!mounted) return;
+    setState(() => _doctorId = doctorId);
+    _subscribeToStream(doctorId);
+  }
+
+  /// Reuse already retrieved profile info without hitting profile endpoint again.
+  void refreshProfileHeader({String? name, String? photoUrl}) {
+    if (!mounted) return;
+    setState(() {
+      if (name != null) {
+        _headerDoctorName = name.trim();
+      }
+      if (photoUrl != null) {
+        final previous = _headerDoctorPhotoUrl;
+        final next = _normalizePhotoUrl(photoUrl);
+
+        // Prevent stale cached avatar after delete/change.
+        if (previous != null &&
+            previous.isNotEmpty &&
+            previous != next) {
+          NetworkImage(previous).evict();
+        }
+        _headerDoctorPhotoUrl = next;
+      }
+    });
   }
 
   Future<void> _prepareSessionAndLoad() async {
@@ -80,7 +122,32 @@ class DoctorHomePageState extends State<DoctorHomePage>
     final String? doctorId = AuthSession.instance.userId;
     if (!mounted) return;
     setState(() => _doctorId = doctorId);
+    await _loadHeaderProfile();
     _subscribeToStream(doctorId);
+  }
+
+  Future<void> _loadHeaderProfile() async {
+    try {
+      final profile = await _profileService.fetchDoctorProfile();
+      if (!mounted) return;
+      final nextPhoto = _normalizePhotoUrl(profile.profilePhotoURL);
+      final prevPhoto = _headerDoctorPhotoUrl;
+      if (prevPhoto != null && prevPhoto.isNotEmpty && prevPhoto != nextPhoto) {
+        NetworkImage(prevPhoto).evict();
+      }
+      setState(() {
+        _headerDoctorName = (profile.name ?? '').trim();
+        _headerDoctorPhotoUrl = nextPhoto;
+      });
+    } catch (_) {
+      // Keep fallback values from session/local UI if profile fetch fails.
+    }
+  }
+
+  /// Force backend-truth refresh for header profile fields (name/photo).
+  Future<void> refreshHeaderFromBackend() async {
+    await AuthService.instance.refreshSession();
+    await _loadHeaderProfile();
   }
 
   void _subscribeToStream(String? doctorId) {
@@ -494,23 +561,51 @@ class DoctorHomePageState extends State<DoctorHomePage>
       ),
       child: Row(
         children: [
-          // Backend hook: replace AssetImage with the logged-in doctor's profile image URL if available.
-          // Example: NetworkImage(profileUrl) + placeholder fallback.
-          const CircleAvatar(
-            radius: 28,
-            backgroundImage: AssetImage('assets/images/doctor.jpg'),
+          CircleAvatar(
+            radius: 31,
+            backgroundColor: Colors.white,
+            child: CircleAvatar(
+              radius: 28,
+              backgroundColor: Colors.white,
+              child: ClipOval(
+                child:
+                    (_headerDoctorPhotoUrl != null &&
+                        _headerDoctorPhotoUrl!.isNotEmpty)
+                    ? Image.network(
+                        _headerDoctorPhotoUrl!,
+                        width: 56,
+                        height: 56,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Image.asset(
+                          'assets/Images/default_ProfileImage.png',
+                          width: 56,
+                          height: 56,
+                          fit: BoxFit.cover,
+                        ),
+                      )
+                    : Image.asset(
+                        'assets/Images/default_ProfileImage.png',
+                        width: 56,
+                        height: 56,
+                        fit: BoxFit.cover,
+                      ),
+              ),
+            ),
           ),
           const SizedBox(width: 12),
 
-          // Doctor name from /me (AuthSession); rating from profile API when available.
+          // Name/photo from profile endpoint (fetched once). Rating can refresh independently.
           Expanded(
             child: StreamBuilder<DoctorBarInfoDto>(
               stream: (_doctorId == null || _doctorId!.isEmpty)
                   ? null
-                  : DoctorsService.streamDoctorBarInfo(doctorId: _doctorId!),
+                  : DoctorsService.streamDoctorBarInfo(
+                      doctorId: _doctorId!,
+                      interval: const Duration(seconds: 10),
+                    ),
               builder: (context, snapshot) {
-                final name = snapshot.data?.name.trim().isNotEmpty == true
-                    ? snapshot.data!.name
+                final name = _headerDoctorName?.trim().isNotEmpty == true
+                    ? _headerDoctorName!
                     : (AuthSession.instance.userName?.trim().isNotEmpty == true
                           ? AuthSession.instance.userName!
                           : '');

@@ -66,8 +66,8 @@ class DoctorsService {
     return DoctorDto.fromJson(decoded);
   }
 
-  //live update doctor header info (name + averageRating)
-  //Backend :GET /api/doctors/{doctorId}/barInfo
+  //Header bar info endpoint (used mainly for average rating refresh).
+  //Backend: GET /api/doctors/{doctorId}/barInfo
   static Future<DoctorBarInfoDto> getDoctorBarInfo({
     required String doctorId,
   }) async {
@@ -90,24 +90,38 @@ class DoctorsService {
     return DoctorBarInfoDto.fromJson(decoded);
   }
 
-  //Polls the backend and emits only when (name/rating) changed.
+  //Polling stream for bar-info changes (primarily rating in current UI usage).
+  //Emits only when payload changes and keeps stream alive on transient failures.
   static Stream<DoctorBarInfoDto> streamDoctorBarInfo({
     required String doctorId,
     Duration interval = const Duration(seconds: 60),
-  }) async* {
+  }) {
     DoctorBarInfoDto? last;
 
-    while (true) {
-      final current = await getDoctorBarInfo(doctorId: doctorId);
-      final changed =
-          last == null ||
-          last!.name != current.name ||
-          last!.averageRating != current.averageRating;
-      if (changed) {
+    Future<DoctorBarInfoDto?> fetchIfChanged() async {
+      try {
+        final current = await getDoctorBarInfo(doctorId: doctorId);
+        final changed =
+            last == null ||
+            last!.name != current.name ||
+            last!.averageRating != current.averageRating;
+        if (!changed) return null;
         last = current;
-        yield current;
+        return current;
+      } catch (_) {
+        // Keep stream alive on transient backend/network failures.
+        return null;
       }
-      await Future<void>.delayed(interval);
     }
+
+    return (() async* {
+      final first = await fetchIfChanged();
+      if (first != null) yield first;
+
+      await for (final _ in Stream.periodic(interval)) {
+        final next = await fetchIfChanged();
+        if (next != null) yield next;
+      }
+    })();
   }
 }

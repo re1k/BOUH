@@ -59,8 +59,16 @@ class _DoctorNavbarState extends State<DoctorNavbar> {
   }
 
   void _onTap(int index) {
-    if (index == _currentIndex) return; // already on this tab
+    if (index == _currentIndex) {
+      if (index == 0) {
+        _homeKey.currentState?.refresh();
+      }
+      return;
+    }
     setState(() => _currentIndex = index);
+    if (index == 0) {
+      _homeKey.currentState?.refresh();
+    }
   }
 
   @override
@@ -76,7 +84,17 @@ class _DoctorNavbarState extends State<DoctorNavbar> {
             currentIndex: _currentIndex,
             onTap: _onTap,
           ),
-          DoctorProfileView(currentIndex: _currentIndex, onTap: _onTap),
+          DoctorProfileView(
+            currentIndex: _currentIndex,
+            onTap: _onTap,
+            onProfileChanged: ({String? name, String? photoUrl}) {
+              _homeKey.currentState?.refreshProfileHeader(
+                name: name,
+                photoUrl: photoUrl,
+              );
+              _homeKey.currentState?.refresh();
+            },
+          ),
         ],
       ),
     );

@@ -3,6 +3,7 @@ class DoctorProfileResponseDto {
   final String? gender;
   final List<String> qualifications;
   final int? yearsOfExperience;
+  /// Signed GCS download URL from `GET /api/accounts/profile` (for display only).
   final String? profilePhotoURL;
   final String? iban;
   final String? email;
