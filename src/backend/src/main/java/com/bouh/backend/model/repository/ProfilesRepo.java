@@ -1,5 +1,6 @@
 package com.bouh.backend.model.repository;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,7 +35,7 @@ public class ProfilesRepo {
     /** Cleans qualifications list (trim, remove empty/duplicates, limit size). */
     private List<String> cleanQualifications(List<String> qualifications) {
         if (qualifications == null)
-            return null; // don't delete if not sent
+            return null;
 
         List<String> result = qualifications.stream()
                 .map(String::trim)
@@ -43,30 +44,53 @@ public class ProfilesRepo {
                 .limit(12)
                 .toList();
 
-        return result.isEmpty() ? null : result;
+        return result;
     }
 
     /** Updates editable doctor fields. */
     public void updateDoctor(String uid, doctorUpdateDto dto) {
+        try {
+            DocumentSnapshot snapshot = firestore
+                    .collection("doctors")
+                    .document(uid)
+                    .get()
+                    .get();
 
-        Map<String, Object> updates = new HashMap<>();
+            if (!snapshot.exists()) {
+                throw new RuntimeException("Doctor not found");
+            }
+            
+            Map<String, Object> updates = new HashMap<>();
 
-        // Editable fields only
-        putIfNotNull(updates, "name", dto.getName());
-        putIfNotNull(updates, "gender", dto.getGender());
-        putIfNotNull(updates, "yearsOfExperience", dto.getYearsOfExperience());
-        putIfNotNull(updates, "profilePhotoURL", dto.getProfilePhotoURL());
-        putIfNotNull(updates, "iban", dto.getIban());
+            String oldImagePath = snapshot.getString("profilePhotoURL");
+            String newImagePath = dto.getProfilePhotoURL();
+            String finalImagePath = handleProfileImage(oldImagePath, newImagePath);
 
-        // qualifications (cleaned)
-        putIfNotNull(updates, "qualifications",
-                cleanQualifications(dto.getQualifications()));
+            if (dto.getProfilePhotoURL() != null) {
+                updates.put("profilePhotoURL", finalImagePath);
+            }
 
-        if (updates.isEmpty()) {
-            throw new RuntimeException("No fields to update");
+            putIfNotNull(updates, "name", dto.getName());
+            putIfNotNull(updates, "gender", dto.getGender());
+            putIfNotNull(updates, "yearsOfExperience", dto.getYearsOfExperience());
+            putIfNotNull(updates, "iban", dto.getIban());
+
+            if (dto.getQualifications() != null) {
+                updates.put("qualifications", cleanQualifications(dto.getQualifications()));
+            }
+
+            log.info("[[DTO quals]]: {}", dto.getQualifications());
+            log.info("[[Cleaned quals]]: {}", cleanQualifications(dto.getQualifications()));
+
+            if (updates.isEmpty()) {
+                throw new RuntimeException("No fields to update");
+            }
+
+            updateDoctorProfile(uid, updates);
+
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to update doctor", e);
         }
-
-        updateDoctorProfile(uid, updates);
     }
 
     /** Applies partial update to doctor document in Firestore. */
@@ -82,7 +106,7 @@ public class ProfilesRepo {
         }
     }
 
-    /** Retrieves basic caregiver profile (name, email). */
+    /** Retrieves doctor profile */
     public doctorProfileResponseDto getDoctorProfile(String uid) {
         try {
             DocumentSnapshot snapshot = firestore
@@ -100,11 +124,11 @@ public class ProfilesRepo {
                     .email(snapshot.getString("email"))
                     .gender(snapshot.getString("gender"))
                     .areaOfKnowledge(snapshot.getString("areaOfKnowledge"))
-                    .qualifications((List<String>) snapshot.get("qualifications"))
+                    .qualifications((getQualificationsStringList(snapshot, "qualifications")))
                     .yearsOfExperience(snapshot.getLong("yearsOfExperience") != null
                             ? snapshot.getLong("yearsOfExperience").intValue()
                             : null)
-                    .profilePhotoURL(imageStorageService.generateDownloadUrl(snapshot.getString("profilePhotoURL")) )
+                    .profilePhotoURL(imageStorageService.generateDownloadUrl(snapshot.getString("profilePhotoURL")))
                     .iban(snapshot.getString("iban"))
                     .scfhsNumber(snapshot.getString("scfhsNumber"))
                     .build();
@@ -114,22 +138,53 @@ public class ProfilesRepo {
         }
     }
 
-    /** Updates caregiver name. */
-    public void updateCaregiverName(String uid, String name) {
+    /** Prepare qualifications as list for forntend */
+    private List<String> getQualificationsStringList(DocumentSnapshot snapshot, String field) {
+        Object value = snapshot.get(field);
 
-        if (name == null || name.trim().isEmpty()) {
-            throw new RuntimeException("Name cannot be empty");
+        if (value == null) {
+            return new ArrayList<>();
         }
 
-        try {
-            DocumentReference caregiverRef = firestore.collection("caregivers").document(uid);
-
-            caregiverRef.update("name", name.trim()).get();
-
-        } catch (Exception e) {
-            log.error("Failed to update caregiver name for uid={}", uid, e);
-            throw new RuntimeException("Failed to update caregiver name", e);
+        if (!(value instanceof List<?> rawList)) {
+            throw new RuntimeException("Field '" + field + "' is not a list. Found: " + value.getClass());
         }
+
+        List<String> result = new ArrayList<>();
+        for (Object item : rawList) {
+            result.add(String.valueOf(item));
+        }
+
+        return result;
+    }
+
+    /* handling doctor profile image */
+    private String handleProfileImage(String oldImagePath, String newImagePath) {
+
+        // convert "null" string → real null
+        if ("null".equals(newImagePath)) {
+            newImagePath = null;
+        }
+
+        // delete case
+        if (newImagePath == null) {
+            if (oldImagePath != null) {
+                imageStorageService.deleteImage(oldImagePath);
+            }
+            return null;
+        }
+
+        // same image
+        if (newImagePath.equals(oldImagePath)) {
+            return oldImagePath;
+        }
+
+        // replace
+        if (oldImagePath != null) {
+            imageStorageService.deleteImage(oldImagePath);
+        }
+
+        return newImagePath;
     }
 
     /** Retrieves basic caregiver profile (name, email). */
@@ -155,4 +210,23 @@ public class ProfilesRepo {
             throw new RuntimeException("Failed to fetch caregiver profile", e);
         }
     }
+
+    /** Updates caregiver name. */
+    public void updateCaregiverName(String uid, String name) {
+
+        if (name == null || name.trim().isEmpty()) {
+            throw new RuntimeException("Name cannot be empty");
+        }
+
+        try {
+            DocumentReference caregiverRef = firestore.collection("caregivers").document(uid);
+
+            caregiverRef.update("name", name.trim()).get();
+
+        } catch (Exception e) {
+            log.error("Failed to update caregiver name for uid={}", uid, e);
+            throw new RuntimeException("Failed to update caregiver name", e);
+        }
+    }
+
 }

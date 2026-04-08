@@ -85,6 +85,7 @@ public class AccountController {
             @AuthenticationPrincipal String firebaseDocUID,
             @RequestBody doctorUpdateDto dto) {
 
+                log.info("[[ Updating doctor info ]]");
         return ResponseEntity.ok(
                 accountService.updateDoctor(firebaseDocUID, dto));
     }
