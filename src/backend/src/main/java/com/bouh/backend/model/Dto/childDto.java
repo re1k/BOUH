@@ -3,6 +3,8 @@ package com.bouh.backend.model.Dto;
 import java.time.LocalDate;
 import java.util.List;
 
+import com.bouh.backend.model.Dto.DrawingAnalysis.drawingDto;
+
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;

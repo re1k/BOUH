@@ -94,4 +94,13 @@ class ChildrenService {
       );
     }
   }
+
+  // Returns only {id, name} pairs — exactly what the dropdowns need.
+  // Reuses getChildren() internally so no extra API call is made.
+  Future<List<({String id, String name})>> getChildrenNames(
+    String caregiverId,
+  ) async {
+    final children = await getChildren(caregiverId);
+    return children.map((c) => (id: c.childId, name: c.name)).toList();
+  }
 }

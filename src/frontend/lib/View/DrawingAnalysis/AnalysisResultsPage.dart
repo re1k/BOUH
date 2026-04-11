@@ -1,16 +1,25 @@
+import 'package:bouh/View/BookAppointment/DoctorDetails.dart';
+import 'package:bouh/dto/doctorDto.dart';
+import 'package:bouh/dto/doctorSummaryDto.dart';
+import 'package:bouh/services/doctorsService.dart';
 import 'package:flutter/material.dart';
 import 'package:bouh/theme/base_themes/colors.dart';
 import 'package:bouh/theme/base_themes/radius.dart';
 import 'package:bouh/theme/base_themes/typography.dart';
 import 'package:bouh/View/DrawingAnalysis/drawing_analysis_stepper.dart';
+import 'package:bouh/dto/DrawingAnalysis/DoctorSuggestionDto.dart';
 
 class AnalysisResultsPage extends StatelessWidget {
   //When true, hide the top stepper and show only the back button (when called in drawing history).
   final bool hideStepper;
+  final String emotionalInterpretation;
+  final List<DoctorSuggestionDto> doctors;
 
   const AnalysisResultsPage({
     super.key,
     this.hideStepper = false,
+    required this.emotionalInterpretation,
+    required this.doctors,
   });
 
   //Main build
@@ -23,7 +32,6 @@ class AnalysisResultsPage extends StatelessWidget {
         body: SafeArea(
           child: Column(
             children: [
-
               SizedBox(height: hideStepper ? 8 : 38),
 
               //When opened from DrawingHistoryPage: back arrow
@@ -56,16 +64,12 @@ class AnalysisResultsPage extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-
                       //Interpretations section
                       _buildInterpretationsSection(),
-
-                      const SizedBox(height: 32),
-
-                      //Recommended doctors section
-                      _buildDoctorsSection(context),
-
-                      const SizedBox(height: 32),
+                      if (doctors.isNotEmpty) ...[
+                        _buildDoctorsSection(context),
+                        const SizedBox(height: 32),
+                      ],
                     ],
                   ),
                 ),
@@ -82,15 +86,10 @@ class AnalysisResultsPage extends StatelessWidget {
     );
   }
 
-  //Builds the interpretations section with cards.
-  //BACKEND: Replace mock list with widget.interpretations ?? mockList once we add
-  //the optional parameter and pass API response from ProcessingAnalysisPage.
   Widget _buildInterpretationsSection() {
-    //Mock data until backend is connected. Then use: widget.interpretations ?? [...]
-    final interpretations = [
-      'يبدو أن طفلك يحس أنه لوحده أو ما يلقى أحد يشاركه لحظاته مثل ما يتمنى. يمكن يكون محتاج احتواء أكثر أو شخص يسمعه ويحس فيه. جرّب تقضين معه وقت ببيط تشاركينه لعب أو سؤال لطيف عن يومه. مجرد وجودك قدامه بقلبك قبل كلامك يساعده يحس أنه مو وحده.',
-      'لاحظنا ان هالنوع من الرسمات طفلك يرسمه بشكل متكرر. اذا تحبين تعرفين أكثر عن الموضوع وتستشيرين مختص اقترحنا لك اطباء ممكن يساعدونك',
-    ];
+    final text = emotionalInterpretation.isNotEmpty
+        ? emotionalInterpretation
+        : 'لم نتمكن من تحليل الرسمة في الوقت الحالي، يرجى المحاولة مرة أخرى لاحقاً.';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -106,11 +105,7 @@ class AnalysisResultsPage extends StatelessWidget {
 
         const SizedBox(height: 16),
 
-        //Builds a list of interpretation cards
-        ...interpretations.map((text) => Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _buildInterpretationCard(text),
-            )),
+        _buildInterpretationCard(text),
       ],
     );
   }
@@ -134,11 +129,7 @@ class AnalysisResultsPage extends StatelessWidget {
               shape: BoxShape.circle,
               color: BColors.accent,
             ),
-            child: const Icon(
-              Icons.lightbulb,
-              color: BColors.white,
-              size: 20,
-            ),
+            child: const Icon(Icons.lightbulb, color: BColors.white, size: 20),
           ),
 
           const SizedBox(width: 10),
@@ -147,9 +138,7 @@ class AnalysisResultsPage extends StatelessWidget {
           Expanded(
             child: Text(
               content,
-              style: BTypography.bodyText.copyWith(
-                height: 1.3,
-              ),
+              style: BTypography.bodyText.copyWith(height: 1.3),
               textAlign: TextAlign.right,
             ),
           ),
@@ -160,13 +149,6 @@ class AnalysisResultsPage extends StatelessWidget {
 
   //Builds the recommended doctors section.
   Widget _buildDoctorsSection(BuildContext context) {
-    //Mock data until backend is connected. Pass imageUrl when available.
-    final doctors = [
-      ('د.علي آل يحيى', null as String?),
-      ('د.موسى ناصر', null as String?),
-      ('د. محمد سعد', null as String?),
-    ];
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -183,21 +165,62 @@ class AnalysisResultsPage extends StatelessWidget {
 
         //Builds a list of doctor cards
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          mainAxisAlignment: MainAxisAlignment.start,
           children: doctors
-              .map((e) => _buildDoctorCard(context, e.$1, imageUrl: e.$2))
+              .map(
+                (d) => _buildDoctorCard(
+                  context,
+                  d.name,
+                  imageUrl: d.profilePhotoURL,
+                  doctorId: d.id,
+                ),
+              )
               .toList(),
         ),
       ],
     );
   }
 
-  //Builds a single doctor card. Pass [imageUrl] when available to show profile image.
-  //TODO: When backend is ready, onTap should route to doctor detail page.
-  Widget _buildDoctorCard(BuildContext context, String name, {String? imageUrl}) {
+  Widget _buildDoctorCard(
+    BuildContext context,
+    String name, {
+    String? imageUrl,
+    required String doctorId,
+  }) {
     return GestureDetector(
-      onTap: () {
-        //TODO: Navigate to doctor page when backend is connected.
+      onTap: () async {
+        try {
+          // Fetch full doctor details using the ID we already have
+          final DoctorDto fullDoctor = await DoctorsService.getDoctorDetails(
+            doctorId,
+          );
+
+          // Map DoctorDto → DoctorSummaryDto which DoctorDetailsView expects
+          final DoctorSummaryDto summary = DoctorSummaryDto(
+            doctorId: fullDoctor.doctorId,
+            name: fullDoctor.name,
+            areaOfKnowledge: fullDoctor.areaOfKnowledge,
+            rating: fullDoctor.averageRating ?? 0.0,
+          );
+
+          if (!context.mounted) return;
+
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => DoctorDetailsView(doctor: summary),
+            ),
+          );
+        } catch (e) {
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'تعذر تحميل بيانات الطبيب، يرجى المحاولة مرة أخرى',
+                textDirection: TextDirection.rtl,
+              ),
+            ),
+          );
+        }
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
@@ -221,17 +244,10 @@ class AnalysisResultsPage extends StatelessWidget {
                         fit: BoxFit.cover,
                       )
                     : null,
-                border: Border.all(
-                  color: BColors.primary,
-                  width: 3,
-                ),
+                border: Border.all(color: BColors.primary, width: 3),
               ),
               child: imageUrl == null
-                  ? const Icon(
-                      Icons.person,
-                      size: 40,
-                      color: BColors.darkGrey,
-                    )
+                  ? const Icon(Icons.person, size: 40, color: BColors.darkGrey)
                   : null,
             ),
             const SizedBox(height: 16),
@@ -264,8 +280,8 @@ class AnalysisResultsPage extends StatelessWidget {
         width: double.infinity,
         child: ElevatedButton(
           onPressed: () {
-            //Pop back to the first route (ReqestAnalysis)
-            Navigator.of(context).popUntil((route) => route.isFirst);
+            Navigator.of(context).pop(); // pop AnalysisResultsPage
+            Navigator.of(context).pop(); // pop UploadDrawingPage
           },
           style: ElevatedButton.styleFrom(
             backgroundColor: BColors.accent,
@@ -275,10 +291,7 @@ class AnalysisResultsPage extends StatelessWidget {
             ),
             elevation: 0,
           ),
-          child: Text(
-            'اغلاق',
-            style: BTypography.buttonText,
-          ),
+          child: Text('اغلاق', style: BTypography.buttonText),
         ),
       ),
     );

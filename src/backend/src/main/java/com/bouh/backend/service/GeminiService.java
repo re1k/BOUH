@@ -2,12 +2,7 @@ package com.bouh.backend.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-
-import jakarta.annotation.PostConstruct;
 import okhttp3.*;
-
-import org.apache.hc.core5.http2.frame.Frame;
-import org.aspectj.lang.annotation.Before;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -81,6 +76,7 @@ Never recommend any activity that involves hitting, punching, screaming, throwin
 Never suggest or reference any activity, metaphor, or language related to food, drinks, eating, cooking, or anything edible in any part of your response.
 Never use the word 'التميمة' or 'التميمه' or any reference to amulets or charms in your response.
 Ensure that all advice and content strictly aligns with Islamic values and principles. Never suggest, imply, or reference anything that contradicts Islamic teachings.
+When writing "بال" or 'كال' specifically as a prefix for emotions, it must always be directly attached to the emotion (e.g., بالحزن, كالحزن) and never separated.
 Keep the response short: 3 to 5 sentences maximum.
 Final output:/nProvide only the final response paragraph to the caregiver. Do not include the knowledge or any internal reasoning in your output.
 """;

@@ -1,19 +1,17 @@
 import 'package:bouh/View/DrawingAnalysis/DrawingHistoryPage.dart';
 import 'package:bouh/View/DrawingAnalysis/UploadDrawingPage.dart';
 import 'package:bouh/View/caregiverHomepage/widgets/caregiverBottomNav.dart';
+import 'package:bouh/widgets/loading_overlay.dart';
 import 'package:flutter/material.dart';
 import 'package:bouh/theme/base_themes/colors.dart';
 import 'package:bouh/theme/base_themes/radius.dart';
 import 'package:bouh/theme/base_themes/typography.dart';
-
+import 'package:bouh/services/ChildrenService.dart';
+import 'package:bouh/authentication/AuthSession.dart';
 
 //First page for drawing analysis feature
 class RequestAnalysisPage extends StatefulWidget {
-  const RequestAnalysisPage({
-    super.key,
-    this.currentIndex = 1,
-    this.onTap,
-  });
+  const RequestAnalysisPage({super.key, this.currentIndex = 1, this.onTap});
 
   //Active bottom nav index (1 = drawings). Pass when used inside CaregiverNavbar.
   final int currentIndex;
@@ -29,13 +27,30 @@ class _RequestAnalysisPageState extends State<RequestAnalysisPage> {
   final GlobalKey _dropdownKey = GlobalKey();
   static const double _menuWidth = 280;
 
-  String? _selectedChild; //Selected child name from dropdown
-  final List<String> _childrenNames = [
-    //Dummy data of children names
-    'ليان',
-    'بسام',
-    'خزامى',
-  ];
+  final _childrenService = ChildrenService();
+  List<({String id, String name})> _children = [];
+  bool _loadingChildren = true;
+  ({String id, String name})? _selectedChild;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadChildren();
+  }
+
+  Future<void> _loadChildren() async {
+    final caregiverId = AuthSession.instance.userId;
+    if (caregiverId == null) return;
+    try {
+      final children = await _childrenService.getChildrenNames(caregiverId);
+      setState(() {
+        _children = children;
+        _loadingChildren = false;
+      });
+    } catch (e) {
+      setState(() => _loadingChildren = false);
+    }
+  }
 
   //Main build
   @override
@@ -61,26 +76,38 @@ class _RequestAnalysisPageState extends State<RequestAnalysisPage> {
             SafeArea(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const SizedBox(height: 16),
-                    _buildTopBar(),
-                    const Spacer(flex: 5),
-                    _buildTitle(),
-                    const SizedBox(height: 40),
-                    _buildChildDropdown(),
-                    const SizedBox(height: 130),
-                    _buildStartButton(),
-                    const Spacer(flex: 3),
-                  ],
+                child: SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight:
+                          MediaQuery.of(context).size.height -
+                          MediaQuery.of(context).padding.top -
+                          MediaQuery.of(context).padding.bottom -
+                          80,
+                    ),
+                    child: IntrinsicHeight(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const SizedBox(height: 16),
+                          _buildTopBar(),
+                          const Spacer(flex: 3),
+                          _buildTitle(),
+                          const SizedBox(height: 24),
+                          _buildChildDropdown(),
+                          const Spacer(flex: 2),
+                          _buildStartButton(),
+                          const Spacer(flex: 2),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
           ],
-          
         ),
-          bottomNavigationBar: Material(
+        bottomNavigationBar: Material(
           clipBehavior: Clip.none,
           color: Colors.transparent,
           child: Directionality(
@@ -104,8 +131,7 @@ class _RequestAnalysisPageState extends State<RequestAnalysisPage> {
           onPressed: () {
             Navigator.of(context).push(
               MaterialPageRoute<void>(
-                builder: (context) =>
-                    DrawingHistoryPage(selectedChildName: _selectedChild),
+                builder: (_) => const DrawingHistoryPage(),
               ),
             );
           },
@@ -144,7 +170,10 @@ class _RequestAnalysisPageState extends State<RequestAnalysisPage> {
       children: [
         Padding(
           padding: const EdgeInsets.only(bottom: 10, right: 6),
-          child: Text('اختر الطفل الذي تود تحليل رسمته', style: BTypography.labelText),
+          child: Text(
+            'اختر الطفل الذي تود تحليل رسمته',
+            style: BTypography.labelText,
+          ),
         ),
 
         //Dropdown container
@@ -157,7 +186,7 @@ class _RequestAnalysisPageState extends State<RequestAnalysisPage> {
             border: Border.all(color: BColors.grey, width: 1),
           ),
           child: InkWell(
-            onTap: _showChildMenu,
+            onTap: _loadingChildren ? null : _showChildMenu,
             borderRadius: BRadius.dropdownRadius,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -177,15 +206,24 @@ class _RequestAnalysisPageState extends State<RequestAnalysisPage> {
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Text(
-                      _selectedChild ?? 'اختر اسم الطفل',
-                      style: _selectedChild != null
-                          ? BTypography.dropdownSelected
-                          : BTypography.dropdownHint,
-                      textAlign: TextAlign.right,
-                    ),
+                    child: _loadingChildren
+                        ? const SizedBox(
+                            height: 16,
+                            width: 16,
+                            child: BouhOvalLoadingIndicator(),
+                          )
+                        : Text(
+                            _selectedChild?.name ?? 'اختر اسم الطفل',
+                            style: _selectedChild != null
+                                ? BTypography.dropdownSelected
+                                : BTypography.dropdownHint,
+                            textAlign: TextAlign.right,
+                          ),
                   ),
-                  const Icon(Icons.keyboard_arrow_down, color: BColors.darkGrey),
+                  const Icon(
+                    Icons.keyboard_arrow_down,
+                    color: BColors.darkGrey,
+                  ),
                 ],
               ),
             ),
@@ -201,25 +239,21 @@ class _RequestAnalysisPageState extends State<RequestAnalysisPage> {
     if (box == null) return;
     final pos = box.localToGlobal(Offset.zero);
     final size = box.size;
-    final screenWidth = MediaQuery.of(context).size.width;//
+    final screenWidth = MediaQuery.of(context).size.width; //
     final top = pos.dy + size.height;
     // Align menue (RTL)
     final left = pos.dx + size.width - _menuWidth;
     final right = screenWidth - pos.dx - size.width;
 
-    showMenu<String>(
-
+    showMenu<({String id, String name})>(
       context: context,
       position: RelativeRect.fromLTRB(left, top, right, 0),
       shape: RoundedRectangleBorder(borderRadius: BRadius.dropdownRadius),
       color: BColors.secondry,
-      items: _childrenNames.asMap().entries.map((entry) {
-        final index = entry.key;
-        final name = entry.value;
-        final itemColor = index.isEven ? BColors.secondry : BColors.white;
-
-        return PopupMenuItem<String>(
-          value: name,
+      items: _children.asMap().entries.map((entry) {
+        final itemColor = entry.key.isEven ? BColors.secondry : BColors.white;
+        return PopupMenuItem<({String id, String name})>(
+          value: entry.value,
           padding: EdgeInsets.zero,
           child: Container(
             width: _menuWidth,
@@ -228,15 +262,16 @@ class _RequestAnalysisPageState extends State<RequestAnalysisPage> {
             padding: const EdgeInsets.symmetric(horizontal: 24),
             alignment: Alignment.centerRight,
             child: Text(
-              name,
+              entry.value.name,
               textAlign: TextAlign.right,
               style: BTypography.dropdownSelected,
             ),
           ),
         );
       }).toList(),
-    ).then((value) {
-      if (value != null) setState(() => _selectedChild = value); //update the selected child
+    ).then((selected) {
+      if (selected != null)
+        setState(() => _selectedChild = selected); //update the selected child
     });
   }
 
@@ -250,8 +285,10 @@ class _RequestAnalysisPageState extends State<RequestAnalysisPage> {
                 // BACKEND: selectedChildName is passed through the flow for your API (e.g. associate analysis with child).
                 Navigator.of(context).push(
                   MaterialPageRoute<void>(
-                    builder: (context) =>
-                        UploadDrawingPage(selectedChildName: _selectedChild),
+                    builder: (context) => UploadDrawingPage(
+                      childId: _selectedChild!.id,
+                      childName: _selectedChild!.name,
+                    ),
                   ),
                 );
               }

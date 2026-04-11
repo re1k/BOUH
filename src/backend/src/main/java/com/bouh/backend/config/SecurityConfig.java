@@ -35,6 +35,7 @@ public class SecurityConfig {
                         // Any request that matches /api/auth/**
                         // MUST be authenticated (a valid JWT must be provided)
                         .requestMatchers("/api/accounts/**").authenticated()
+                        .requestMatchers("/api/admin/forgot-password").permitAll()
                         .requestMatchers("/api/admin/**").authenticated()
 
                         // Classifier test endpoint (remove after testing)

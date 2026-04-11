@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:html' as html;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../theme/colors.dart';
@@ -153,7 +155,7 @@ class _LoginPageState extends State<LoginPage> {
             break;
           case 'too-many-requests':
             _passwordError =
-                'تم تجاوز عدد المحاولات. انتظر قليلاً ثم حاول مرة أخرى.';
+                'تم تجاوز عدد المحاولات. انتظر قليلًا ثم حاول مرة أخرى.';
             break;
           default:
             _passwordError = 'حدث خطأ غير متوقع. حاول مرة أخرى.';
@@ -168,9 +170,44 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  static const String _attemptsKey = 'reset_attempts';
+  static const int _maxAttempts = 3;
+  static const Duration _windowDuration = Duration(minutes: 15);
+
+  List<DateTime> _loadAttempts() {
+    final stored = html.window.localStorage[_attemptsKey];
+    if (stored == null) return [];
+    final list = jsonDecode(stored) as List;
+    final now = DateTime.now();
+    return list
+        .map((e) => DateTime.parse(e as String))
+        .where((t) => now.difference(t) <= _windowDuration)
+        .toList();
+  }
+
+  void _saveAttempts(List<DateTime> attempts) {
+    html.window.localStorage[_attemptsKey] = jsonEncode(
+      attempts.map((t) => t.toIso8601String()).toList(),
+    );
+  }
+
+  bool _isRateLimited() {
+    final attempts = _loadAttempts();
+    _saveAttempts(attempts); // prune expired ones
+    return attempts.length >= _maxAttempts;
+  }
+
+  void _recordAttempt() {
+    final attempts = _loadAttempts()..add(DateTime.now());
+    _saveAttempts(attempts);
+  }
+
   void _handleForgotPassword() {
     final resetEmailCtrl = TextEditingController();
     String? dialogError;
+    String? inlineMessage;
+    Color inlineColor = BColors.primary;
+    bool loading = false;
 
     showDialog(
       context: context,
@@ -191,19 +228,23 @@ class _LoginPageState extends State<LoginPage> {
             ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const Text(
                   'أدخل بريدك الإلكتروني وسنرسل لك رابط استعادة كلمة المرور.',
+                  textAlign: TextAlign.right,
                   style: TextStyle(fontSize: 14, color: BColors.darkerGrey),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
                 TextField(
                   controller: resetEmailCtrl,
                   keyboardType: TextInputType.emailAddress,
                   textAlign: TextAlign.right,
+                  onChanged: (_) => setDialogState(() => dialogError = null),
                   decoration: InputDecoration(
                     hintText: 'البريد الإلكتروني',
                     errorText: dialogError,
+                    helperText: ' ',
                     errorMaxLines: 2,
                     filled: true,
                     fillColor: BColors.white,
@@ -236,6 +277,29 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                   ),
                 ),
+                Padding(
+                  padding: const EdgeInsets.only(top: 5),
+                  child: Stack(
+                    children: [
+                      const Opacity(
+                        opacity: 0,
+                        child: Text(
+                          'إذا كان بريدك الإلكتروني مرتبطًا بحساب مسؤول، ستصلك تعليمات استعادة كلمة المرور.',
+                          style: TextStyle(fontSize: 14, height: -0.1),
+                        ),
+                      ),
+                      if (inlineMessage != null)
+                        Text(
+                          inlineMessage!,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: inlineColor,
+                            height: -0.1,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
               ],
             ),
             actions: [
@@ -250,42 +314,68 @@ class _LoginPageState extends State<LoginPage> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: BColors.primary,
                   foregroundColor: BColors.white,
+                  disabledBackgroundColor: BColors.primary,
+                  disabledForegroundColor: BColors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
-                onPressed: () async {
-                  final email = resetEmailCtrl.text.trim();
-                  if (email.isEmpty) {
-                    setDialogState(
-                      () => dialogError = 'يرجى إدخال البريد الإلكتروني',
-                    );
-                    return;
-                  }
-
-                  final error = await AdminAuthService.instance
-                      .sendPasswordResetEmail(email: email);
-
-                  if (!ctx.mounted) return;
-
-                  if (error != null) {
-                    setDialogState(() => dialogError = error);
-                  } else {
-                    Navigator.pop(ctx);
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'تم إرسال رابط استعادة كلمة المرور إلى بريدك الإلكتروني.',
-                            textDirection: TextDirection.rtl,
-                          ),
-                          backgroundColor: BColors.primary,
+                onPressed: loading
+                    ? null
+                    : () async {
+                        final email = resetEmailCtrl.text.trim();
+                        final emailError = _validateEmail(email);
+                        if (emailError != null) {
+                          setDialogState(() {
+                            dialogError = emailError;
+                            inlineMessage = null;
+                          });
+                          return;
+                        }
+                        if (_isRateLimited()) {
+                          setDialogState(() {
+                            dialogError = null;
+                            inlineMessage =
+                                'تجاوزت الحد المسموح. حاول مجددًا لاحقًا.';
+                            inlineColor = BColors.validationError;
+                          });
+                          return;
+                        }
+                        _recordAttempt();
+                        setDialogState(() {
+                          loading = true;
+                          inlineMessage = null;
+                          dialogError = null;
+                        });
+                        await AdminAuthService.instance.sendPasswordResetEmail(
+                          email: email,
+                        );
+                        if (!ctx.mounted) return;
+                        setDialogState(() {
+                          loading = false;
+                          inlineMessage =
+                              'إذا كان بريدك الإلكتروني مرتبطًا بحساب مسؤول، ستصلك تعليمات استعادة كلمة المرور.';
+                          inlineColor = BColors.primary;
+                        });
+                      },
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Opacity(
+                      opacity: loading ? 0.0 : 1.0,
+                      child: const Text('إرسال'),
+                    ),
+                    if (loading)
+                      const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: BColors.white,
                         ),
-                      );
-                    }
-                  }
-                },
-                child: const Text('إرسال'),
+                      ),
+                  ],
+                ),
               ),
             ],
           ),

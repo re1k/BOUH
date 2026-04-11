@@ -1,4 +1,4 @@
-import 'drawingDto.dart';
+import 'DrawingAnalysis/DrawingDto.dart';
 
 class ChildDto {
   final String childId;

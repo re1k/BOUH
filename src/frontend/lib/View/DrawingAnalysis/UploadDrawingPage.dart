@@ -6,8 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:bouh/theme/base_themes/colors.dart';
 import 'package:bouh/theme/base_themes/radius.dart';
 import 'package:bouh/theme/base_themes/typography.dart';
-
-
+import 'package:permission_handler/permission_handler.dart';
 //UPLOAD DRAWING PAGE (Step 1 of 3)
 //Permissions: image_picker asks for camera/photo access when the user picks an image.
 //BACKEND PHASE:
@@ -18,8 +17,13 @@ import 'package:bouh/theme/base_themes/typography.dart';
 
 class UploadDrawingPage extends StatefulWidget {
   //Child name chosen on the previous screen Passed along for future BACKEND.
-  final String? selectedChildName;
-  const UploadDrawingPage({super.key, this.selectedChildName});
+  final String childId;
+  final String childName;
+  const UploadDrawingPage({
+    super.key,
+    required this.childId,
+    required this.childName,
+  });
 
   @override
   State<UploadDrawingPage> createState() => _UploadDrawingPageState();
@@ -31,6 +35,19 @@ class _UploadDrawingPageState extends State<UploadDrawingPage> {
   final ImagePicker _picker =
       ImagePicker(); //image_picker: opens native Android gallery/camera. It requests permissions when needed.
 
+  @override
+  void initState() {
+    super.initState();
+    _requestPermissions();
+  }
+
+  Future<void> _requestPermissions() async {
+    await Permission.camera.request();
+    await Permission.photos.request();
+    await Permission.storage.request();
+    await Permission.mediaLibrary.request();
+  }
+
   //Main build
   @override
   Widget build(BuildContext context) {
@@ -41,11 +58,10 @@ class _UploadDrawingPageState extends State<UploadDrawingPage> {
         body: SafeArea(
           child: Column(
             children: [
-
               const SizedBox(height: 6),
 
               _buildBackButton(context),
-            
+
               //Stepper: step 0 = (Upload Drawing) is active
               const DrawingAnalysisStepper(currentStep: 0),
 
@@ -185,7 +201,7 @@ class _UploadDrawingPageState extends State<UploadDrawingPage> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Text(
-              'حمل الرسمة التي ترغب في تحليلها',
+              'يرجى تحميل الرسمة التي ترغب في تحليلها، مع التأكد من التقاطها بشكل واضح ودقيق',
               style: BTypography.bodyText.copyWith(color: BColors.darkGrey),
               textAlign: TextAlign.center,
             ),
@@ -301,8 +317,9 @@ class _UploadDrawingPageState extends State<UploadDrawingPage> {
                 Navigator.of(context).push(
                   MaterialPageRoute<void>(
                     builder: (context) => ProcessingAnalysisPage(
-                      imagePath: _selectedImageFile!.path,
-                      selectedChildName: widget.selectedChildName,
+                      imageFile: _selectedImageFile!,
+                      childId: widget.childId,
+                      childName: widget.childName,
                     ),
                   ),
                 );
