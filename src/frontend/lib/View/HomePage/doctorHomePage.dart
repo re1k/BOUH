@@ -577,14 +577,14 @@ class DoctorHomePageState extends State<DoctorHomePage>
                         height: 56,
                         fit: BoxFit.cover,
                         errorBuilder: (_, __, ___) => Image.asset(
-                          'assets/Images/default_ProfileImage.png',
+                          'assets/images/default_ProfileImage.png',
                           width: 56,
                           height: 56,
                           fit: BoxFit.cover,
                         ),
                       )
                     : Image.asset(
-                        'assets/Images/default_ProfileImage.png',
+                        'assets/images/default_ProfileImage.png',
                         width: 56,
                         height: 56,
                         fit: BoxFit.cover,
@@ -773,5 +773,5 @@ class _RatingStars extends StatelessWidget {
     );
   }
 }
-
 // _StarClipper no longer needed (ShaderMask handles fractional fill).
+

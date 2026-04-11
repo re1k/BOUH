@@ -51,13 +51,9 @@ class DoctorProfileView extends StatefulWidget {
 
   final String? defaultAvatarAsset;
 
-  /// Active bottom nav index (2 = profile). Pass when used inside [DoctorNavbar].
   final int currentIndex;
-
-  /// Called when a bottom nav item is tapped. Pass when used inside [DoctorNavbar].
   final ValueChanged<int>? onTap;
 
-  // TODO(next stage): implement DB update + image upload, then store returned image URL/path
   final Future<void> Function({
     required String email,
     required String name,
@@ -90,7 +86,6 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
   String? _loadError;
   String? _saveError;
 
-  /// Signed photo URL from GET profile (display).
   String? _photoUrl;
   int? _yearsOfExperience;
 
@@ -100,7 +95,6 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
   late final TextEditingController _specNoCtrl;
   late final TextEditingController _areaCtrl;
 
-  /// Same pattern as doctor registration step 2: one field per qualification (1–12).
   final List<TextEditingController> _qualificationCtrls = [];
   final List<FocusNode> _qualificationFocusNodes = [];
   String? _qualificationsError;
@@ -113,7 +107,6 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
 
   final ImagePicker _picker = ImagePicker();
 
-  /// Same labels as [DoctorAccountCreationStep2] (`doctor_account_creation_work_info.dart`).
   static const List<String> _experienceYearDropdownLabels = [
     '1',
     '2',
@@ -126,17 +119,13 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
   static const int _maxQualifications = 12;
   static const int _qualMaxLength = 70;
 
-  // UI tuning — search: `_kSaveButtonsLeftPadding`, `_kAppBarEditTrailingPadding`
-  /// Physical **left** padding on the حفظ/إلغاء row (both edit screens).
   static const double _kSaveButtonsLeftPadding = 15;
-  /// App bar circular **edit** inset from the trailing edge (RTL: more space from title).
   static const double _kAppBarEditTrailingPadding = 15;
 
-  static final RegExp _arabicOnlyRegex = RegExp(
-    r'^[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF\s]+$',
+  static final RegExp _qualificationsTextRegex = RegExp(
+    r'^[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF0-9\s]+$',
   );
 
-  /// Name body after honorific — same idea as doctor registration step 1.
   static const String _doctorNameHonorificPrefix = 'د. ';
 
   static final RegExp _arabicNameOnlyRegex = RegExp(
@@ -151,7 +140,6 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
     return trimmed;
   }
 
-  /// IBAN suffix (22 digits) from full `SA…` or raw digits, for the edit field.
   static String _ibanSuffixFromStored(String? iban) {
     if (iban == null || iban.trim().isEmpty) return '';
     var s = iban.trim().replaceAll(RegExp(r'\s'), '').toUpperCase();
@@ -170,14 +158,12 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
     return v;
   }
 
-  /// Maps dropdown label → int (same as registration `_parseYears`).
   static int? _parseExperienceYearsLabel(String? v) {
     if (v == null) return null;
     if (v == '+5') return 5;
     return int.tryParse(v);
   }
 
-  /// Maps stored years → dropdown value; only 1–5 match registration buckets.
   static String? _experienceYearsToDropdownValue(int? y) {
     if (y == null || y < 1) return null;
     if (y <= 4) return '$y';
@@ -212,7 +198,6 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
     return null;
   }
 
-  /// Same rules as `doctor_account_creation_work_info.dart` `_validateIbanSuffix` (22 digits after SA).
   String? _validateIbanSuffix(String? raw) {
     if (raw == null || raw.trim().isEmpty) {
       return 'يرجى إدخال صيغة آيبان صحيحة';
@@ -302,7 +287,6 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
     _qualificationFocusNodes.add(focusNode);
   }
 
-  /// Rebuilds qualification fields from server (or initial) data.
   void _replaceQualificationEditors(List<String> qualifications) {
     _disposeQualificationEditors();
     _qualificationsError = null;
@@ -346,8 +330,8 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
       return 'يرجى إدخال مؤهل واحد على الأقل';
     }
     for (final s in nonEmpty) {
-      if (!_arabicOnlyRegex.hasMatch(s)) {
-        return 'يرجى إدخال المؤهلات باللغة العربية فقط';
+      if (!_qualificationsTextRegex.hasMatch(s)) {
+        return 'يرجى إدخال المؤهلات باللغة العربية';
       }
     }
     return null;
@@ -594,6 +578,7 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
         _isDeletingAccount = false;
         _deleteError = e as String;
       });
+      // Auto-dismiss error so it does not persist.
       // Auto-dismiss error so it does not persist.
       _deleteErrorTimer = Timer(const Duration(seconds: 4), () {
         if (mounted) setState(() => _deleteError = null);
@@ -1429,7 +1414,6 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
         p.endsWith('.heic');
   }
 
-  /// Same storage path contract as registration: Firebase object path for backend `profilePhotoURL`.
   Future<String> _uploadDoctorProfilePhotoToStorage(File file) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return '';
@@ -1530,7 +1514,6 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
     }
   }
 
-  /// Same layout as doctor registration IBAN row: 22 digits + fixed `SA`.
   Widget _buildIbanEditField({ValueChanged<String>? onChanged}) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1690,7 +1673,6 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
     );
   }
 
-  /// Soft grey circle, subtle border/shadow, primary pencil (reference edit style).
   Widget _circularEditIcon({double diameter = 34}) {
     return Container(
       width: diameter,
@@ -1726,6 +1708,7 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
           children: [
             SafeArea(
               child: SingleChildScrollView(
+            clipBehavior: Clip.none,
             padding: EdgeInsets.only(
               bottom: widget.onTap != null
                   ? DoctorBottomNav.barHeight - 50
@@ -1738,7 +1721,11 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
                   child: Stack(
                     clipBehavior: Clip.none,
                     children: [
-                      Positioned.fill(
+                      Positioned(
+                        top: -50,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
                         child: Image.asset(
                           'assets/images/ProfileBackground.png',
                           fit: BoxFit.cover,
@@ -1941,7 +1928,6 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
     ),
   );
 
-  /// Read-only backend fields (email, SCFHS, area — not in update DTO).
   static Widget _viewFieldGrey(String value) => Container(
         constraints: const BoxConstraints(minHeight: 46),
         alignment: Alignment.centerRight,
@@ -1975,45 +1961,74 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
       );
 
   static Widget _viewQualificationsList(List<String> items) {
+    final sectionDecoration = BoxDecoration(
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: BColors.grey),
+      color: BColors.white,
+    );
+
     if (items.isEmpty) {
-      return _readOnlyPlainField('');
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        decoration: sectionDecoration,
+        alignment: Alignment.centerRight,
+        child: Text(
+          'لا توجد مؤهلات مسجّلة',
+          textAlign: TextAlign.right,
+          style: _kProfileFieldValueStyle.copyWith(color: BColors.darkGrey),
+        ),
+      );
     }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: BColors.grey),
-        color: BColors.white,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: items
-            .map(
-              (t) => Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      '• ',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: BColors.textDarkestBlue,
-                        fontWeight: FontWeight.w700,
-                      ),
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < items.length; i++) ...[
+          if (i > 0) const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: sectionDecoration,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              textDirection: TextDirection.rtl,
+              children: [
+                Container(
+                  width: 28,
+                  height: 28,
+                  alignment: Alignment.center,
+                  decoration: const BoxDecoration(
+                    color: BColors.accent,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Text(
+                    '${i + 1}',
+                    style: const TextStyle(
+                      fontFamily: 'Markazi Text',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      height: 1,
                     ),
-                    Expanded(
-                      child: Text(
-                        t,
-                        style: _kProfileFieldValueStyle,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            )
-            .toList(),
-      ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      items[i],
+                      textAlign: TextAlign.right,
+                      style: _kProfileFieldValueStyle.copyWith(height: 1.35),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
     );
   }
 

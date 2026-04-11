@@ -49,8 +49,8 @@ class _DoctorAccountCreationStep2State
   bool _isSubmitting = false;
   String? _submitError;
 
-  static final _arabicOnlyRegex = RegExp(
-    r'^[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF\s]+$',
+  static final _qualificationsTextRegex = RegExp(
+    r'^[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF0-9\s]+$',
   );
 
   String? _validateQualificationsList() {
@@ -62,8 +62,8 @@ class _DoctorAccountCreationStep2State
       return 'يرجى إدخال مؤهل واحد على الأقل';
     }
     for (final s in nonEmpty) {
-      if (!_arabicOnlyRegex.hasMatch(s)) {
-        return 'يرجى إدخال المؤهلات باللغة العربية فقط';
+      if (!_qualificationsTextRegex.hasMatch(s)) {
+        return 'يرجى إدخال المؤهلات بالعربية مع السماح بالأرقام';
       }
     }
     return null;

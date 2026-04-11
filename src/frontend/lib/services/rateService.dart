@@ -4,8 +4,9 @@ import 'package:bouh/config/api_config.dart';
 import 'package:bouh/dto/rateDto.dart';
 import 'package:bouh/authentication/AuthSession.dart';
 
+/// Submits a caregiver rating for a completed appointment
+/// Backend: `POST /api/rate/add`
 class RateService {
-
   Uri _url(String path) => Uri.parse('${ApiConfig.baseUrl}$path');
 
   Map<String, String> _authHeaders({bool json = false}) {
@@ -20,7 +21,6 @@ class RateService {
     };
   }
 
-  //POST /api/rate/add
   Future<void> rateDoctor({required RateDto rateDto}) async {
 
     final res = await http.post(

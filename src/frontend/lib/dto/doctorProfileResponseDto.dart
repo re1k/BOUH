@@ -1,9 +1,9 @@
+/// Shape of doctor account from `GET /api/accounts/profile` (not the caregiver `{ name, email }` variant).
 class DoctorProfileResponseDto {
   final String? name;
   final String? gender;
   final List<String> qualifications;
   final int? yearsOfExperience;
-  /// Signed GCS download URL from `GET /api/accounts/profile` (for display only).
   final String? profilePhotoURL;
   final String? iban;
   final String? email;

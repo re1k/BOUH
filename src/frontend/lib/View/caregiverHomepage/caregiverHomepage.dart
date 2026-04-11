@@ -68,6 +68,11 @@ class CaregiverHomepageState extends State<CaregiverHomepage>
     _prepareSessionAndLoad();
   }
 
+  void refreshGreetingFromSession() {
+    if (!mounted) return;
+    setState(() {});
+  }
+
   Future<void> _prepareSessionAndLoad() async {
     final AuthSession session = AuthSession.instance;
     await AuthService.instance.refreshSession();

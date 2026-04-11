@@ -1,4 +1,4 @@
-//Rating DTO for submitting a doctor's rating (1–5).
+/// Body for `POST /api/rate/add` (caregiver rates a doctor after an appointment).
 class RateDto {
   const RateDto({
     required this.doctorId,
@@ -6,13 +6,8 @@ class RateDto {
     required this.appointmentId,
   });
 
-  //Doctor UID used in POST /api/rate/add/{doctorId}.
   final String doctorId;
-
-  //Rating value 1–5.
   final int rating;
-
-  //Appointment ID used in POST /api/rate/add/{doctorId}.
   final String appointmentId;
 
   Map<String, dynamic> toJson() => {
@@ -21,4 +16,3 @@ class RateDto {
         'appointmentId': appointmentId,
       };
 }
-

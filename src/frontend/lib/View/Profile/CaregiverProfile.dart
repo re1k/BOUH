@@ -16,13 +16,14 @@ class CaregiverAccountView extends StatefulWidget {
     super.key,
     this.currentIndex = 3,
     this.onTap,
+    this.onCaregiverNameSynced,
   });
 
-  /// Active bottom nav index (3 = profile). Pass when used inside [CaregiverNavbar].
   final int currentIndex;
-
-  /// Called when a bottom nav item is tapped. Pass when used inside [CaregiverNavbar].
   final ValueChanged<int>? onTap;
+
+  /// Called after name is loaded or saved so the home greeting can refresh.
+  final VoidCallback? onCaregiverNameSynced;
 
   @override
   State<CaregiverAccountView> createState() => _CaregiverAccountViewState();
@@ -71,7 +72,6 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
           children: [
             Column(
               children: [
-            //HEADER
             SizedBox(
               height: 220,
               width: double.infinity,
@@ -88,7 +88,6 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
                   ),
                 ),
 
-                // BODY
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 22),
@@ -301,6 +300,9 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
         _nameCtrl.text = _name;
         _loadingProfile = false;
       });
+      await AuthSession.instance.updateCachedUserName(_name);
+      if (!mounted) return;
+      widget.onCaregiverNameSynced?.call();
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -360,6 +362,9 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
         _name = candidate;
         _isEditingName = false;
       });
+      await AuthSession.instance.updateCachedUserName(candidate);
+      if (!mounted) return;
+      widget.onCaregiverNameSynced?.call();
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -369,8 +374,6 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
       if (mounted) setState(() => _savingName = false);
     }
   }
-
-  // Helpers  (EASIER IF WE WANT TO CHANGE LATER THE FIELDS OR LABELS)
 
   static Widget _label(String text) {
     return Text(

@@ -103,7 +103,13 @@ class _CaregiverNavbarState extends State<CaregiverNavbar> {
             initialSubIndex: widget.initialAppointmentsSubIndex,
             initialBookedSubIndex: widget.initialBookedSubIndex,
           ),
-          CaregiverAccountView(currentIndex: _currentIndex, onTap: _onTap),
+          CaregiverAccountView(
+            currentIndex: _currentIndex,
+            onTap: _onTap,
+            onCaregiverNameSynced: () {
+              _homeKey.currentState?.refreshGreetingFromSession();
+            },
+          ),
         ],
       ),
     );

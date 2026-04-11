@@ -4,9 +4,7 @@ import 'package:bouh/dto/rateDto.dart';
 import 'package:bouh/services/rateService.dart';
 import 'package:bouh/widgets/loading_overlay.dart';
 
-//Bottom sheet for the caregiver to rating (1–5 stars)
 class RateDoctorBottomSheet extends StatefulWidget {
-
   final String doctorId;
   final String appointmentId;
 
@@ -16,7 +14,6 @@ class RateDoctorBottomSheet extends StatefulWidget {
     required this.appointmentId,
   });
 
-  //Opens the bottom sheet
   static Future<void> show(
     BuildContext context, {
     required String doctorId,

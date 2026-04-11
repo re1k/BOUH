@@ -274,7 +274,7 @@ class AuthService {
     final body = doctorDto.toJson()..['doctorId'] = user.uid;
     final storagePath = (doctorDto.profilePhotoURL ?? '').trim();
     if (storagePath.isNotEmpty) {
-      // Backend compatibility: keep expected image field name(s), value is path.
+      // Backend compatibility: keep expected image field names
       body['imageUrl'] = storagePath;
       body['ImgaeUrl'] = storagePath;
     }

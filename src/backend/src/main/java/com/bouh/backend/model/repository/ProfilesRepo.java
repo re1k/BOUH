@@ -59,7 +59,7 @@ public class ProfilesRepo {
             if (!snapshot.exists()) {
                 throw new RuntimeException("Doctor not found");
             }
-            
+
             Map<String, Object> updates = new HashMap<>();
 
             String oldImagePath = snapshot.getString("profilePhotoURL");
@@ -119,6 +119,13 @@ public class ProfilesRepo {
                 throw new RuntimeException("Doctor not found");
             }
 
+            // handling if no image exists
+            String imagePath = snapshot.getString("profilePhotoURL");
+            String imageUrl = null;
+            if (imagePath != null && !imagePath.isBlank()) {
+                imageUrl = imageStorageService.generateDownloadUrl(imagePath);
+            }
+
             return doctorProfileResponseDto.builder()
                     .name(snapshot.getString("name"))
                     .email(snapshot.getString("email"))
@@ -128,7 +135,7 @@ public class ProfilesRepo {
                     .yearsOfExperience(snapshot.getLong("yearsOfExperience") != null
                             ? snapshot.getLong("yearsOfExperience").intValue()
                             : null)
-                    .profilePhotoURL(imageStorageService.generateDownloadUrl(snapshot.getString("profilePhotoURL")))
+                    .profilePhotoURL(imageUrl)
                     .iban(snapshot.getString("iban"))
                     .scfhsNumber(snapshot.getString("scfhsNumber"))
                     .build();
