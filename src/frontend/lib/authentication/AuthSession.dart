@@ -70,6 +70,15 @@ class AuthSession {
 
   //Updates display name after profile edit
   Future<void> updateCachedUserName(String name) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return;
+    final uid = _userId;
+    if (uid == null || uid.isEmpty) return;
+    _userName = trimmed;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_userNameKeyPrefix + uid, trimmed);
+  }
+
   //Clears in-memory and all persisted session so next login is set fresh from backend.
   Future<void> clearSession([String? uid]) async {
     _idToken = null;
