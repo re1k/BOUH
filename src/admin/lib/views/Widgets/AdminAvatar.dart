@@ -20,17 +20,33 @@ class AdminAvatarWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (photoUrl != null && photoUrl!.isNotEmpty) {
-      debugPrint('photoUrl: $photoUrl');
-      return CircleAvatar(
-        radius: size / 2,
-        backgroundImage: NetworkImage(photoUrl!),
-        backgroundColor: bg,
-        onBackgroundImageError: (_, __) {},
-        child: null,
+    final hasPhoto = photoUrl != null && photoUrl!.trim().isNotEmpty;
+
+    if (hasPhoto) {
+      return ClipOval(
+        child: SizedBox(
+          width: size,
+          height: size,
+          child: Image.network(
+            photoUrl!,
+            fit: BoxFit.cover,
+            gaplessPlayback: true,
+            errorBuilder: (context, error, stackTrace) {
+              return _buildInitialsAvatar();
+            },
+            loadingBuilder: (context, child, loadingProgress) {
+              if (loadingProgress == null) return child;
+              return _buildInitialsAvatar();
+            },
+          ),
+        ),
       );
     }
 
+    return _buildInitialsAvatar();
+  }
+
+  Widget _buildInitialsAvatar() {
     return Container(
       width: size,
       height: size,

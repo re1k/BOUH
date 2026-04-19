@@ -1,14 +1,16 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../theme/colors.dart';
 import 'Widgets/AdminAvatar.dart';
 import 'Widgets/ScfhsTag.dart';
 import 'Widgets/ActionButton.dart';
-import 'Widgets/ConfirmDeleteDialog.dart';
 import 'Widgets/DoctorDetailDialog.dart';
 import 'package:bouh_admin/views/Widgets/loading_overlay.dart';
 import 'package:bouh_admin/model/DoctorModel.dart';
 import 'package:bouh_admin/model/DoctorStatsModel.dart';
 import 'package:bouh_admin/services/DoctorService.dart';
+import 'package:bouh_admin/views/Widgets/ConfirmActionDialog.dart';
+import 'responsive.dart';
 
 class PendingRequestsView extends StatefulWidget {
   final ValueChanged<int>? onCountLoaded;
@@ -25,23 +27,42 @@ class _PendingRequestsViewState extends State<PendingRequestsView> {
   bool _isLoading = true;
   String? _errorMessage;
   final Set<String> _processingUids = {};
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
-    _loadPendingDoctors();
+    _loadPendingDoctors(showLoader: true);
+
+    _refreshTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
+      if (mounted) {
+        _loadPendingDoctors();
+      }
+    });
   }
 
-  Future<void> _loadPendingDoctors() async {
-    setState(() {
-      _isLoading = true;
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadPendingDoctors({bool showLoader = false}) async {
+    if (showLoader) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+    } else {
       _errorMessage = null;
-    });
+    }
+
     try {
       final results = await Future.wait([
         DoctorService.instance.getPendingDoctors(context),
         DoctorService.instance.getStats(context),
       ]);
+
       if (mounted) {
         setState(() {
           _doctors = results[0] as List<DoctorModel>;
@@ -122,65 +143,100 @@ class _PendingRequestsViewState extends State<PendingRequestsView> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(msg, textDirection: TextDirection.rtl),
-        backgroundColor: isSuccess
-            ? const Color(0xFF1E6B3A)
-            : BColors.validationError,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        margin: const EdgeInsets.only(
-          top: 16,
-          left: 16,
-          right: 16,
-          bottom: 600,
-        ),
+        backgroundColor: isSuccess ? BColors.primary : BColors.validationError,
+      ),
+    );
+  }
+
+  void _showAcceptDialog(DoctorModel doc) {
+    showDialog(
+      context: context,
+      builder: (_) => ConfirmActionDialog(
+        title: 'تأكيد القبول',
+        message: 'هل أنت متأكد أنك تريد قبول ${doc.name}؟',
+        confirmText: 'قبول',
+        confirmColor: const Color(0xFF3B6D11),
+        onConfirm: () async {
+          Navigator.pop(context);
+          await _acceptDoctor(doc);
+        },
+      ),
+    );
+  }
+
+  void _showRejectDialog(DoctorModel doc) {
+    showDialog(
+      context: context,
+      builder: (_) => ConfirmActionDialog(
+        title: 'تأكيد الرفض',
+        message: 'هل أنت متأكد أنك تريد رفض ${doc.name}؟',
+        confirmText: 'رفض',
+        confirmColor: BColors.validationError,
+        onConfirm: () async {
+          Navigator.pop(context);
+          await _rejectDoctor(doc);
+        },
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = ResponsiveBreakpoints.isMobile(context);
+    final isTablet = ResponsiveBreakpoints.isTablet(context);
+    final isSmallLayout = isMobile || isTablet;
+
+    final stat1 = _StatCard(
+      icon: Icons.access_time_outlined,
+      iconBg: const Color(0xFFFFF1EA),
+      iconColor: BColors.accent,
+      label: 'طلبات معلقة',
+      value: _stats?.pending ?? 0,
+    );
+
+    final stat2 = _StatCard(
+      icon: Icons.people_outlined,
+      iconBg: BColors.secondary,
+      iconColor: BColors.primary,
+      label: 'أطباء مقبولون',
+      value: _stats?.accepted ?? 0,
+    );
+
+    final stat3 = _StatCard(
+      icon: Icons.cancel_outlined,
+      iconBg: const Color(0xFFFCEBEB),
+      iconColor: BColors.validationError,
+      label: 'طلبات مرفوضة',
+      value: _stats?.rejected ?? 0,
+    );
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(32),
+      padding: EdgeInsets.all(isMobile ? 16 : 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Stat cards
-          Row(
-            children: [
-              Expanded(
-                child: _StatCard(
-                  icon: Icons.access_time_outlined,
-                  iconBg: const Color(0xFFFFF1EA),
-                  iconColor: BColors.accent,
-                  label: 'طلبات معلقة',
-                  value: _stats?.pending ?? 0,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _StatCard(
-                  icon: Icons.people_outlined,
-                  iconBg: BColors.secondary,
-                  iconColor: BColors.primary,
-                  label: 'أطباء مقبولون',
-                  value: _stats?.accepted ?? 0,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _StatCard(
-                  icon: Icons.cancel_outlined,
-                  iconBg: const Color(0xFFFCEBEB),
-                  iconColor: BColors.validationError,
-                  label: 'طلبات مرفوضة',
-                  value: _stats?.rejected ?? 0,
-                ),
-              ),
-            ],
-          ),
+          if (isSmallLayout)
+            Column(
+              children: [
+                stat1,
+                const SizedBox(height: 16),
+                stat2,
+                const SizedBox(height: 16),
+                stat3,
+              ],
+            )
+          else
+            Row(
+              children: [
+                Expanded(child: stat1),
+                const SizedBox(width: 16),
+                Expanded(child: stat2),
+                const SizedBox(width: 16),
+                Expanded(child: stat3),
+              ],
+            ),
           const SizedBox(height: 28),
 
-          // Table card
           Container(
             decoration: BoxDecoration(
               color: BColors.white,
@@ -190,36 +246,15 @@ class _PendingRequestsViewState extends State<PendingRequestsView> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'طلبات التسجيل المعلقة',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: BColors.textDarkestBlue,
-                        ),
-                      ),
-                      if (_isLoading)
-                        const BouhOvalLoadingIndicator(
-                          width: 28,
-                          height: 20,
-                          strokeWidth: 2.5,
-                        )
-                      else
-                        IconButton(
-                          icon: const Icon(
-                            Icons.refresh,
-                            color: BColors.darkGrey,
-                            size: 20,
-                          ),
-                          onPressed: _loadPendingDoctors,
-                          tooltip: 'تحديث',
-                        ),
-                    ],
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(24, 20, 24, 16),
+                  child: Text(
+                    'طلبات التسجيل المعلقة',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: BColors.textDarkestBlue,
+                    ),
                   ),
                 ),
                 const Divider(color: BColors.grey, height: 0.5, thickness: 0.5),
@@ -246,7 +281,8 @@ class _PendingRequestsViewState extends State<PendingRequestsView> {
                           ),
                           const SizedBox(height: 12),
                           OutlinedButton(
-                            onPressed: _loadPendingDoctors,
+                            onPressed: () =>
+                                _loadPendingDoctors(showLoader: true),
                             child: const Text('إعادة المحاولة'),
                           ),
                         ],
@@ -263,93 +299,220 @@ class _PendingRequestsViewState extends State<PendingRequestsView> {
                       ),
                     ),
                   )
+                else if (isSmallLayout)
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: _doctors.map((doc) {
+                        final processing = _processingUids.contains(doc.uid);
+
+                        return SizedBox(
+                          width: double.infinity,
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 16),
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: BColors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: BColors.grey,
+                                width: 0.5,
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _DoctorCell(
+                                  name: doc.name,
+                                  email: doc.email,
+                                  initials: doc.initials,
+                                  photoUrl: doc.profilePhotoURL,
+                                ),
+                                const SizedBox(height: 12),
+                                Text('مجال المعرفة: ${doc.areaOfKnowledge}'),
+                                const SizedBox(height: 8),
+                                Text('المؤهلات: ${doc.qualificationsDisplay}'),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'سنوات الخبرة: ${doc.yearsOfExperience} سنوات',
+                                ),
+                                const SizedBox(height: 8),
+                                Text('رقم التخصص: ${doc.scfhsNumber}'),
+                                const SizedBox(height: 12),
+                                if (_processingUids.contains(doc.uid))
+                                  const BouhOvalLoadingIndicator(
+                                    width: 28,
+                                    height: 20,
+                                    strokeWidth: 2.5,
+                                  )
+                                else
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: [
+                                      ActionIconButton(
+                                        icon: Icons.visibility_outlined,
+                                        bg: BColors.secondary,
+                                        fg: BColors.primary,
+                                        tooltip: 'عرض التفاصيل',
+                                        onTap: () => _showDetail(doc),
+                                      ),
+                                      ActionTextButton(
+                                        label: 'قبول',
+                                        bg: const Color(0xFFEAF3DE),
+                                        fg: const Color(0xFF3B6D11),
+                                        border: const Color(0xFFC0DD97),
+                                        onTap: () => _showAcceptDialog(doc),
+                                      ),
+                                      ActionTextButton(
+                                        label: 'رفض',
+                                        bg: const Color(0xFFFCEBEB),
+                                        fg: BColors.validationError,
+                                        border: const Color(0xFFF7C1C1),
+                                        onTap: () => _showRejectDialog(doc),
+                                      ),
+                                    ],
+                                  ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  )
                 else
                   SizedBox(
                     width: double.infinity,
-                    child: DataTable(
-                      headingRowColor: WidgetStateProperty.all(
-                        BColors.lightGrey,
-                      ),
-                      headingTextStyle: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: BColors.darkGrey,
-                      ),
-                      dataTextStyle: const TextStyle(
-                        fontSize: 14,
-                        color: BColors.darkerGrey,
-                      ),
-                      columnSpacing: 32,
-                      dataRowMinHeight: 68,
-                      dataRowMaxHeight: 68,
-                      columns: const [
-                        DataColumn(label: Text('الطبيب')),
-                        DataColumn(label: Text('مجال المعرفة')),
-                        DataColumn(label: Text('المؤهلات')),
-                        DataColumn(label: Text('سنوات الخبرة')),
-                        DataColumn(label: Text('رقم التخصص')),
-                        DataColumn(label: Text('الإجراء')),
-                      ],
-                      rows: _doctors
-                          .map(
-                            (doc) => DataRow(
-                              cells: [
-                                DataCell(
-                                  _DoctorCell(
-                                    name: doc.name,
-                                    email: doc.email,
-                                    initials: doc.initials,
-                                    photoUrl: doc.profilePhotoURL,
-                                  ),
-                                ),
-                                DataCell(Text(doc.areaOfKnowledge)),
-                                DataCell(Text(doc.qualificationsDisplay)),
-                                DataCell(
-                                  Text('${doc.yearsOfExperience} سنوات'),
-                                ),
-                                DataCell(
-                                  ScfhsTagWidget(value: doc.scfhsNumber),
-                                ),
-                                DataCell(
-                                  _processingUids.contains(doc.uid)
-                                      ? const BouhOvalLoadingIndicator(
-                                          width: 28,
-                                          height: 20,
-                                          strokeWidth: 2.5,
-                                        )
-                                      : Row(
-                                          children: [
-                                            ActionIconButton(
-                                              icon: Icons.visibility_outlined,
-                                              bg: BColors.secondary,
-                                              fg: BColors.primary,
-                                              tooltip:
-                                                  'عرض التفاصيل كاملة بما فيها رقم الايبان',
-                                              onTap: () => _showDetail(doc),
-                                            ),
-                                            const SizedBox(width: 8),
-                                            ActionTextButton(
-                                              label: 'قبول',
-                                              bg: const Color(0xFFEAF3DE),
-                                              fg: const Color(0xFF3B6D11),
-                                              border: const Color(0xFFC0DD97),
-                                              onTap: () => _acceptDoctor(doc),
-                                            ),
-                                            const SizedBox(width: 8),
-                                            ActionTextButton(
-                                              label: 'رفض',
-                                              bg: const Color(0xFFFCEBEB),
-                                              fg: BColors.validationError,
-                                              border: const Color(0xFFF7C1C1),
-                                              onTap: () => _rejectDoctor(doc),
-                                            ),
-                                          ],
-                                        ),
-                                ),
-                              ],
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        return SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                              minWidth: constraints.maxWidth,
                             ),
-                          )
-                          .toList(),
+                            child: DataTable(
+                              headingRowColor: WidgetStateProperty.all(
+                                BColors.lightGrey,
+                              ),
+                              headingTextStyle: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: BColors.darkGrey,
+                              ),
+                              dataTextStyle: const TextStyle(
+                                fontSize: 14,
+                                color: BColors.darkerGrey,
+                              ),
+                              columnSpacing: 32,
+                              dataRowMinHeight: 68,
+                              dataRowMaxHeight: 68,
+                              columns: const [
+                                DataColumn(label: Text('الطبيب')),
+                                DataColumn(label: Text('مجال المعرفة')),
+                                DataColumn(label: Text('المؤهلات')),
+                                DataColumn(label: Text('سنوات الخبرة')),
+                                DataColumn(label: Text('رقم التخصص')),
+                                DataColumn(label: Text('الإجراء')),
+                              ],
+                              rows: _doctors.map((doc) {
+                                final processing = _processingUids.contains(
+                                  doc.uid,
+                                );
+
+                                return DataRow(
+                                  cells: [
+                                    DataCell(
+                                      _DoctorCell(
+                                        name: doc.name,
+                                        email: doc.email,
+                                        initials: doc.initials,
+                                        photoUrl: doc.profilePhotoURL,
+                                      ),
+                                    ),
+                                    DataCell(
+                                      SizedBox(
+                                        width: 120,
+                                        child: Text(
+                                          doc.areaOfKnowledge,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ),
+                                    DataCell(
+                                      SizedBox(
+                                        width: 140,
+                                        child: Text(
+                                          doc.qualificationsDisplay,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ),
+                                    DataCell(
+                                      SizedBox(
+                                        width: 80,
+                                        child: Text(
+                                          '${doc.yearsOfExperience} سنوات',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ),
+                                    DataCell(
+                                      ScfhsTagWidget(value: doc.scfhsNumber),
+                                    ),
+                                    DataCell(
+                                      processing
+                                          ? const BouhOvalLoadingIndicator(
+                                              width: 28,
+                                              height: 20,
+                                              strokeWidth: 2.5,
+                                            )
+                                          : Row(
+                                              children: [
+                                                ActionIconButton(
+                                                  icon:
+                                                      Icons.visibility_outlined,
+                                                  bg: BColors.secondary,
+                                                  fg: BColors.primary,
+                                                  tooltip:
+                                                      'عرض التفاصيل كاملة بما فيها رقم الايبان',
+                                                  onTap: () => _showDetail(doc),
+                                                ),
+                                                const SizedBox(width: 8),
+                                                ActionTextButton(
+                                                  label: 'قبول',
+                                                  bg: const Color(0xFFEAF3DE),
+                                                  fg: const Color(0xFF3B6D11),
+                                                  border: const Color(
+                                                    0xFFC0DD97,
+                                                  ),
+                                                  onTap: () =>
+                                                      _showAcceptDialog(doc),
+                                                ),
+                                                const SizedBox(width: 8),
+                                                ActionTextButton(
+                                                  label: 'رفض',
+                                                  bg: const Color(0xFFFCEBEB),
+                                                  fg: BColors.validationError,
+                                                  border: const Color(
+                                                    0xFFF7C1C1,
+                                                  ),
+                                                  onTap: () =>
+                                                      _showRejectDialog(doc),
+                                                ),
+                                              ],
+                                            ),
+                                    ),
+                                  ],
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ),
               ],
@@ -379,6 +542,7 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: BColors.white,
@@ -432,7 +596,10 @@ class _DoctorCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 10,
+      runSpacing: 8,
       children: [
         AdminAvatarWidget(
           initials: initials,
@@ -440,10 +607,9 @@ class _DoctorCell extends StatelessWidget {
           fg: BColors.primary,
           photoUrl: photoUrl,
         ),
-        const SizedBox(width: 10),
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               name,

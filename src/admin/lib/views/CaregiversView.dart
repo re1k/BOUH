@@ -1,11 +1,13 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../theme/colors.dart';
 import 'Widgets/AdminAvatar.dart';
 import 'Widgets/ConfirmDeleteDialog.dart';
 import 'Widgets/ActionButton.dart';
-import 'package:bouh_admin/model/CaregiverModel.dart';
 import 'Widgets/loading_overlay.dart';
+import 'package:bouh_admin/model/CaregiverModel.dart';
 import 'package:bouh_admin/services/CaregiverService.dart';
+import 'responsive.dart';
 
 class CaregiversView extends StatefulWidget {
   const CaregiversView({super.key});
@@ -18,18 +20,36 @@ class _CaregiversViewState extends State<CaregiversView> {
   List<CaregiverInfoModel> _caregivers = [];
   bool _isLoading = true;
   String? _errorMessage;
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
-    _loadCaregivers();
+    _loadCaregivers(showLoader: true);
+
+    _refreshTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
+      if (mounted) {
+        _loadCaregivers();
+      }
+    });
   }
 
-  Future<void> _loadCaregivers() async {
-    setState(() {
-      _isLoading = true;
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadCaregivers({bool showLoader = false}) async {
+    if (showLoader) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+    } else {
       _errorMessage = null;
-    });
+    }
+
     try {
       final caregivers = await CaregiverInfoService.instance.getAllCaregivers(
         context,
@@ -54,16 +74,49 @@ class _CaregiversViewState extends State<CaregiversView> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(msg, textDirection: TextDirection.rtl),
-        backgroundColor:
-            isSuccess ? BColors.primary : BColors.validationError,
+        backgroundColor: isSuccess ? BColors.primary : BColors.validationError,
+      ),
+    );
+  }
+
+  void _showDeleteDialog(CaregiverInfoModel cg) {
+    showDialog(
+      context: context,
+      builder: (_) => ConfirmDeleteDialog(
+        name: cg.name,
+        onConfirm: () async {
+          try {
+            await CaregiverInfoService.instance.deleteCaregiver(
+              context,
+              cg.uid,
+            );
+            if (!mounted) return;
+            Navigator.pop(context);
+            setState(() {
+              _caregivers.removeWhere((c) => c.uid == cg.uid);
+            });
+            _showSnackBar('تم حذف حساب ${cg.name} بنجاح', isSuccess: true);
+          } catch (e) {
+            if (!mounted) return;
+            Navigator.pop(context);
+            final msg = e is Exception
+                ? e.toString().replaceFirst('Exception: ', '')
+                : 'تعذّر الاتصال بالخادم، تحقق من الاتصال';
+            _showSnackBar(msg, isSuccess: false);
+          }
+        },
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = ResponsiveBreakpoints.isMobile(context);
+    final isTablet = ResponsiveBreakpoints.isTablet(context);
+    final isSmallLayout = isMobile || isTablet;
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(32),
+      padding: EdgeInsets.all(isMobile ? 16 : 32),
       child: Container(
         decoration: BoxDecoration(
           color: BColors.white,
@@ -73,12 +126,11 @@ class _CaregiversViewState extends State<CaregiversView> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(24, 20, 24, 16),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
+                  Text(
                     'مقدمو الرعاية',
                     style: TextStyle(
                       fontSize: 15,
@@ -86,22 +138,6 @@ class _CaregiversViewState extends State<CaregiversView> {
                       color: BColors.textDarkestBlue,
                     ),
                   ),
-                  if (_isLoading)
-                    const BouhOvalLoadingIndicator(
-                      width: 28,
-                      height: 20,
-                      strokeWidth: 2.5,
-                    )
-                  else
-                    IconButton(
-                      icon: const Icon(
-                        Icons.refresh,
-                        color: BColors.darkGrey,
-                        size: 20,
-                      ),
-                      onPressed: _loadCaregivers,
-                      tooltip: 'تحديث',
-                    ),
                 ],
               ),
             ),
@@ -129,7 +165,7 @@ class _CaregiversViewState extends State<CaregiversView> {
                       ),
                       const SizedBox(height: 12),
                       OutlinedButton(
-                        onPressed: _loadCaregivers,
+                        onPressed: () => _loadCaregivers(showLoader: true),
                         child: const Text('إعادة المحاولة'),
                       ),
                     ],
@@ -146,104 +182,177 @@ class _CaregiversViewState extends State<CaregiversView> {
                   ),
                 ),
               )
-            else
-              SizedBox(
-                width: double.infinity,
-                child: DataTable(
-                  headingRowColor: WidgetStateProperty.all(BColors.lightGrey),
-                  headingTextStyle: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: BColors.darkGrey,
-                  ),
-                  dataTextStyle: const TextStyle(
-                    fontSize: 14,
-                    color: BColors.darkerGrey,
-                  ),
-                  columnSpacing: 32,
-                  dataRowMinHeight: 68,
-                  dataRowMaxHeight: 68,
-                  columns: const [
-                    DataColumn(label: Text('مقدم الرعاية')),
-                    DataColumn(label: Text('البريد الإلكتروني')),
-                    DataColumn(label: Text('الإجراء')),
-                  ],
-                  rows: _caregivers
-                      .map(
-                        (cg) => DataRow(
-                          cells: [
-                            DataCell(
-                              Row(
-                                children: [
-                                  AdminAvatarWidget(
-                                    initials: cg.initials,
-                                    bg: BColors.secondary,
-                                    fg: BColors.primary,
-                                    size: 40,
-                                    fontSize: 14,
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Text(
-                                    cg.name,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      color: BColors.textDarkestBlue,
-                                      fontSize: 15,
-                                    ),
-                                  ),
-                                ],
+            else if (isSmallLayout)
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: _caregivers.map((cg) {
+                    return SizedBox(
+                      width: double.infinity,
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: BColors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: BColors.grey, width: 0.5),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _CaregiverCell(
+                              name: cg.name,
+                              email: cg.email,
+                              initials: cg.initials,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              cg.email,
+                              style: const TextStyle(
+                                color: BColors.primary,
+                                fontSize: 14,
                               ),
                             ),
-                            DataCell(
-                              Text(
-                                cg.email,
-                                style: const TextStyle(
-                                  color: BColors.primary,
-                                  fontSize: 14,
+                            const SizedBox(height: 12),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                DeleteButton(
+                                  label: 'حذف الحساب',
+                                  onTap: () => _showDeleteDialog(cg),
                                 ),
-                              ),
-                            ),
-                            DataCell(
-                              DeleteButton(
-                                label: 'حذف الحساب',
-                                onTap: () => showDialog(
-                                  context: context,
-                                  builder: (_) => ConfirmDeleteDialog(
-                                    name: cg.name,
-                                    onConfirm: () async {
-                                      try {
-                                        await CaregiverInfoService.instance
-                                            .deleteCaregiver(context, cg.uid);
-                                        if (!mounted) return;
-                                        Navigator.pop(context);
-                                        setState(() => _caregivers.removeWhere(
-                                            (c) => c.uid == cg.uid));
-                                        _showSnackBar(
-                                          'تم حذف حساب ${cg.name} بنجاح',
-                                          isSuccess: true,
-                                        );
-                                      } catch (e) {
-                                        if (!mounted) return;
-                                        Navigator.pop(context);
-                                        final msg = e is Exception
-                                            ? e.toString().replaceFirst('Exception: ', '')
-                                            : 'تعذّر الاتصال بالخادم، تحقق من الاتصال';
-                                        _showSnackBar(msg, isSuccess: false);
-                                      }
-                                    },
-                                  ),
-                                ),
-                              ),
+                              ],
                             ),
                           ],
                         ),
-                      )
-                      .toList(),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              )
+            else
+              SizedBox(
+                width: double.infinity,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minWidth: constraints.maxWidth,
+                        ),
+                        child: DataTable(
+                          headingRowColor: WidgetStateProperty.all(
+                            BColors.lightGrey,
+                          ),
+                          headingTextStyle: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: BColors.darkGrey,
+                          ),
+                          dataTextStyle: const TextStyle(
+                            fontSize: 14,
+                            color: BColors.darkerGrey,
+                          ),
+                          columnSpacing: 32,
+                          dataRowMinHeight: 68,
+                          dataRowMaxHeight: 68,
+                          columns: const [
+                            DataColumn(label: Text('مقدم الرعاية')),
+                            DataColumn(label: Text('البريد الإلكتروني')),
+                            DataColumn(label: Text('الإجراء')),
+                          ],
+                          rows: _caregivers.map((cg) {
+                            return DataRow(
+                              cells: [
+                                DataCell(
+                                  _CaregiverCell(
+                                    name: cg.name,
+                                    email: cg.email,
+                                    initials: cg.initials,
+                                  ),
+                                ),
+                                DataCell(
+                                  SizedBox(
+                                    width: 180,
+                                    child: Text(
+                                      cg.email,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: BColors.primary,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                DataCell(
+                                  DeleteButton(
+                                    label: 'حذف الحساب',
+                                    onTap: () => _showDeleteDialog(cg),
+                                  ),
+                                ),
+                              ],
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _CaregiverCell extends StatelessWidget {
+  final String name;
+  final String email;
+  final String initials;
+
+  const _CaregiverCell({
+    required this.name,
+    required this.email,
+    required this.initials,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 10,
+      runSpacing: 8,
+      children: [
+        AdminAvatarWidget(
+          initials: initials,
+          bg: BColors.secondary,
+          fg: BColors.primary,
+          size: 40,
+          fontSize: 14,
+        ),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              name,
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                color: BColors.textDarkestBlue,
+                fontSize: 15,
+              ),
+            ),
+            Text(
+              email,
+              style: const TextStyle(fontSize: 13, color: BColors.darkGrey),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

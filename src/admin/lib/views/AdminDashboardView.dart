@@ -5,6 +5,7 @@ import 'AcceptedDoctorsView.dart';
 import 'CaregiversView.dart';
 import 'package:bouh_admin/services/auth_service.dart';
 import 'package:bouh_admin/views/login_page.dart';
+import 'responsive.dart';
 
 class AdminDashboardView extends StatefulWidget {
   const AdminDashboardView({super.key});
@@ -79,28 +80,53 @@ class _AdminDashboardViewState extends State<AdminDashboardView> {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = ResponsiveBreakpoints.isMobile(context);
+
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: BColors.lightGrey,
-        body: Row(
-          children: [
-            _SidebarWidget(
-              selectedIndex: _selectedIndex,
-              pendingCount: _pendingCount,
-              onSelectIndex: (i) => setState(() => _selectedIndex = i),
-              onLogout: _confirmLogout,
-            ),
-            Expanded(
-              child: Column(
+        drawer: isMobile
+            ? Drawer(
+                child: _SidebarWidget(
+                  selectedIndex: _selectedIndex,
+                  pendingCount: _pendingCount,
+                  onSelectIndex: (i) {
+                    setState(() => _selectedIndex = i);
+                    Navigator.pop(context);
+                  },
+                  onLogout: _confirmLogout,
+                ),
+              )
+            : null,
+        body: isMobile
+            ? Column(
                 children: [
-                  _TopBarWidget(title: _pageTitles[_selectedIndex]),
+                  _TopBarWidget(
+                    title: _pageTitles[_selectedIndex],
+                    showMenuButton: true,
+                  ),
                   Expanded(child: _buildCurrentPage()),
                 ],
+              )
+            : Row(
+                children: [
+                  _SidebarWidget(
+                    selectedIndex: _selectedIndex,
+                    pendingCount: _pendingCount,
+                    onSelectIndex: (i) => setState(() => _selectedIndex = i),
+                    onLogout: _confirmLogout,
+                  ),
+                  Expanded(
+                    child: Column(
+                      children: [
+                        _TopBarWidget(title: _pageTitles[_selectedIndex]),
+                        Expanded(child: _buildCurrentPage()),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -228,43 +254,24 @@ class _SidebarWidget extends StatelessWidget {
             decoration: const BoxDecoration(
               border: Border(top: BorderSide(color: BColors.grey, width: 0.5)),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'المسؤول',
-                  style: TextStyle(fontSize: 12, color: BColors.darkGrey),
+            child: SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: onLogout,
+                icon: const Icon(Icons.logout, size: 16),
+                label: const Text(
+                  'تسجيل الخروج',
+                  style: TextStyle(fontSize: 14),
                 ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Layanbadar1425@hotmail.com',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: BColors.textDarkestBlue,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: BColors.destructiveError,
+                  side: const BorderSide(color: BColors.grey, width: 0.5),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
                   ),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
-                const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: onLogout,
-                    icon: const Icon(Icons.logout, size: 16),
-                    label: const Text(
-                      'تسجيل الخروج',
-                      style: TextStyle(fontSize: 14),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: BColors.destructiveError,
-                      side: const BorderSide(color: BColors.grey, width: 0.5),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ],
@@ -290,7 +297,7 @@ class _NavItemWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return InkWell(
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
@@ -348,26 +355,37 @@ class _NavItemWidget extends StatelessWidget {
 
 class _TopBarWidget extends StatelessWidget {
   final String title;
-  const _TopBarWidget({required this.title});
+  final bool showMenuButton;
+
+  const _TopBarWidget({required this.title, this.showMenuButton = false});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       height: 70,
-      padding: const EdgeInsets.symmetric(horizontal: 32),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: const BoxDecoration(
         color: BColors.white,
         border: Border(bottom: BorderSide(color: BColors.grey, width: 0.5)),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              color: BColors.textDarkestBlue,
+          if (showMenuButton)
+            Builder(
+              builder: (context) => IconButton(
+                icon: const Icon(Icons.menu),
+                onPressed: () => Scaffold.of(context).openDrawer(),
+              ),
+            ),
+          Expanded(
+            child: Text(
+              title,
+              textAlign: showMenuButton ? TextAlign.center : TextAlign.start,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: BColors.textDarkestBlue,
+              ),
             ),
           ),
         ],
