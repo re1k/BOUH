@@ -351,6 +351,7 @@ class _LoginPageState extends State<LoginPage> {
                           email: email,
                         );
                         if (!ctx.mounted) return;
+                        resetEmailCtrl.clear();
                         setDialogState(() {
                           loading = false;
                           inlineMessage =

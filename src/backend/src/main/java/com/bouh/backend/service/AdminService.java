@@ -48,7 +48,7 @@ public class AdminService {
                     Map.of("requestType", "PASSWORD_RESET", "email", email.trim()), headers);
             restTemplate.postForEntity(url, request, String.class);
         } catch (Exception e) {
-            log.warn("Password reset failed silently for email={}", email);
+            log.warn("Password reset failed for email={}: {}", email, e.getMessage());
         }
     }
 
