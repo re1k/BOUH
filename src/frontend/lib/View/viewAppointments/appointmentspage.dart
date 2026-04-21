@@ -42,7 +42,8 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
   String? _lastDoctorId;
   bool _isLoadingMore = false;
   bool _isSearching = false;
-  final Map<String, String> _cachedPhotoUrls = {};
+  final Map<String, String?> _cachedPhotoUrls =
+      {}; // nullable — null = no photo
   Timer? _refreshTimer;
   Timer? _defaultRefreshTimer;
   final DoctorSearchService _service = DoctorSearchService();
@@ -65,6 +66,7 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
   static const Color _tabInactiveColor = Color(0xFF7D8A96);
   static const Color _searchBorderColor = Color(0xFFE8EBED);
   static const Color _filterButtonBg = Color(0xFF5B8FA3);
+
   static const List<String> _areas = [
     'الكل',
     'توتر وقلق',
@@ -73,6 +75,16 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
     'تفاؤل',
     'غضب',
   ];
+
+  // ── cache helper ─────────────────────────────────────────────────────────────
+  void _updateCache(List<DoctorSummaryDto> doctors) {
+    for (final doc in doctors) {
+      final id = doc.doctorId;
+      if (id == null) continue;
+      final photo = doc.profilePhotoURL?.trim();
+      _cachedPhotoUrls[id] = (photo != null && photo.isNotEmpty) ? photo : null;
+    }
+  }
 
   @override
   void initState() {
@@ -85,25 +97,41 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
       }
     });
     _loadDoctorsForCaregiver();
+
     _defaultRefreshTimer = Timer.periodic(const Duration(seconds: 3), (
       _,
     ) async {
       if (!_isSearching && _selectedArea == null) {
         try {
           final (doctors, hasMore) = await _service.getTopRatedDoctors();
-          for (final doc in doctors) {
-            if (doc.profilePhotoURL != null &&
-                doc.profilePhotoURL!.isNotEmpty &&
-                !_cachedPhotoUrls.containsKey(doc.doctorId)) {
-              _cachedPhotoUrls[doc.doctorId!] = doc.profilePhotoURL!;
-            }
+
+          bool changed =
+              doctors.length != _allDoctors.length ||
+              doctors.any((d) {
+                final old = _allDoctors.firstWhere(
+                  (a) => a.doctorId == d.doctorId,
+                  orElse: () => d,
+                );
+                final newPhoto = (d.profilePhotoURL?.trim().isNotEmpty ?? false)
+                    ? d.profilePhotoURL!.trim()
+                    : null;
+                return old.doctorId != d.doctorId ||
+                    old.name != d.name ||
+                    old.areaOfKnowledge != d.areaOfKnowledge ||
+                    old.rating != d.rating ||
+                    _cachedPhotoUrls[d.doctorId] != newPhoto;
+              });
+
+          _updateCache(doctors);
+
+          if (changed) {
+            setState(() {
+              _allDoctors = doctors;
+              _filteredDoctors = doctors;
+              _hasMore = hasMore;
+              _lastDoctorId = doctors.isNotEmpty ? doctors.last.doctorId : null;
+            });
           }
-          setState(() {
-            _allDoctors = doctors;
-            _filteredDoctors = doctors;
-            _hasMore = hasMore;
-            _lastDoctorId = doctors.isNotEmpty ? doctors.last.doctorId : null;
-          });
         } catch (_) {}
       }
     });
@@ -120,6 +148,7 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
 
     try {
       final (doctors, hasMore) = await _service.getTopRatedDoctors();
+      _updateCache(doctors); // before setState — no flicker
       setState(() {
         _allDoctors = doctors;
         _filteredDoctors = doctors;
@@ -142,6 +171,7 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
       final (doctors, hasMore) = await _service.getTopRatedDoctors(
         lastDoctorId: _lastDoctorId,
       );
+      _updateCache(doctors); // before setState — no flicker
       setState(() {
         _allDoctors.addAll(doctors);
         _filteredDoctors = _allDoctors;
@@ -154,32 +184,26 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
     }
   }
 
-  // ── 10.2.32  filter by area ───────────────────────────────────────────────────
   Future<void> _onAreaSelected(String area) async {
-    // "الكل" clears the filter
-    if (area == 'الكل') {
-      setState(() => _selectedArea = null);
-      if (!_isSearching)
-        await _loadDoctorsForCaregiver(); // ← fresh fetch
-      else
-        setState(() => _filteredDoctors = _searchResults);
+    if (area == 'الكل' || _selectedArea == area) {
+      _refreshTimer?.cancel();
+      setState(() {
+        _selectedArea = null;
+        _filteredDoctors = _isSearching ? _searchResults : _allDoctors;
+      });
       return;
     }
 
-    if (_selectedArea == area) {
-      setState(() => _selectedArea = null);
-      if (!_isSearching)
-        await _loadDoctorsForCaregiver(); // ← fresh fetch
-      else
-        setState(() => _filteredDoctors = _searchResults);
-      return;
-    }
+    setState(() {
+      _selectedArea = area;
+      _isLoading = true;
+      _error = null;
+    });
 
-    setState(() => _selectedArea = area);
-
-    // search is active → filter raw search results locally, no API call
+    // search active → filter locally from search results
     if (_isSearching) {
       setState(() {
+        _isLoading = false;
         _filteredDoctors = _searchResults
             .where((d) => d.areaOfKnowledge == area)
             .toList();
@@ -187,19 +211,15 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
       return;
     }
 
-    // no search active → call backend
-    _startRefreshTimer();
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-
+    // no search → call backend
     try {
       final results = await _service.filterDoctors(area);
+      _updateCache(results);
       setState(() {
         _filteredDoctors = results;
         _isLoading = false;
       });
+      _startRefreshTimer();
     } catch (e) {
       setState(() {
         _error = 'حدث خطأ في التصفية';
@@ -208,7 +228,6 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
     }
   }
 
-  // ── 10.2.31  search by name — calls backend ───────────────────────────────────
   void _onSearchChanged() {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
 
@@ -216,6 +235,7 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
       final q = _searchController.text.trim();
 
       if (q.isEmpty) {
+        _refreshTimer?.cancel();
         setState(() {
           _isSearching = false;
           _searchResults = [];
@@ -225,7 +245,6 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
                     .toList()
               : _allDoctors;
         });
-        if (_selectedArea == null) _refreshTimer?.cancel();
         return;
       }
 
@@ -234,6 +253,7 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
 
       try {
         final results = await _service.searchDoctors(q);
+        _updateCache(results);
         _searchResults = results;
         final filtered = _selectedArea != null
             ? results.where((d) => d.areaOfKnowledge == _selectedArea).toList()
@@ -256,6 +276,7 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
       if (q.isNotEmpty) {
         try {
           final results = await _service.searchDoctors(q);
+          _updateCache(results);
           _searchResults = results;
           final filtered = _selectedArea != null
               ? results
@@ -267,6 +288,7 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
       } else if (_selectedArea != null) {
         try {
           final results = await _service.filterDoctors(_selectedArea!);
+          _updateCache(results);
           setState(() => _filteredDoctors = results);
         } catch (_) {}
       } else {
@@ -291,6 +313,17 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
       context,
       MaterialPageRoute(builder: (_) => DoctorDetailsView(doctor: doctor)),
     );
+  }
+
+  ImageProvider? _photoFor(DoctorSummaryDto doctor) {
+    final id = doctor.doctorId;
+    if (id == null) return null;
+    if (_cachedPhotoUrls.containsKey(id)) {
+      final url = _cachedPhotoUrls[id];
+      return (url != null && url.isNotEmpty) ? NetworkImage(url) : null;
+    }
+    final raw = doctor.profilePhotoURL?.trim();
+    return (raw != null && raw.isNotEmpty) ? NetworkImage(raw) : null;
   }
 
   @override
@@ -455,7 +488,6 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
               color: _filterButtonBg,
               borderRadius: BorderRadius.circular(_searchRadius),
             ),
-            // ── shows selected area name or default icon ──
             child: _selectedArea != null
                 ? Center(
                     child: Padding(
@@ -555,15 +587,7 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
               name: _filteredDoctors[i].name,
               specialty: _filteredDoctors[i].areaOfKnowledge,
               rating: _filteredDoctors[i].rating.toInt(),
-              profileImage:
-                  (_cachedPhotoUrls[_filteredDoctors[i].doctorId] ??
-                          _filteredDoctors[i].profilePhotoURL) !=
-                      null
-                  ? NetworkImage(
-                      _cachedPhotoUrls[_filteredDoctors[i].doctorId] ??
-                          _filteredDoctors[i].profilePhotoURL!,
-                    )
-                  : null,
+              profileImage: _photoFor(_filteredDoctors[i]),
             ),
           ),
           if (i < _filteredDoctors.length - 1) const SizedBox(height: _cardGap),

@@ -153,6 +153,7 @@ class SuggestedDoctorCard extends StatelessWidget {
           height: _avatarSize,
           child: Image(
             image: profileImage!,
+            gaplessPlayback: true,
             fit: BoxFit.cover,
             errorBuilder: (context, error, stackTrace) => Container(
               width: _avatarSize,
