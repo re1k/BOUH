@@ -239,24 +239,20 @@ class AppointmentCard extends StatelessWidget {
   }
 
   Widget _buildAvatar() {
-    if (profileImage != null) {
-      return ClipOval(
-        child: SizedBox(
-          width: _avatarSize,
-          height: _avatarSize,
-          child: Image(image: profileImage!, fit: BoxFit.cover),
-        ),
-      );
-    }
     return ClipOval(
-      child: Container(
+      child: SizedBox(
         width: _avatarSize,
         height: _avatarSize,
-        color: BColors.softGrey,
-        child: Icon(
-          Icons.person,
-          color: BColors.darkGrey,
-          size: _avatarSize * 0.5,
+        child: Image(
+          image: profileImage ??
+              const AssetImage('assets/images/default_ProfileImage.png'),
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => Image.asset(
+            'assets/images/default_ProfileImage.png',
+            width: _avatarSize,
+            height: _avatarSize,
+            fit: BoxFit.cover,
+          ),
         ),
       ),
     );

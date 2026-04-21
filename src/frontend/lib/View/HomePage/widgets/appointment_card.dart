@@ -9,6 +9,7 @@ class AppointmentCard extends StatelessWidget {
   final String caregiverName;
   final String childName;
   final AppointmentButtonType? buttonType;
+  final ImageProvider? profileImage;
 
   /// When set, the action button (بدء/إلغاء) is tappable and triggers this callback.
   final VoidCallback? onActionTap;
@@ -20,6 +21,7 @@ class AppointmentCard extends StatelessWidget {
     required this.caregiverName,
     required this.childName,
     this.buttonType,
+    this.profileImage,
     this.onActionTap,
   });
 
@@ -46,6 +48,19 @@ class AppointmentCard extends StatelessWidget {
             decoration: BoxDecoration(
               color: BColors.primary,
               borderRadius: BorderRadius.circular(20),
+            ),
+          ),
+
+          const SizedBox(width: 12),
+          ClipOval(
+            child: SizedBox(
+              width: 52,
+              height: 52,
+              child: Image(
+                image: profileImage ??
+                    const AssetImage('assets/images/default_ProfileImage.png'),
+                fit: BoxFit.cover,
+              ),
             ),
           ),
 
