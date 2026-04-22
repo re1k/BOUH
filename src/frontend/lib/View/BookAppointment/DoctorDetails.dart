@@ -43,6 +43,7 @@ class _DoctorDetailsViewState extends State<DoctorDetailsView> {
                 final doctorName = widget.doctor.name;
                 final doctorMajor = widget.doctor.areaOfKnowledge;
                 final rating = snapshot.data?.averageRating ?? 0.0;
+                final profilePhotoUrl = widget.doctor.profilePhotoURL;
 
                 final years = snapshot.data?.yearsOfExperience ?? 0;
                 final qualifications = snapshot.data?.qualifications ?? [];
@@ -59,6 +60,7 @@ class _DoctorDetailsViewState extends State<DoctorDetailsView> {
                         tabIndex: tabIndex,
                         onTapQualifications: () => setState(() => tabIndex = 0),
                         onTapBooking: () => setState(() => tabIndex = 1),
+                        profilePhotoURL: profilePhotoUrl,
                       ),
                       const SizedBox(height: 18),
                       Padding(
@@ -108,6 +110,7 @@ class _DoctorInfoCard extends StatelessWidget {
   final int tabIndex;
   final VoidCallback onTapQualifications;
   final VoidCallback onTapBooking;
+  final String? profilePhotoURL;
 
   const _DoctorInfoCard({
     required this.doctorName,
@@ -117,6 +120,7 @@ class _DoctorInfoCard extends StatelessWidget {
     required this.tabIndex,
     required this.onTapQualifications,
     required this.onTapBooking,
+    this.profilePhotoURL,
   });
 
   @override
@@ -143,10 +147,22 @@ class _DoctorInfoCard extends StatelessWidget {
                   color: Colors.grey.shade200,
                   border: Border.all(color: Colors.white, width: 4),
                 ),
-                child: Icon(
-                  Icons.person,
-                  size: 34,
-                  color: Colors.grey.shade600,
+                child: ClipOval(
+                  child: Image(
+                    image:
+                        (profilePhotoURL != null && profilePhotoURL!.isNotEmpty)
+                        ? NetworkImage(profilePhotoURL!)
+                        : const AssetImage(
+                                'assets/images/default_ProfileImage.png',
+                              )
+                              as ImageProvider,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Icon(
+                      Icons.person,
+                      size: 34,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(width: 7),

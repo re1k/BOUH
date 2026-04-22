@@ -248,10 +248,35 @@ class _BookingViewState extends State<BookingView> {
   }
 
   List<TimeSlotDto> get availableTimeSlots {
-    if (selectedSchedule == null) return [];
-    return selectedSchedule!.timeSlots
-        .where((slot) => slot.booked == false)
-        .toList();
+    if (selectedSchedule == null || selectedDay == null) return [];
+
+    final now = DateTime.now();
+    final isToday =
+        selectedDay!.year == now.year &&
+        selectedDay!.month == now.month &&
+        selectedDay!.day == now.day;
+
+    return selectedSchedule!.timeSlots.where((slot) {
+      if (slot.booked == true) return false;
+
+      if (!isToday) return true;
+
+      final startMinutes = slot.index * 30;
+      final startHour = 16 + (startMinutes ~/ 60);
+      final startMinute = startMinutes % 60;
+
+      final slotStart = DateTime(
+        selectedDay!.year,
+        selectedDay!.month,
+        selectedDay!.day,
+        startHour,
+        startMinute,
+      );
+
+      final slotEnd = slotStart.add(const Duration(minutes: 30));
+
+      return now.isBefore(slotEnd);
+    }).toList();
   }
 
   ChildDto? get selectedChild {
