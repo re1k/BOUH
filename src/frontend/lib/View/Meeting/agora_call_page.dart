@@ -28,9 +28,9 @@ class _AgoraCallPageState extends State<AgoraCallPage> {
 
   bool _isJoined = false;
   bool _micEnabled = true;
-  bool _cameraEnabled = true;
+  bool _cameraEnabled = false;
   int? _remoteUid;
-
+  bool _remoteVideoMuted = false;
   @override
   void initState() {
     super.initState();
@@ -45,7 +45,7 @@ class _AgoraCallPageState extends State<AgoraCallPage> {
     await engine.initialize(RtcEngineContext(appId: widget.appId));
 
     await engine.enableVideo();
-    await engine.startPreview();
+    await engine.enableLocalVideo(false);
 
     engine.registerEventHandler(
       RtcEngineEventHandler(
@@ -99,9 +99,19 @@ class _AgoraCallPageState extends State<AgoraCallPage> {
                 _remoteUid = null;
               });
             },
+        onUserMuteVideo: (RtcConnection connection, int uid, bool muted) {
+          print('🎥 USER VIDEO MUTED: $uid -> $muted');
 
+          if (!mounted) return;
+
+          setState(() {
+            if (uid == _remoteUid) {
+              _remoteVideoMuted = muted;
+            }
+          });
+        },
         onLeaveChannel: (RtcConnection connection, RtcStats stats) {
-          print('🚪 LEFT CHANNEL');
+          print('LEFT CHANNEL');
 
           if (!mounted) return;
           setState(() {
@@ -123,7 +133,7 @@ class _AgoraCallPageState extends State<AgoraCallPage> {
       options: const ChannelMediaOptions(
         clientRoleType: ClientRoleType.clientRoleBroadcaster,
         channelProfile: ChannelProfileType.channelProfileCommunication,
-        publishCameraTrack: true,
+        publishCameraTrack: false,
         publishMicrophoneTrack: true,
         autoSubscribeAudio: true,
         autoSubscribeVideo: true,
@@ -162,7 +172,35 @@ class _AgoraCallPageState extends State<AgoraCallPage> {
     if (_engine == null) return;
 
     _cameraEnabled = !_cameraEnabled;
-    await _engine!.muteLocalVideoStream(!_cameraEnabled);
+
+    if (_cameraEnabled) {
+      await _engine!.enableLocalVideo(true);
+      await _engine!.startPreview();
+      await _engine!.muteLocalVideoStream(false);
+
+      await _engine!.updateChannelMediaOptions(
+        const ChannelMediaOptions(
+          publishCameraTrack: true,
+          publishMicrophoneTrack: true,
+          autoSubscribeAudio: true,
+          autoSubscribeVideo: true,
+        ),
+      );
+    } else {
+      await _engine!.muteLocalVideoStream(true);
+      await _engine!.stopPreview();
+
+      await _engine!.updateChannelMediaOptions(
+        const ChannelMediaOptions(
+          publishCameraTrack: false,
+          publishMicrophoneTrack: true,
+          autoSubscribeAudio: true,
+          autoSubscribeVideo: true,
+        ),
+      );
+
+      await _engine!.enableLocalVideo(false);
+    }
 
     if (mounted) setState(() {});
   }
@@ -189,13 +227,25 @@ class _AgoraCallPageState extends State<AgoraCallPage> {
       children: [
         Positioned.fill(
           child: _remoteUid != null
-              ? AgoraVideoView(
-                  controller: VideoViewController.remote(
-                    rtcEngine: _engine!,
-                    canvas: VideoCanvas(uid: _remoteUid),
-                    connection: RtcConnection(channelId: widget.channelName),
-                  ),
-                )
+              ? (_remoteVideoMuted
+                    ? Container(
+                        color: Colors.black,
+                        alignment: Alignment.center,
+                        child: const Icon(
+                          Icons.videocam_off,
+                          color: Colors.white,
+                          size: 50,
+                        ),
+                      )
+                    : AgoraVideoView(
+                        controller: VideoViewController.remote(
+                          rtcEngine: _engine!,
+                          canvas: VideoCanvas(uid: _remoteUid),
+                          connection: RtcConnection(
+                            channelId: widget.channelName,
+                          ),
+                        ),
+                      ))
               : const Center(
                   child: Text(
                     'بانتظار الطرف الآخر...',
@@ -210,12 +260,22 @@ class _AgoraCallPageState extends State<AgoraCallPage> {
           height: 180,
           child: ClipRRect(
             borderRadius: BorderRadius.circular(12),
-            child: AgoraVideoView(
-              controller: VideoViewController(
-                rtcEngine: _engine!,
-                canvas: const VideoCanvas(uid: 0),
-              ),
-            ),
+            child: _cameraEnabled
+                ? AgoraVideoView(
+                    controller: VideoViewController(
+                      rtcEngine: _engine!,
+                      canvas: const VideoCanvas(uid: 0),
+                    ),
+                  )
+                : Container(
+                    color: Colors.grey.shade900,
+                    alignment: Alignment.center,
+                    child: const Icon(
+                      Icons.videocam_off,
+                      color: Colors.white,
+                      size: 36,
+                    ),
+                  ),
           ),
         ),
       ],
