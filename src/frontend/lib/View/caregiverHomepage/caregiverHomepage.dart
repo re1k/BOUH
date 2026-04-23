@@ -234,7 +234,7 @@ class CaregiverHomepageState extends State<CaregiverHomepage>
     if (showJoin) {
       actionLabel = 'انضمام';
       actionColor = BColors.accent;
-      onActionTap = () => _joinAgoraMeeting(dto.appointmentId);
+      onActionTap = () => _joinAgoraMeeting(dto);
     } else if (canCancel) {
       actionLabel = 'الغاء';
       actionColor = _cancelRed;
@@ -639,12 +639,22 @@ class CaregiverHomepageState extends State<CaregiverHomepage>
     );
   }
 
-  Future<void> _joinAgoraMeeting(String appointmentId) async {
+  Future<void> _joinAgoraMeeting(UpcomingAppointmentDto dto) async {
     try {
+      final endTime = AppointmentsService.parseAppointmentTime(
+        dto.date,
+        dto.endTime,
+      );
+
+      if (endTime == null) {
+        print('❌ endTime is null');
+        return;
+      }
+
       final token = AuthSession.instance.idToken;
 
       final url = Uri.parse(
-        '${ApiConfig.baseUrl}/api/appointments/join/$appointmentId',
+        '${ApiConfig.baseUrl}/api/appointments/join/${dto.appointmentId}',
       );
 
       final res = await http.post(
@@ -663,7 +673,9 @@ class CaregiverHomepageState extends State<CaregiverHomepage>
 
       if (!mounted) return;
 
-      Navigator.push(
+      _pauseLiveUpdates();
+
+      await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => AgoraCallPage(
@@ -671,15 +683,21 @@ class CaregiverHomepageState extends State<CaregiverHomepage>
             channelName: data.channelName,
             token: data.token,
             uid: data.uid,
-            appointmentId: appointmentId,
+            appointmentId: data.appointmentId,
+            endTime: endTime,
           ),
         ),
       );
-    } catch (e) {
+
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('فشل الدخول للجلسة: $e')));
+      _prepareSessionAndLoad();
+    } catch (e) {
+      print('JOIN ERROR: $e');
     }
+  }
+
+  void _pauseLiveUpdates() {
+    _ticker?.cancel();
+    _subscription?.cancel();
   }
 }

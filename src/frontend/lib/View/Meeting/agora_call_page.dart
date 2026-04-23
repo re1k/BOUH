@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -8,6 +10,7 @@ class AgoraCallPage extends StatefulWidget {
   final String token;
   final int uid;
   final String appointmentId;
+  final DateTime endTime;
 
   const AgoraCallPage({
     super.key,
@@ -16,6 +19,7 @@ class AgoraCallPage extends StatefulWidget {
     required this.token,
     required this.uid,
     required this.appointmentId,
+    required this.endTime,
   });
 
   @override
@@ -26,11 +30,16 @@ class _AgoraCallPageState extends State<AgoraCallPage> {
   RtcEngine? _engine;
   bool _engineReady = false;
 
+  Timer? _meetingTimer;
+  Duration _remainingTime = Duration.zero;
+  bool _showCountdown = false;
+
   bool _isJoined = false;
   bool _micEnabled = true;
   bool _cameraEnabled = false;
   int? _remoteUid;
   bool _remoteVideoMuted = false;
+
   @override
   void initState() {
     super.initState();
@@ -64,15 +73,22 @@ class _AgoraCallPageState extends State<AgoraCallPage> {
               print('reason: $reason');
               print('channel = ${connection.channelId}');
             },
+
         onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
           print('✅ LOCAL JOINED');
           print('channel = ${connection.channelId}');
           print('local uid = ${widget.uid}');
+          print('NOW = ${DateTime.now()}');
+          print('END TIME = ${widget.endTime}');
+          print('DIFF = ${widget.endTime.difference(DateTime.now())}');
 
           if (!mounted) return;
+
           setState(() {
             _isJoined = true;
           });
+
+          _startMeetingTimer();
         },
 
         onUserJoined: (RtcConnection connection, int remoteUid, int elapsed) {
@@ -97,10 +113,12 @@ class _AgoraCallPageState extends State<AgoraCallPage> {
               if (!mounted) return;
               setState(() {
                 _remoteUid = null;
+                _remoteVideoMuted = false;
               });
             },
+
         onUserMuteVideo: (RtcConnection connection, int uid, bool muted) {
-          print('🎥 USER VIDEO MUTED: $uid -> $muted');
+          print('🎥 USER VIDEO MUTED EVENT => uid: $uid, muted: $muted');
 
           if (!mounted) return;
 
@@ -110,6 +128,7 @@ class _AgoraCallPageState extends State<AgoraCallPage> {
             }
           });
         },
+
         onLeaveChannel: (RtcConnection connection, RtcStats stats) {
           print('LEFT CHANNEL');
 
@@ -117,15 +136,18 @@ class _AgoraCallPageState extends State<AgoraCallPage> {
           setState(() {
             _isJoined = false;
             _remoteUid = null;
+            _remoteVideoMuted = false;
           });
         },
       ),
     );
+
     print('=== AGORA JOIN REQUEST ===');
     print('appId = ${widget.appId}');
     print('channelName = ${widget.channelName}');
     print('uid = ${widget.uid}');
     print('token = ${widget.token}');
+
     await engine.joinChannel(
       token: widget.token,
       channelId: widget.channelName,
@@ -152,9 +174,12 @@ class _AgoraCallPageState extends State<AgoraCallPage> {
   }
 
   Future<void> _leaveCall() async {
+    _meetingTimer?.cancel();
+
     if (_engine != null) {
       await _engine!.leaveChannel();
     }
+
     if (!mounted) return;
     Navigator.of(context).pop();
   }
@@ -205,23 +230,74 @@ class _AgoraCallPageState extends State<AgoraCallPage> {
     if (mounted) setState(() {});
   }
 
-  @override
-  void dispose() {
-    final engine = _engine;
-    _engine = null;
+  void _startMeetingTimer() {
+    _meetingTimer?.cancel();
 
-    if (engine != null) {
-      engine.leaveChannel();
-      engine.release();
+    _meetingTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
+      if (!mounted) return;
+
+      final now = DateTime.now();
+      final remaining = widget.endTime.difference(now);
+
+      if (remaining <= Duration.zero) {
+        timer.cancel();
+        await _leaveCall();
+        return;
+      }
+
+      if (remaining <= const Duration(minutes: 10)) {
+        setState(() {
+          _showCountdown = true;
+          _remainingTime = remaining;
+        });
+      } else if (_showCountdown) {
+        setState(() {
+          _showCountdown = false;
+        });
+      }
+    });
+  }
+
+  String _formatDuration(Duration d) {
+    final minutes = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
+  }
+
+  Widget _buildTenMinuteCountdown() {
+    if (!_showCountdown) {
+      return const SizedBox.shrink();
     }
 
-    super.dispose();
+    return Positioned(
+      top: 24,
+      left: 16,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.7),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white24),
+        ),
+        child: Text(
+          'الوقت المتبقي: ${_formatDuration(_remainingTime)}',
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildVideoViews() {
     if (!_engineReady || _engine == null) {
       return const Center(child: CircularProgressIndicator());
     }
+
+    print(
+      'BUILD VIDEO VIEWS => _remoteUid=$_remoteUid, _remoteVideoMuted=$_remoteVideoMuted, _cameraEnabled=$_cameraEnabled',
+    );
 
     return Stack(
       children: [
@@ -253,6 +329,7 @@ class _AgoraCallPageState extends State<AgoraCallPage> {
                   ),
                 ),
         ),
+
         Positioned(
           top: 24,
           right: 16,
@@ -293,6 +370,7 @@ class _AgoraCallPageState extends State<AgoraCallPage> {
             children: [
               FloatingActionButton(
                 heroTag: 'mic',
+                backgroundColor: Colors.white,
                 onPressed: _toggleMic,
                 child: Icon(_micEnabled ? Icons.mic : Icons.mic_off),
               ),
@@ -301,11 +379,12 @@ class _AgoraCallPageState extends State<AgoraCallPage> {
                 heroTag: 'end',
                 backgroundColor: Colors.red,
                 onPressed: _leaveCall,
-                child: const Icon(Icons.call_end),
+                child: const Icon(Icons.call_end, color: Colors.white),
               ),
               const SizedBox(width: 16),
               FloatingActionButton(
                 heroTag: 'camera',
+                backgroundColor: Colors.white,
                 onPressed: _toggleCamera,
                 child: Icon(
                   _cameraEnabled ? Icons.videocam : Icons.videocam_off,
@@ -319,6 +398,21 @@ class _AgoraCallPageState extends State<AgoraCallPage> {
   }
 
   @override
+  void dispose() {
+    _meetingTimer?.cancel();
+
+    final engine = _engine;
+    _engine = null;
+
+    if (engine != null) {
+      engine.leaveChannel();
+      engine.release();
+    }
+
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
@@ -326,7 +420,13 @@ class _AgoraCallPageState extends State<AgoraCallPage> {
         title: const Text('جلسة الاستشارة'),
         backgroundColor: Colors.black,
       ),
-      body: Stack(children: [_buildVideoViews(), _buildControls()]),
+      body: Stack(
+        children: [
+          _buildVideoViews(),
+          _buildTenMinuteCountdown(),
+          _buildControls(),
+        ],
+      ),
     );
   }
 }

@@ -123,7 +123,9 @@ class PreviousBookedAppointmentCard extends StatelessWidget {
                         ),
                       ),
                       // <Rating feature> Button appears only when parent allows it.
-                      if (_isAttended && showRateButton && onRateTap != null) ...[
+                      if (_isAttended &&
+                          showRateButton &&
+                          onRateTap != null) ...[
                         const SizedBox(width: 8),
                         Transform.translate(
                           offset: const Offset(0, _rateOffsetY),
@@ -279,7 +281,8 @@ class PreviousBookedAppointmentCard extends StatelessWidget {
         width: _avatarSize,
         height: _avatarSize,
         child: Image(
-          image: profileImage ??
+          image:
+              profileImage ??
               const AssetImage('assets/images/default_ProfileImage.png'),
           fit: BoxFit.cover,
           errorBuilder: (_, __, ___) => Image.asset(

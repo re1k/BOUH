@@ -95,7 +95,7 @@ class _BookedAppointmentsUpcomingState
   // One Firestore listener per distinct doctorId in the current list.
   // Triggers a re-fetch when a doctor updates their profile photo.
   final Map<String, StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>>
-      _doctorListeners = {};
+  _doctorListeners = {};
 
   @override
   void initState() {
@@ -236,8 +236,9 @@ class _BookedAppointmentsUpcomingState
       if (url != null && url.isNotEmpty) NetworkImage(url).evict();
     }
     try {
-      final list =
-          await _appointmentsService.getUpcomingAppointments(caregiverId);
+      final list = await _appointmentsService.getUpcomingAppointments(
+        caregiverId,
+      );
       if (!mounted) return;
       setState(() => _list = _removeExpired(list));
       _updateDoctorListeners(_list);
@@ -551,7 +552,7 @@ class _BookedAppointmentsUpcomingState
       actionLabel = 'انضمام';
       actionColor = BColors.accent;
 
-      onActionTap = () => _joinAgoraMeeting(dto.appointmentId);
+      onActionTap = () => _joinAgoraMeeting(dto);
     } else if (canCancel) {
       actionLabel = 'الغاء';
       actionColor = _cancelRed;
@@ -770,18 +771,23 @@ class _BookedAppointmentsUpcomingState
     }
   }
 
-  Future<void> _joinAgoraMeeting(String appointmentId) async {
+  Future<void> _joinAgoraMeeting(UpcomingAppointmentDto dto) async {
     try {
+      final endTime = AppointmentsService.parseAppointmentTime(
+        dto.date,
+        dto.endTime,
+      );
+
+      if (endTime == null) {
+        print('❌ endTime is null');
+        return;
+      }
+
       final token = AuthSession.instance.idToken;
 
       final url = Uri.parse(
-        '${ApiConfig.baseUrl}/api/appointments/join/$appointmentId',
+        '${ApiConfig.baseUrl}/api/appointments/join/${dto.appointmentId}',
       );
-
-      print('=== JOIN DEBUG START ===');
-      print('appointmentId: $appointmentId');
-      print('url: $url');
-      print('token exists: ${token != null && token.isNotEmpty}');
 
       final res = await http.post(
         url,
@@ -791,25 +797,16 @@ class _BookedAppointmentsUpcomingState
         },
       );
 
-      print('statusCode: ${res.statusCode}');
-      print('response body: ${res.body}');
-      print('=== JOIN DEBUG END ===');
-
       if (res.statusCode < 200 || res.statusCode >= 300) {
-        throw Exception('Join failed (${res.statusCode}): ${res.body}');
+        throw Exception('Join failed: ${res.body}');
       }
 
       final data = JoinMeetingResponseDto.fromJson(jsonDecode(res.body));
 
-      print('Agora Data:');
-      print('appId: ${data.appId}');
-      print('channelName: ${data.channelName}');
-      print('token: ${data.token}');
-      print('uid: ${data.uid}');
-      print('CURRENT USER ID: ${AuthSession.instance.userId}');
       if (!mounted) return;
 
-      Navigator.push(
+      _pauseLiveUpdates();
+      await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => AgoraCallPage(
@@ -818,17 +815,26 @@ class _BookedAppointmentsUpcomingState
             token: data.token,
             uid: data.uid,
             appointmentId: data.appointmentId,
+            endTime: endTime,
           ),
         ),
       );
-    } catch (e) {
-      print('JOIN ERROR: $e');
 
       if (!mounted) return;
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('فشل الدخول إلى الجلسة: $e')));
+      _prepareSessionAndLoad();
+    } catch (e) {
+      print('JOIN ERROR: $e');
     }
+  }
+
+  void _pauseLiveUpdates() {
+    _ticker?.cancel();
+    _subscription?.cancel();
+    _accountListener?.cancel();
+
+    for (final sub in _doctorListeners.values) {
+      sub.cancel();
+    }
+    _doctorListeners.clear();
   }
 }

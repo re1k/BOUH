@@ -513,4 +513,16 @@ public class AppointmentRepo {
 
         appointmentRef.update(updates);
     }
+    public void markAsPresent(String appointmentId) {
+    if (appointmentId == null || appointmentId.isBlank()) {
+        throw new IllegalArgumentException("appointmentId is required");
+    }
+
+    DocumentReference appointmentRef = firestore.collection(COLLECTION).document(appointmentId);
+
+    Map<String, Object> updates = new HashMap<>();
+    updates.put("status", 1);
+
+    appointmentRef.update(updates);
+}
 }

@@ -281,7 +281,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
 
     if (showJoin) {
       buttonType = AppointmentButtonType.start;
-      onActionTap = () => _joinAgoraMeeting(dto.appointmentId);
+      onActionTap = () => _joinAgoraMeeting(dto);
     } else if (canCancel) {
       buttonType = AppointmentButtonType.cancel;
 
@@ -481,12 +481,22 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
     return now.isBefore(cancelDeadline);
   }
 
-  Future<void> _joinAgoraMeeting(String appointmentId) async {
+  Future<void> _joinAgoraMeeting(UpcomingAppointmentDto dto) async {
     try {
+      final endTime = AppointmentsService.parseAppointmentTime(
+        dto.date,
+        dto.endTime,
+      );
+
+      if (endTime == null) {
+        print('❌ endTime is null');
+        return;
+      }
+
       final token = AuthSession.instance.idToken;
 
       final url = Uri.parse(
-        '${ApiConfig.baseUrl}/api/appointments/join/$appointmentId',
+        '${ApiConfig.baseUrl}/api/appointments/join/${dto.appointmentId}',
       );
 
       final res = await http.post(
@@ -502,15 +512,12 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
       }
 
       final data = JoinMeetingResponseDto.fromJson(jsonDecode(res.body));
-print('=== JOIN RESPONSE FRONTEND ===');
-print('appointmentId: ${data.appointmentId}');
-print('channelName: ${data.channelName}');
-print('uid: ${data.uid}');
-print('token: ${data.token}');
-print('appId: ${data.appId}');
+
       if (!mounted) return;
 
-      Navigator.push(
+      _pauseLiveUpdates();
+
+      await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => AgoraCallPage(
@@ -519,12 +526,21 @@ print('appId: ${data.appId}');
             token: data.token,
             uid: data.uid,
             appointmentId: data.appointmentId,
+            endTime: endTime,
           ),
         ),
       );
+
+      if (!mounted) return;
+      _prepareSessionAndLoad();
     } catch (e) {
       print('JOIN ERROR: $e');
     }
+  }
+
+  void _pauseLiveUpdates() {
+    _ticker?.cancel();
+    _subscription?.cancel();
   }
 }
 

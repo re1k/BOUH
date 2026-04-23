@@ -112,9 +112,7 @@ class DoctorHomePageState extends State<DoctorHomePage>
         final next = _normalizePhotoUrl(photoUrl);
 
         // Prevent stale cached avatar after delete/change.
-        if (previous != null &&
-            previous.isNotEmpty &&
-            previous != next) {
+        if (previous != null && previous.isNotEmpty && previous != next) {
           NetworkImage(previous).evict();
         }
         _headerDoctorPhotoUrl = next;
@@ -348,7 +346,7 @@ class DoctorHomePageState extends State<DoctorHomePage>
 
     if (showJoin) {
       buttonType = AppointmentButtonType.start;
-      onActionTap = () => _joinAgoraMeeting(dto.appointmentId);
+      onActionTap = () => _joinAgoraMeeting(dto);
     } else if (canCancel) {
       buttonType = AppointmentButtonType.cancel;
 
@@ -693,12 +691,22 @@ class DoctorHomePageState extends State<DoctorHomePage>
     );
   }
 
-  Future<void> _joinAgoraMeeting(String appointmentId) async {
+  Future<void> _joinAgoraMeeting(UpcomingAppointmentDto dto) async {
     try {
+      final endTime = AppointmentsService.parseAppointmentTime(
+        dto.date,
+        dto.endTime,
+      );
+
+      if (endTime == null) {
+        print('❌ endTime is null');
+        return;
+      }
+
       final token = AuthSession.instance.idToken;
 
       final url = Uri.parse(
-        '${ApiConfig.baseUrl}/api/appointments/join/$appointmentId',
+        '${ApiConfig.baseUrl}/api/appointments/join/${dto.appointmentId}',
       );
 
       final res = await http.post(
@@ -717,7 +725,8 @@ class DoctorHomePageState extends State<DoctorHomePage>
 
       if (!mounted) return;
 
-      Navigator.push(
+      _pauseLiveUpdates();
+      await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => AgoraCallPage(
@@ -725,16 +734,22 @@ class DoctorHomePageState extends State<DoctorHomePage>
             channelName: data.channelName,
             token: data.token,
             uid: data.uid,
-            appointmentId: appointmentId,
+            appointmentId: data.appointmentId,
+            endTime: endTime,
           ),
         ),
       );
+
+      // بعد الرجوع من الميتنق رجع التحميل
+      _prepareSessionAndLoad();
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('فشل الدخول للجلسة: $e')));
+      print('JOIN ERROR: $e');
     }
+  }
+
+  void _pauseLiveUpdates() {
+    _ticker?.cancel();
+    _subscription?.cancel();
   }
 }
 
@@ -818,5 +833,5 @@ class _RatingStars extends StatelessWidget {
     );
   }
 }
-// _StarClipper no longer needed (ShaderMask handles fractional fill).
 
+// _StarClipper no longer needed (ShaderMask handles fractional fill).

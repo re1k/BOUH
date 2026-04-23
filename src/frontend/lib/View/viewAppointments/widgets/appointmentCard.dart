@@ -73,7 +73,7 @@ class AppointmentCard extends StatelessWidget {
   static const double _cardBorderWidth = 1.5;
   static const double _avatarSize = 52;
   static const double _avatarOffsetY = 6;
-  static const double _joinButtonWidth = 84;
+  static const double _joinButtonWidth = 70;
   static const double _joinButtonHeight = 20;
   static const double _chipRight = 20;
 

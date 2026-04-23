@@ -68,6 +68,7 @@ if (appointment != null) {
         if (now.isBefore(start) || !now.isBefore(end)) {
             throw new IllegalStateException("الدخول متاح فقط أثناء وقت الموعد");
         }
+appointmentRepo.markAsPresent(appointmentId);
 
         String channelName = "appointment_" + appointmentId;
         int uid = Math.abs(firebaseDocUID.hashCode());
