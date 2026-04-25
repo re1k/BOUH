@@ -88,7 +88,6 @@ class DoctorHomePageState extends State<DoctorHomePage>
   /// Call when home nav is tapped to refresh today's appointments.
   void refresh() {
     refreshAppointmentsOnly();
-    refreshHeaderFromBackend();
   }
 
   /// Lightweight refresh for home tab taps: updates appointments only.
@@ -575,6 +574,7 @@ class DoctorHomePageState extends State<DoctorHomePage>
                         width: 56,
                         height: 56,
                         fit: BoxFit.cover,
+                        gaplessPlayback: true,
                         errorBuilder: (_, __, ___) => Image.asset(
                           'assets/images/default_ProfileImage.png',
                           width: 56,

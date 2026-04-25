@@ -22,7 +22,7 @@ class CaregiverAccountView extends StatefulWidget {
   final int currentIndex;
   final ValueChanged<int>? onTap;
 
-  /// Called after name is loaded or saved so the home greeting can refresh.
+  //Called after name is loaded or saved so the home greeting can refresh.
   final VoidCallback? onCaregiverNameSynced;
 
   @override
@@ -41,7 +41,6 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
   final TextEditingController _nameCtrl = TextEditingController();
   String _name = '';
   String _email = '';
-  bool _isEditingName = false;
   bool _loadingProfile = true;
   bool _savingName = false;
   String? _deleteError;
@@ -97,33 +96,17 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
                         const SizedBox(height: 20),
                         _settingsCard(
                           children: [
-                            _sectionFieldItem(
-                              label: 'البريد الالكتروني',
-                              child: _field(
-                                text: _email.isEmpty ? '—' : _email,
-                                textColor: BColors.darkGrey,
-                                backgroundColor: const Color(0xFFF5F5F5),
-                              ),
-                            ),
-                            _sectionFieldItem(
-                              label: 'الاسم',
-                              child: _editableNameField(),
+                            _settingsItem(
+                              title: 'المعلومات الشخصية',
+                              titleColor: BColors.textDarkestBlue,
+                              icon: Icons.person_outline_rounded,
+                              iconColor: BColors.primary,
+                              showChevron: true,
+                              onTap: () => _openPersonalInfoPage(context),
                             ),
                             _childrenManagementItem(context),
                           ],
                         ),
-                        if (_nameError != null) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            _nameError!,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: BColors.validationError,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
                         if (_profileError != null) ...[
                           const SizedBox(height: 8),
                           Text(
@@ -142,17 +125,10 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
                           children: [
                             _settingsItem(
                               title: 'تسجيل الخروج',
-                              titleColor: BColors.textDarkestBlue,
-                              icon: Icons.logout,
-                              iconColor: BColors.primary,
-                              onTap: () => _handleLogout(context),
-                            ),
-                            _settingsItem(
-                              title: 'حذف الحساب',
                               titleColor: BColors.validationError,
-                              icon: Icons.delete_outline,
+                              icon: Icons.logout,
                               iconColor: BColors.validationError,
-                              onTap: () => _handleDeleteAccount(context),
+                              onTap: () => _handleLogout(context),
                             ),
                           ],
                         ),
@@ -169,7 +145,7 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
                           ),
                         ],
 
-                        const SizedBox(height: 150),
+                        const SizedBox(height: 250),
                       ],
                     ),
                   ),
@@ -246,6 +222,224 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
         _deleteError = 'تعذر حذف الحساب. حاول مرة أخرى.';
       });
     }
+  }
+
+  Future<void> _openPersonalInfoPage(BuildContext context) async {
+    setState(() {
+      _nameError = null;
+      _nameCtrl.text = _name;
+    });
+    var pageEditingName = false;
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => StatefulBuilder(
+          builder: (context, setPage) => Directionality(
+            textDirection: TextDirection.rtl,
+            child: Scaffold(
+              backgroundColor: Colors.white,
+              appBar: AppBar(
+                backgroundColor: Colors.white,
+                elevation: 0,
+                surfaceTintColor: Colors.transparent,
+                leading: IconButton(
+                  icon: const Icon(
+                    Icons.arrow_back_ios_new_rounded,
+                    size: 20,
+                    color: BColors.textDarkestBlue,
+                  ),
+                  onPressed: () async {
+                    FocusManager.instance.primaryFocus?.unfocus();
+                    await Future.delayed(const Duration(milliseconds: 160));
+                    if (!context.mounted) return;
+                    setState(() {
+                      _nameError = null;
+                      _nameCtrl.text = _name;
+                    });
+                    Navigator.of(context).pop();
+                  },
+                ),
+                title: const Text(
+                  'المعلومات الشخصية',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: BColors.textDarkestBlue,
+                  ),
+                ),
+                centerTitle: true,
+              ),
+              body: SafeArea(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(22, 10, 22, 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _sectionFieldItem(
+                        label: 'البريد الالكتروني',
+                        child: _field(
+                          text: _email.isEmpty ? '—' : _email,
+                          textColor: BColors.darkGrey,
+                          backgroundColor: const Color(0xFFF5F5F5),
+                        ),
+                      ),
+                      _sectionFieldItem(
+                        label: 'الاسم',
+                        child: Container(
+                          height: _kControlHeight,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(_kControlRadius),
+                            border: Border.all(color: Colors.black.withOpacity(0.1)),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: _nameCtrl,
+                                  readOnly: !pageEditingName || _savingName,
+                                  textAlign: TextAlign.right,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.black,
+                                  ),
+                                  decoration: const InputDecoration(
+                                    isDense: true,
+                                    border: InputBorder.none,
+                                    hintText: '—',
+                                  ),
+                                  onChanged: (_) {
+                                    setState(() {
+                                      if (_nameError != null) _nameError = null;
+                                    });
+                                    setPage(() {});
+                                  },
+                                ),
+                              ),
+                              if (pageEditingName) ...[
+                                if (_savingName)
+                                  const Padding(
+                                    padding: EdgeInsets.symmetric(horizontal: 8),
+                                    child: BouhOvalLoadingIndicator(
+                                      width: 30,
+                                      height: 20,
+                                      strokeWidth: 2.5,
+                                    ),
+                                  )
+                                else ...[
+                                  IconButton(
+                                    onPressed: !_hasNameChanged
+                                        ? null
+                                        : () async {
+                                            await _saveNameInline();
+                                            if (!mounted) return;
+                                            if (_nameError == null) {
+                                              pageEditingName = false;
+                                            }
+                                            setPage(() {});
+                                          },
+                                    icon: Icon(
+                                      Icons.check,
+                                      color: _hasNameChanged
+                                          ? BColors.primary
+                                          : BColors.grey,
+                                    ),
+                                  ),
+                                  IconButton(
+                                    onPressed: () {
+                                      setState(() {
+                                        _nameError = null;
+                                        _nameCtrl.text = _name;
+                                      });
+                                      pageEditingName = false;
+                                      setPage(() {});
+                                    },
+                                    icon: const Icon(Icons.close, color: Colors.grey),
+                                  ),
+                                ],
+                              ] else
+                                _editIcon(
+                                  onTap: () {
+                                    pageEditingName = true;
+                                    setState(() {
+                                      _nameError = null;
+                                      _nameCtrl.text = _name;
+                                    });
+                                    setPage(() {});
+                                  },
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      if (_nameError != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          _nameError!,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: BColors.validationError,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                      if (_deleteError != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          _deleteError!,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: BColors.validationError,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              bottomNavigationBar: SafeArea(
+                minimum: const EdgeInsets.fromLTRB(22, 0, 22, 28),
+                child: SizedBox(
+                  height: 46,
+                  child: ElevatedButton.icon(
+                    onPressed: _isDeletingAccount
+                        ? null
+                        : () => _handleDeleteAccount(context),
+                    style: ElevatedButton.styleFrom(
+                      elevation: 0,
+                      backgroundColor: BColors.destructiveError,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    icon: const Icon(Icons.delete_outline_rounded),
+                    label: const Text(
+                      'حذف الحساب',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (!mounted) return;
+    setState(() {
+      _nameError = null;
+      _nameCtrl.text = _name;
+    });
   }
 
   Uri _url(String path) => Uri.parse('${ApiConfig.baseUrl}$path');
@@ -329,7 +523,6 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
       return;
     }
     if (candidate == _name) {
-      setState(() => _isEditingName = false);
       return;
     }
 
@@ -360,7 +553,6 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
       if (!mounted) return;
       setState(() {
         _name = candidate;
-        _isEditingName = false;
       });
       await AuthSession.instance.updateCachedUserName(candidate);
       if (!mounted) return;
@@ -435,83 +627,6 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
     );
   }
 
-  Widget _editableNameField() {
-    return Container(
-      height: _kControlHeight,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(_kControlRadius),
-        border: Border.all(color: Colors.black.withOpacity(0.1)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: _nameCtrl,
-              readOnly: !_isEditingName || _savingName,
-              textAlign: TextAlign.right,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Colors.black,
-              ),
-              decoration: const InputDecoration(
-                isDense: true,
-                border: InputBorder.none,
-                hintText: '—',
-              ),
-              onChanged: (_) {
-                setState(() {
-                  if (_nameError != null) _nameError = null;
-                });
-              },
-            ),
-          ),
-          if (_isEditingName) ...[
-            if (_savingName)
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 8),
-                child: BouhOvalLoadingIndicator(
-                  width: 30,
-                  height: 20,
-                  strokeWidth: 2.5,
-                ),
-              )
-            else ...[
-              IconButton(
-                onPressed: !_hasNameChanged ? null : _saveNameInline,
-                icon: Icon(
-                  Icons.check,
-                  color: _hasNameChanged ? BColors.primary : BColors.grey,
-                ),
-              ),
-              IconButton(
-                onPressed: () {
-                  setState(() {
-                    _isEditingName = false;
-                    _nameError = null;
-                    _nameCtrl.text = _name;
-                  });
-                },
-                icon: const Icon(Icons.close, color: Colors.grey),
-              ),
-            ],
-          ] else
-            _editIcon(
-              onTap: () {
-                setState(() {
-                  _isEditingName = true;
-                  _nameError = null;
-                  _nameCtrl.text = _name;
-                });
-              },
-            ),
-        ],
-      ),
-    );
-  }
-
   Widget _settingsCard({required List<Widget> children}) {
     return Container(
       decoration: BoxDecoration(
@@ -544,6 +659,7 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
     required IconData icon,
     required Color iconColor,
     required VoidCallback onTap,
+    bool showChevron = false,
   }) {
     return Material(
       color: Colors.transparent,
@@ -565,6 +681,13 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
                     color: titleColor,
                   ),
                 ),
+                const Spacer(),
+                if (showChevron)
+                  const Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    size: 18,
+                    color: BColors.primary,
+                  ),
               ],
             ),
           ),
@@ -603,7 +726,7 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
           );
         },
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
           child: SizedBox(
             height: _kControlHeight,
             child: Row(

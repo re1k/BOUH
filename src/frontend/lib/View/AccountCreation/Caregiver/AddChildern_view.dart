@@ -335,15 +335,9 @@ class _CaregiverAccountCreationStep2State
                                     ),
                                   ),
 
-                                const Align(
+                                Align(
                                   alignment: Alignment.centerRight,
-                                  child: Text(
-                                    'اسم الطفل *',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: BColors.darkGrey,
-                                    ),
-                                  ),
+                                  child: _requiredFieldLabel('اسم الطفل'),
                                 ),
                                 const SizedBox(height: 8),
                                 TextField(
@@ -355,15 +349,9 @@ class _CaregiverAccountCreationStep2State
                                 ),
                                 const SizedBox(height: 14),
 
-                                const Align(
+                                Align(
                                   alignment: Alignment.centerRight,
-                                  child: Text(
-                                    'جنس الطفل *',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: BColors.darkGrey,
-                                    ),
-                                  ),
+                                  child: _requiredFieldLabel('جنس الطفل'),
                                 ),
                                 const SizedBox(height: 8),
                                 _GenderSegment(
@@ -373,15 +361,9 @@ class _CaregiverAccountCreationStep2State
                                 ),
                                 const SizedBox(height: 14),
 
-                                const Align(
+                                Align(
                                   alignment: Alignment.centerRight,
-                                  child: Text(
-                                    'تاريخ الميلاد *',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: BColors.darkGrey,
-                                    ),
-                                  ),
+                                  child: _requiredFieldLabel('تاريخ الميلاد'),
                                 ),
                                 const SizedBox(height: 8),
 
@@ -604,6 +586,24 @@ class _GenderSegment extends StatelessWidget {
       ),
     );
   }
+}
+
+Widget _requiredFieldLabel(String label) {
+  return RichText(
+    text: TextSpan(
+      style: const TextStyle(
+        fontSize: 13,
+        color: BColors.darkGrey,
+      ),
+      children: [
+        TextSpan(text: label),
+        const TextSpan(
+          text: ' *',
+          style: TextStyle(color: BColors.validationError),
+        ),
+      ],
+    ),
+  );
 }
 
 class _SegButton extends StatelessWidget {

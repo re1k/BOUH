@@ -336,7 +336,18 @@ class _CaregiverSignupViewState extends State<CaregiverSignupView> {
                           validator: (v) =>
                               _nameTouched ? _validateName(v) : null,
                           textInputAction: TextInputAction.next,
-                          onChanged: (_) => setState(() {}),
+                          onChanged: (_) {
+                            if (_confirmPasswordCtrl.text.isNotEmpty) {
+                              _confirmPasswordTouched = true;
+                            }
+                            if (_passwordTouched) {
+                              _passwordFieldKey.currentState?.validate();
+                            }
+                            if (_confirmPasswordTouched) {
+                              _confirmPasswordFieldKey.currentState?.validate();
+                            }
+                            setState(() {});
+                          },
                         ),
                         const SizedBox(height: 14),
 
@@ -352,7 +363,15 @@ class _CaregiverSignupViewState extends State<CaregiverSignupView> {
                           validator: (v) =>
                               _emailTouched ? _validateEmail(v) : null,
                           textInputAction: TextInputAction.next,
-                          onChanged: (_) => setState(() {}),
+                          onChanged: (_) {
+                            if (_confirmPasswordCtrl.text.isNotEmpty) {
+                              _confirmPasswordTouched = true;
+                            }
+                            if (_confirmPasswordTouched) {
+                              _confirmPasswordFieldKey.currentState?.validate();
+                            }
+                            setState(() {});
+                          },
                         ),
                         const SizedBox(height: 14),
 
