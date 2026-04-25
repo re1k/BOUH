@@ -21,7 +21,7 @@ String? validateStrongPassword(String? value) {
   }
   final specialChar = RegExp(r'[!@#$%^&*()_+\-=\[\]{}|;:",./<>?`~\\]');
   if (!value.contains(specialChar)) {
-    return 'يجب أن تحتوي كلمة المرور على رمز خاص واحد على الأقل (مثل !@#\$%)';
+    return 'يجب أن تحتوي كلمة المرور على رمز خاص واحد على الأقل';
   }
   return null;
 }

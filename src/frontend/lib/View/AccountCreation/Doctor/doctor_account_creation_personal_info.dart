@@ -61,6 +61,15 @@ class _DoctorAccountCreationStep1State
         nameUserPart.isNotEmpty;
   }
 
+  bool get _isFormValidForNext {
+    if (!_isFormComplete) return false;
+    final emailOk = _validateEmail(_emailCtrl.text) == null;
+    final passOk = _validatePassword(_passCtrl.text) == null;
+    final confirmOk = _validateConfirmPassword(_confirmCtrl.text) == null;
+    final nameOk = _validateName(_nameCtrl.text) == null;
+    return emailOk && passOk && confirmOk && nameOk;
+  }
+
   static const String _namePrefix = 'د. ';
 
   @override
@@ -396,7 +405,18 @@ class _DoctorAccountCreationStep1State
                           fieldKey: _emailFieldKey,
                           validator: (v) =>
                               _emailTouched ? _validateEmail(v) : null,
-                          onChanged: (_) => setState(() {}),
+                          onChanged: (_) {
+                            if (_confirmCtrl.text.isNotEmpty) {
+                              _confirmTouched = true;
+                            }
+                            if (_passwordTouched) {
+                              _passwordFieldKey.currentState?.validate();
+                            }
+                            if (_confirmTouched) {
+                              _confirmPasswordFieldKey.currentState?.validate();
+                            }
+                            setState(() {});
+                          },
                         ),
                         const SizedBox(height: 14),
 
@@ -423,7 +443,15 @@ class _DoctorAccountCreationStep1State
                           fieldKey: _passwordFieldKey,
                           validator: (v) =>
                               _passwordTouched ? _validatePassword(v) : null,
-                          onChanged: (_) => setState(() {}),
+                          onChanged: (_) {
+                            if (_confirmCtrl.text.isNotEmpty) {
+                              _confirmTouched = true;
+                            }
+                            if (_confirmTouched) {
+                              _confirmPasswordFieldKey.currentState?.validate();
+                            }
+                            setState(() {});
+                          },
                         ),
                         const SizedBox(height: 8),
                         PasswordStrengthWidget(password: _passCtrl.text),
@@ -539,7 +567,7 @@ class _DoctorAccountCreationStep1State
                           width: double.infinity,
                           height: 50,
                           child: ElevatedButton(
-                            onPressed: _isFormComplete
+                            onPressed: _isFormValidForNext
                                 ? () => _handleNext()
                                 : null,
                             style: ElevatedButton.styleFrom(

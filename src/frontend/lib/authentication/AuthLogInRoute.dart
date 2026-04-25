@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:bouh/View/HomePage/doctorNavbar.dart';
 import 'package:bouh/View/Login/login_view.dart';
-import 'package:bouh/View/WelcomePage/welcomePage_view.dart';
 import 'package:bouh/View/caregiverHomepage/caregivernavbar.dart';
 import 'package:bouh/authentication/AuthService.dart';
 import 'package:bouh/widgets/loading_overlay.dart';
@@ -61,7 +60,7 @@ class _LoginResolverViewState extends State<LoginResolverView> {
         break;
       default:
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const AccountTypeView()),
+          MaterialPageRoute(builder: (_) => const LoginView()),
         );
     }
   }

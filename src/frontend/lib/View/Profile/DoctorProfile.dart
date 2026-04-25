@@ -504,7 +504,10 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
     );
   }
 
-  Future<void> _loadProfile({bool silent = false}) async {
+  Future<void> _loadProfile({
+    bool silent = false,
+    bool updateAvatar = true,
+  }) async {
     if (!silent) {
       setState(() {
         _loadingProfile = true;
@@ -524,7 +527,9 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
         final g = (p.gender ?? '').toLowerCase();
         _gender = (g == 'female' || g == 'f' || g == 'أنثى') ? 'female' : 'male';
         _yearsOfExperience = p.yearsOfExperience;
-        _photoUrl = _normalizePhotoUrl(p.profilePhotoURL);
+        if (updateAvatar) {
+          _photoUrl = _normalizePhotoUrl(p.profilePhotoURL);
+        }
         if (!silent) _pickedImageFile = null;
         if (!silent) _loadingProfile = false;
       });
@@ -759,9 +764,10 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
     setState(() => _saveError = null);
     var pageGender = _gender;
     var personalEditing = false;
-    final originalName = '$_doctorNameHonorificPrefix${_nameCtrl.text.trim()}';
-    final originalIban = _ibanReadOnlyDisplay().trim();
-    final originalGender = _gender.trim().toLowerCase();
+    var baselineNameBody = _nameCtrl.text.trim();
+    var baselineIbanSuffix = _ibanCtrl.text.trim();
+    var baselineGender = _gender.trim().toLowerCase();
+    var personalSaved = false;
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (routeCtx) {
@@ -781,10 +787,9 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
                   !_loadingProfile &&
                   nameError == null &&
                   ibanError == null &&
-                  ('$_doctorNameHonorificPrefix${_nameCtrl.text.trim()}' !=
-                          originalName ||
-                      _ibanReadOnlyDisplay().trim() != originalIban ||
-                      pageGender.trim().toLowerCase() != originalGender);
+                  (_nameCtrl.text.trim() != baselineNameBody ||
+                      _ibanCtrl.text.trim() != baselineIbanSuffix ||
+                      pageGender.trim().toLowerCase() != baselineGender);
               return Directionality(
                 textDirection: TextDirection.rtl,
                 child: Scaffold(
@@ -921,17 +926,32 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
                                           onPressed: !canSavePersonal
                                               ? null
                                               : () async {
+                                                  setPage(() {});
                                                   setState(
                                                     () =>
                                                         _gender = pageGender,
                                                   );
                                                   await _savePersonal(
-                                                    originalName: originalName,
-                                                    originalIban: originalIban,
+                                                    originalName:
+                                                        '$_doctorNameHonorificPrefix$baselineNameBody',
+                                                    originalIban:
+                                                        _fullIbanFromSuffix(
+                                                          baselineIbanSuffix,
+                                                        ),
                                                     originalGender:
-                                                        originalGender,
+                                                        baselineGender,
                                                   );
                                                   if (_saveError == null) {
+                                                    baselineNameBody = _nameCtrl
+                                                        .text
+                                                        .trim();
+                                                    baselineIbanSuffix = _ibanCtrl
+                                                        .text
+                                                        .trim();
+                                                    baselineGender = _gender
+                                                        .trim()
+                                                        .toLowerCase();
+                                                    personalSaved = true;
                                                     personalEditing = false;
                                                   }
                                                   setPage(() {});
@@ -974,15 +994,14 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
                                           onPressed: _saving || _loadingProfile
                                               ? null
                                               : () async {
-                                                  setState(
-                                                    () => _saveError = null,
-                                                  );
-                                                  await _loadProfile(
-                                                    silent: true,
-                                                  );
-                                                  if (!routeCtx.mounted) {
-                                                    return;
-                                                  }
+                                                  setState(() {
+                                                    _saveError = null;
+                                                    _nameCtrl.text =
+                                                        baselineNameBody;
+                                                    _ibanCtrl.text =
+                                                        baselineIbanSuffix;
+                                                    _gender = baselineGender;
+                                                  });
                                                   pageGender = _gender;
                                                   personalEditing = false;
                                                   setPage(() {});
@@ -1017,6 +1036,36 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
                       ),
                     ],
                   ),
+                  bottomNavigationBar: SafeArea(
+                    minimum: const EdgeInsets.fromLTRB(22, 0, 22, 28),
+                    child: SizedBox(
+                      height: 46,
+                      child: ElevatedButton.icon(
+                        onPressed: _isDeletingAccount
+                            ? null
+                            : () => _handleDeleteAccount(),
+                        style: ElevatedButton.styleFrom(
+                          elevation: 0,
+                          backgroundColor: BColors.destructiveError,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        icon: const Icon(
+                          Icons.delete_outline_rounded,
+                          size: 18,
+                        ),
+                        label: const Text(
+                          'حذف الحساب',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               );
             },
@@ -1024,14 +1073,24 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
         },
       ),
     );
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    if (!personalSaved) {
+      setState(() {
+        _saveError = null;
+        _nameCtrl.text = baselineNameBody;
+        _ibanCtrl.text = baselineIbanSuffix;
+        _gender = baselineGender;
+      });
+    }
   }
 
   Future<void> _openProfessionalInfoPage() async {
     setState(() => _saveError = null);
     var professionalEditing = false;
-    final originalQuals = _qualificationsForSubmit().join('\n');
-    final originalYears = _yearsOfExperience;
+    var baselineQualsList = List<String>.from(_qualificationsForSubmit());
+    var baselineQuals = baselineQualsList.join('\n');
+    var baselineYears = _yearsOfExperience;
+    var professionalSaved = false;
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (routeCtx) {
@@ -1053,8 +1112,8 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
                   !_loadingProfile &&
                   qualificationsError == null &&
                   yearsError == null &&
-                  (_qualificationsForSubmit().join('\n') != originalQuals ||
-                      _yearsOfExperience != originalYears);
+                  (_qualificationsForSubmit().join('\n') != baselineQuals ||
+                      _yearsOfExperience != baselineYears);
               return Directionality(
                 textDirection: TextDirection.rtl,
                 child: Scaffold(
@@ -1091,6 +1150,15 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
                             child: InkWell(
                               customBorder: const CircleBorder(),
                               onTap: () {
+                                if (professionalEditing) {
+                                  setState(() {
+                                    _replaceQualificationEditors(
+                                      baselineQualsList,
+                                    );
+                                    _yearsOfExperience = baselineYears;
+                                    _saveError = null;
+                                  });
+                                }
                                 professionalEditing = !professionalEditing;
                                 setPage(() {});
                               },
@@ -1220,13 +1288,25 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
                                           onPressed: !canSaveProfessional
                                               ? null
                                               : () async {
+                                                      setPage(() {});
                                                       await _saveProfessional(
                                                         originalQualsJoined:
-                                                            originalQuals,
+                                                            baselineQuals,
                                                         originalYears:
-                                                            originalYears,
+                                                            baselineYears,
                                                       );
                                                       if (_saveError == null) {
+                                                        baselineQualsList =
+                                                            List<String>.from(
+                                                              _qualificationsForSubmit(),
+                                                            );
+                                                        baselineQuals =
+                                                            baselineQualsList
+                                                                .join('\n');
+                                                        baselineYears =
+                                                            _yearsOfExperience;
+                                                        professionalSaved =
+                                                            true;
                                                         professionalEditing =
                                                             false;
                                                       }
@@ -1273,15 +1353,15 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
                                                   ? null
                                                   : () async {
                                                       setState(
-                                                        () =>
-                                                            _saveError = null,
+                                                        () {
+                                                            _replaceQualificationEditors(
+                                                              baselineQualsList,
+                                                            );
+                                                            _yearsOfExperience =
+                                                                baselineYears;
+                                                            _saveError = null;
+                                                          },
                                                       );
-                                                      await _loadProfile(
-                                                        silent: true,
-                                                      );
-                                                      if (!routeCtx.mounted) {
-                                                        return;
-                                                      }
                                                       professionalEditing =
                                                           false;
                                                       setPage(() {});
@@ -1323,7 +1403,14 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
         },
       ),
     );
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    if (!professionalSaved) {
+      setState(() {
+        _replaceQualificationEditors(baselineQualsList);
+        _yearsOfExperience = baselineYears;
+        _saveError = null;
+      });
+    }
   }
 
   Widget _settingsMenuTile({
@@ -1654,6 +1741,7 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
           width: size,
           height: size,
           fit: BoxFit.cover,
+          gaplessPlayback: true,
           errorBuilder: (_, __, ___) => Image.asset(
             _defaultAvatarAsset,
             width: size,
@@ -1858,17 +1946,9 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
                           _settingsMenuTile(
                             icon: Icons.logout_rounded,
                             title: 'تسجيل الخروج',
-                            showChevron: false,
-                            onTap: () => _confirmAndLogout(),
-                          ),
-                          _settingsMenuTile(
-                            icon: Icons.delete_outline_rounded,
-                            title: 'حذف الحساب',
                             danger: true,
                             showChevron: false,
-                            onTap: _isDeletingAccount
-                                ? () {}
-                                : () => _handleDeleteAccount(),
+                            onTap: () => _confirmAndLogout(),
                           ),
                         ],
                       ),
