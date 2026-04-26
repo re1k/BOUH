@@ -5,7 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Repository;
-
+import com.google.cloud.Timestamp;
 import com.bouh.backend.model.Dto.profiles.caregiverProfileResponseDto;
 import com.bouh.backend.model.Dto.profiles.doctorProfileResponseDto;
 import com.bouh.backend.model.Dto.profiles.doctorUpdateDto;
@@ -64,9 +64,13 @@ public class ProfilesRepo {
 
             String oldImagePath = snapshot.getString("profilePhotoURL");
             String newImagePath = dto.getProfilePhotoURL();
-            String finalImagePath = handleProfileImage(oldImagePath, newImagePath);
-
+            
             if (dto.getProfilePhotoURL() != null) {
+
+                String finalImagePath = handleProfileImage(
+                        oldImagePath,
+                        newImagePath);
+
                 updates.put("profilePhotoURL", finalImagePath);
             }
 
@@ -75,19 +79,28 @@ public class ProfilesRepo {
             putIfNotNull(updates, "yearsOfExperience", dto.getYearsOfExperience());
             putIfNotNull(updates, "iban", dto.getIban());
 
+            // if (dto.getQualifications() != null) {
+            // updates.put("qualifications", cleanQualifications(dto.getQualifications()));
+            // }
+
             if (dto.getQualifications() != null) {
-                updates.put("qualifications", cleanQualifications(dto.getQualifications()));
+                if (hasPendingRequest(uid)) {
+                    throw new RuntimeException("لديك طلب تعديل مؤهلات قيد المراجعة حالياً.");
+                }
+
+                List<String> cleanedNew = cleanQualifications(dto.getQualifications());
+                List<String> oldQualifications = getQualificationsStringList(snapshot, "qualifications");
+                createQualificationEditRequest(uid, oldQualifications, cleanedNew);
+
+                log.info("[[DTO quals]]: {}", dto.getQualifications());
+                log.info("[[Cleaned quals]]: {}", cleanedNew);
             }
 
-            log.info("[[DTO quals]]: {}", dto.getQualifications());
-            log.info("[[Cleaned quals]]: {}", cleanQualifications(dto.getQualifications()));
-
-            if (updates.isEmpty()) {
-                throw new RuntimeException("No fields to update");
-            }
-
+            if (!updates.isEmpty())
             updateDoctorProfile(uid, updates);
 
+        } catch (RuntimeException e) {
+            throw e;
         } catch (Exception e) {
             throw new RuntimeException("Failed to update doctor", e);
         }
@@ -233,6 +246,42 @@ public class ProfilesRepo {
         } catch (Exception e) {
             log.error("Failed to update caregiver name for uid={}", uid, e);
             throw new RuntimeException("Failed to update caregiver name", e);
+        }
+    }
+
+    /* Creates a new request for qualification changes to be reviewed by an admin */
+    private void createQualificationEditRequest(String doctorId, List<String> oldQualifications,
+            List<String> newQualifications) {
+        try {
+            Map<String, Object> request = new HashMap<>();
+            request.put("doctorId", doctorId);
+            request.put("oldQualifications", oldQualifications);
+            request.put("newQualifications", newQualifications);
+            request.put("createdAt", Timestamp.now());
+
+            firestore.collection("qualificationEditRequests")
+                    .add(request)
+                    .get();
+
+            log.info("Qualification edit request created for doctor={}", doctorId);
+
+        } catch (Exception e) {
+            log.error("Failed to create qualification edit request", e);
+            throw new RuntimeException("Failed to create qualification edit request", e);
+        }
+    }
+
+    private boolean hasPendingRequest(String doctorId) {
+        try {
+            return !firestore.collection("qualificationEditRequests")
+                    .whereEqualTo("doctorId", doctorId)
+                    .get()
+                    .get()
+                    .isEmpty();
+
+        } catch (Exception e) {
+            log.error("Failed to check pending requests for doctor={}", doctorId, e);
+            throw new RuntimeException("Failed to check pending requests", e);
         }
     }
 
