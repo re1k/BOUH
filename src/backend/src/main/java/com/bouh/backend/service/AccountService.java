@@ -122,7 +122,7 @@ public class AccountService {
             return new accountResponseDto(
                     false,
                     "UPDATE_FAILED",
-                    "فشل تحديث بيانات الدكتور");
+                     e.getMessage() != null ? e.getMessage() : "فشل تحديث بيانات الدكتور");
         }
     }
 
