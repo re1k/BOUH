@@ -181,6 +181,21 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
   static bool _isAllowedProfileYearsOfExperience(int? y) =>
       y != null && y >= 1 && y <= 5;
 
+  String _userFriendlyError(Object error) {
+    final raw = error.toString().trim();
+    const prefixes = <String>[
+      'Exception:',
+      'StateError:',
+      'FormatException:',
+    ];
+    for (final prefix in prefixes) {
+      if (raw.startsWith(prefix)) {
+        return raw.substring(prefix.length).trim();
+      }
+    }
+    return raw;
+  }
+
   String? _validateDoctorNameLikeRegistration(String value) {
     final trimmed = value.trim();
     if (trimmed.isEmpty) {
@@ -504,7 +519,7 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
     );
   }
 
-  Future<void> _loadProfile({
+  Future<bool> _loadProfile({
     bool silent = false,
     bool updateAvatar = true,
   }) async {
@@ -516,7 +531,7 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
     }
     try {
       final p = await _profileService.fetchDoctorProfile();
-      if (!mounted) return;
+      if (!mounted) return false;
       _replaceQualificationEditors(p.qualifications);
       setState(() {
         _emailCtrl.text = p.email ?? '';
@@ -533,14 +548,16 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
         if (!silent) _pickedImageFile = null;
         if (!silent) _loadingProfile = false;
       });
+      return true;
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) return false;
       setState(() {
         if (!silent) {
           _loadingProfile = false;
-          _loadError = e.toString();
+          _loadError = _userFriendlyError(e);
         }
       });
+      return false;
     }
   }
 
@@ -696,14 +713,17 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
       if (!result.success) {
         throw Exception(result.message ?? 'فشل تحديث الملف الشخصي');
       }
-      await _loadProfile(silent: true);
+      final refreshed = await _loadProfile(silent: true);
+      if (!refreshed) {
+        throw Exception('تعذر مزامنة البيانات مع الخادم، حاول مرة أخرى');
+      }
       widget.onProfileChanged?.call(
         name: '$_doctorNameHonorificPrefix${_nameCtrl.text.trim()}',
         photoUrl: _photoUrl ?? '',
       );
     } catch (e) {
       if (!mounted) return;
-      setState(() => _saveError = e.toString());
+      setState(() => _saveError = _userFriendlyError(e));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -752,12 +772,57 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
         name: '$_doctorNameHonorificPrefix${_nameCtrl.text.trim()}',
         photoUrl: _photoUrl ?? '',
       );
+      if (qualsChanged) {
+        await _showQualificationsReviewPopup();
+      }
     } catch (e) {
       if (!mounted) return;
-      setState(() => _saveError = e.toString());
+      setState(() => _saveError = _userFriendlyError(e));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  Future<void> _showQualificationsReviewPopup() async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (_) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          backgroundColor: BColors.white,
+          actionsAlignment: MainAxisAlignment.center,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          content: const Text(
+            'تم إرسال طلب تعديل المؤهلات للمراجعة. سيتم إشعارك عند الموافقة وسيتم تحديث بياناتك تلقائيًا.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 15,
+              color: BColors.darkGrey,
+              height: 1.4,
+            ),
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: BColors.primary,
+                foregroundColor: BColors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text(
+                'حسناً',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _openPersonalInfoPage() async {
@@ -1085,12 +1150,15 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
   }
 
   Future<void> _openProfessionalInfoPage() async {
+    // Always refresh from backend before opening this page so qualifications
+    // reflect persisted DB state (not unsaved local edits).
+    await _loadProfile(silent: true);
+    if (!mounted) return;
     setState(() => _saveError = null);
     var professionalEditing = false;
     var baselineQualsList = List<String>.from(_qualificationsForSubmit());
     var baselineQuals = baselineQualsList.join('\n');
     var baselineYears = _yearsOfExperience;
-    var professionalSaved = false;
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (routeCtx) {
@@ -1149,7 +1217,7 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
                             color: Colors.transparent,
                             child: InkWell(
                               customBorder: const CircleBorder(),
-                              onTap: () {
+                              onTap: () async {
                                 if (professionalEditing) {
                                   setState(() {
                                     _replaceQualificationEditors(
@@ -1158,6 +1226,13 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
                                     _yearsOfExperience = baselineYears;
                                     _saveError = null;
                                   });
+                                } else {
+                                  await _refreshProfessionalDraftFromBackend();
+                                  baselineQualsList = List<String>.from(
+                                    _qualificationsForSubmit(),
+                                  );
+                                  baselineQuals = baselineQualsList.join('\n');
+                                  baselineYears = _yearsOfExperience;
                                 }
                                 professionalEditing = !professionalEditing;
                                 setPage(() {});
@@ -1233,6 +1308,22 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
                                 : _viewQualificationsList(
                                     _qualificationsForSubmit(),
                                   ),
+                            const Padding(
+                              padding: EdgeInsets.only(top: 8),
+                              child: Align(
+                                alignment: Alignment.centerRight,
+                                child: Text(
+                                  '* تعديل المؤهلات يتطلب موافقة الإدارة، وسيتم إشعارك عند اعتماد الطلب.',
+                                  textAlign: TextAlign.right,
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    color: BColors.darkGrey,
+                                    fontWeight: FontWeight.w600,
+                                    height: 1.35,
+                                  ),
+                                ),
+                              ),
+                            ),
                             if (professionalEditing &&
                                 qualificationsError != null) ...[
                               const SizedBox(height: 6),
@@ -1296,6 +1387,11 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
                                                             baselineYears,
                                                       );
                                                       if (_saveError == null) {
+                                                        // Force a fresh backend read after submit so displayed
+                                                        // qualifications always reflect persisted DB state.
+                                                        await _loadProfile(
+                                                          silent: true,
+                                                        );
                                                         baselineQualsList =
                                                             List<String>.from(
                                                               _qualificationsForSubmit(),
@@ -1305,8 +1401,6 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
                                                                 .join('\n');
                                                         baselineYears =
                                                             _yearsOfExperience;
-                                                        professionalSaved =
-                                                            true;
                                                         professionalEditing =
                                                             false;
                                                       }
@@ -1404,12 +1498,24 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
       ),
     );
     if (!mounted) return;
-    if (!professionalSaved) {
+    // Always re-sync from backend when leaving this page so the profile keeps
+    // showing persisted values, not any local draft values.
+    await _loadProfile(silent: true);
+    if (!mounted) return;
+    setState(() => _saveError = null);
+  }
+
+  Future<void> _refreshProfessionalDraftFromBackend() async {
+    try {
+      final p = await _profileService.fetchDoctorProfile();
+      if (!mounted) return;
       setState(() {
-        _replaceQualificationEditors(baselineQualsList);
-        _yearsOfExperience = baselineYears;
+        _replaceQualificationEditors(p.qualifications);
+        _yearsOfExperience = p.yearsOfExperience;
         _saveError = null;
       });
+    } catch (_) {
+      // Keep current local values if refresh fails.
     }
   }
 
@@ -1550,7 +1656,7 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
       setState(() => _pickedImageFile = null);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString())),
+          SnackBar(content: Text(_userFriendlyError(e))),
         );
       }
     } finally {
@@ -1594,7 +1700,7 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
+        SnackBar(content: Text(_userFriendlyError(e))),
       );
     } finally {
       if (mounted) setState(() => _saving = false);

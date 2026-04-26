@@ -15,6 +15,7 @@ class DoctorPendingPopup extends StatelessWidget {
       textDirection: TextDirection.rtl,
       child: AlertDialog(
         backgroundColor: BColors.white,
+        actionsAlignment: MainAxisAlignment.center,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text(
           'لا يمكنك تسجيل الدخول حالياً',
