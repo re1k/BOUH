@@ -19,6 +19,7 @@ import 'package:bouh/services/payment/RefundService.dart';
 import 'package:bouh/widgets/confirmation_popup.dart';
 import 'package:bouh/widgets/loading_overlay.dart';
 import 'package:bouh/View/Login/login_view.dart';
+import 'package:bouh/config/slot_config.dart';
 
 /// Booked appointments – upcoming
 ///
@@ -697,10 +698,19 @@ class _BookedAppointmentsUpcomingState
 
   /// Format startTime and endTime for display.
   static String _formatTimeRange(String? start, String? end) {
-    const suffix = 'مساءً';
     final s = start ?? '';
     final e = end ?? '';
     if (s.isEmpty && e.isEmpty) return '';
+
+    // Find which slot matches this start time to get correct AM/PM
+    String suffix = 'مساءً'; // default
+    for (int i = 0; i < SlotConfig.slotCount; i++) {
+      if (SlotConfig.slotStartText(i) == s) {
+        suffix = SlotConfig.amPmSuffix(i);
+        break;
+      }
+    }
+
     if (e.isEmpty) return '$s $suffix';
     return '$s - $e $suffix';
   }

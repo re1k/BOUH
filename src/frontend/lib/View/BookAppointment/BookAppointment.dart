@@ -8,6 +8,7 @@ import 'package:bouh/services/appointmentsService.dart';
 import 'package:bouh/dto/scheduleDto.dart';
 import 'package:bouh/dto/childDto.dart';
 import 'package:bouh/authentication/AuthSession.dart';
+import 'package:bouh/config/slot_config.dart';
 
 class BookingView extends StatefulWidget {
   final String doctorId;
@@ -132,30 +133,9 @@ class _BookingViewState extends State<BookingView> {
     }
   }
 
-  String _slotLabel(int index) {
-    final totalMinutes = index * 30;
-    final hour = 16 + (totalMinutes ~/ 60);
-    final minute = totalMinutes % 60;
+  String _slotLabel(int index) => SlotConfig.slotLabel(index);
 
-    final nextTotal = totalMinutes + 30;
-    final hour2 = 16 + (nextTotal ~/ 60);
-    final minute2 = nextTotal % 60;
-
-    String fmt(int h, int m) {
-      final hh = h > 12 ? h - 12 : h;
-      return "$hh:${m.toString().padLeft(2, '0')}";
-    }
-
-    return "${fmt(hour, minute)} - ${fmt(hour2, minute2)} مساءً";
-  }
-
-  String _slotStartText(int index) {
-    final totalMinutes = index * 30;
-    final hour = 16 + (totalMinutes ~/ 60);
-    final minute = totalMinutes % 60;
-    final hh = hour > 12 ? hour - 12 : hour;
-    return "$hh:${minute.toString().padLeft(2, '0')}";
-  }
+  String _slotStartText(int index) => SlotConfig.slotStartText(index);
 
   Future<bool> _hasConflictBeforeBooking({
     required String caregiverId,
@@ -261,9 +241,7 @@ class _BookingViewState extends State<BookingView> {
 
       if (!isToday) return true;
 
-      final startMinutes = slot.index * 30;
-      final startHour = 16 + (startMinutes ~/ 60);
-      final startMinute = startMinutes % 60;
+      final (startHour, startMinute) = SlotConfig.slotStart(slot.index);
 
       final slotStart = DateTime(
         selectedDay!.year,
@@ -273,10 +251,16 @@ class _BookingViewState extends State<BookingView> {
         startMinute,
       );
 
-      final slotEnd = slotStart.add(const Duration(minutes: 30));
+      final slotEnd = slotStart.add(Duration(minutes: SlotConfig.slotMinutes));
 
       return now.isBefore(slotEnd);
-    }).toList();
+    }).toList()..sort((a, b) {
+      final isMorningA = SlotConfig.isMorningSlot(a.index);
+      final isMorningB = SlotConfig.isMorningSlot(b.index);
+      if (isMorningA && !isMorningB) return -1;
+      if (!isMorningA && isMorningB) return 1;
+      return a.index.compareTo(b.index);
+    });
   }
 
   ChildDto? get selectedChild {

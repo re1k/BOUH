@@ -20,6 +20,8 @@ import java.time.format.DateTimeFormatter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import java.time.LocalTime;
+
 
 @Slf4j
 @Service
@@ -104,8 +106,9 @@ public class RefundService {
         LocalDate today = ZonedDateTime.now(ZONE).toLocalDate();
 
         // Format time, e.g. "5:30 مساءً" 
-        String timeText = appointmentDateTime.toLocalTime().format(DateTimeFormatter.ofPattern("h:mm")) + " مساءً";
-
+        LocalTime appointmentTime = appointmentDateTime.toLocalTime();
+        String amPm = appointmentTime.getHour() < 12 ? "صباحًا" : "مساءً";
+        String timeText = appointmentTime.format(DateTimeFormatter.ofPattern("h:mm")) + " " + amPm;
         // Case A: (Doctor canceled) notify caregiver 
         // Build full label: "يوم الأحد 14 مايو الساعة 5:30 مساءً"
         if (actorUid.equals(doctorId)) {

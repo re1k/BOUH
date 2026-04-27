@@ -21,11 +21,27 @@ public final class TimeSlotConfig {
     public static final int SLOT_MINUTES = 30;
 
     // 5 hours = 300 minutes / 30 = 10 slots
-    public static final int SLOT_COUNT = 10;
+    public static final int AFTERNOON_SLOT_COUNT = 10;
+
+    // Morning test slots for demo
+    public static final boolean MORNING_SLOTS_ENABLED = true; //if we do not want just make it false
+    public static final LocalTime MORNING_START = LocalTime.of(9, 0); //we can change later depending on when is the demo
+    public static final int MORNING_SLOT_COUNT = 2; // 13:00–13:30, 13:30–14:00
+
+    public static final int SLOT_COUNT = AFTERNOON_SLOT_COUNT + 
+        (MORNING_SLOTS_ENABLED ? MORNING_SLOT_COUNT : 0);
 
     private TimeSlotConfig() {}
 
+    public static boolean isMorningSlot(int slotIndex) {
+        return MORNING_SLOTS_ENABLED && slotIndex >= AFTERNOON_SLOT_COUNT; // >= because I will make the morning index 11, 12 and so on after the actual ones we have
+    }
+
     public static LocalTime slotStart(int slotIndex) {
+        if (isMorningSlot(slotIndex)) {
+            int morningIndex = slotIndex - AFTERNOON_SLOT_COUNT;
+            return MORNING_START.plusMinutes((long) morningIndex * SLOT_MINUTES);
+        }
         return START_TIME.plusMinutes((long) slotIndex * SLOT_MINUTES); 
     }
 
