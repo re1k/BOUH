@@ -66,13 +66,17 @@ class _RateDoctorBottomSheetState extends State<RateDoctorBottomSheet> {
       if (!mounted) return;
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تم إرسال التقييم بنجاح')),
+        const SnackBar(
+          content: Text('شكرًا لك، تقييمك يصنع فرقًا!'),
+          backgroundColor: Colors.green,
+        ),
       );
     } catch (e) {
       if (!mounted) return;
       setState(() => _isSubmitting = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('تعذر إرسال التقييم: ${e.toString()}')),
+        SnackBar(content: Text('تعذر إرسال التقييم: ${e.toString()}'),           backgroundColor: Colors.red,
+),
       );
     }
   }

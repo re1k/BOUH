@@ -114,8 +114,8 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
                             textAlign: TextAlign.center,
                             style: const TextStyle(
                               fontSize: 13,
-                              color: BColors.validationError,
-                              fontWeight: FontWeight.w600,
+                              color: Colors.grey,
+                              fontWeight: FontWeight.normal,
                             ),
                           ),
                         ],
@@ -230,13 +230,40 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
       _nameCtrl.text = _name;
     });
     var pageEditingName = false;
+    const discardChangesMessage =
+        'لديك تغييرات غير محفوظة. هل تريد المغادرة؟';
+
+    Future<bool> confirmDiscardIfNeeded() async {
+      final hasUnsavedChanges = pageEditingName && _hasNameChanged;
+      if (!hasUnsavedChanges) return true;
+      return ConfirmationPopup.show(
+        context,
+        title: 'تغييرات غير محفوظة',
+        message: discardChangesMessage,
+        confirmText: 'مغادرة',
+        cancelText: 'بقاء',
+      );
+    }
 
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => StatefulBuilder(
           builder: (context, setPage) => Directionality(
             textDirection: TextDirection.rtl,
-            child: Scaffold(
+            child: WillPopScope(
+              onWillPop: () async {
+                FocusManager.instance.primaryFocus?.unfocus();
+                await Future.delayed(const Duration(milliseconds: 160));
+                if (!context.mounted) return false;
+                final shouldDiscard = await confirmDiscardIfNeeded();
+                if (!shouldDiscard) return false;
+                setState(() {
+                  _nameError = null;
+                  _nameCtrl.text = _name;
+                });
+                return true;
+              },
+              child: Scaffold(
               backgroundColor: Colors.white,
               appBar: AppBar(
                 backgroundColor: Colors.white,
@@ -252,6 +279,8 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
                     FocusManager.instance.primaryFocus?.unfocus();
                     await Future.delayed(const Duration(milliseconds: 160));
                     if (!context.mounted) return;
+                    final shouldDiscard = await confirmDiscardIfNeeded();
+                    if (!shouldDiscard || !context.mounted) return;
                     setState(() {
                       _nameError = null;
                       _nameCtrl.text = _name;
@@ -269,12 +298,14 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
                 ),
                 centerTitle: true,
               ),
-              body: SafeArea(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(22, 10, 22, 24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
+              body: Stack(
+                children: [
+                  SafeArea(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(22, 10, 22, 24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
                       _sectionFieldItem(
                         label: 'البريد الالكتروني',
                         child: _field(
@@ -348,7 +379,10 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
                                     ),
                                   ),
                                   IconButton(
-                                    onPressed: () {
+                                    onPressed: () async {
+                                      final shouldDiscard =
+                                          await confirmDiscardIfNeeded();
+                                      if (!shouldDiscard) return;
                                       setState(() {
                                         _nameError = null;
                                         _nameCtrl.text = _name;
@@ -398,9 +432,12 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
                           ),
                         ),
                       ],
-                    ],
+                        ],
+                      ),
+                    ),
                   ),
-                ),
+                  if (_isDeletingAccount) BouhLoadingOverlay(),
+                ],
               ),
               bottomNavigationBar: SafeArea(
                 minimum: const EdgeInsets.fromLTRB(22, 0, 22, 28),
@@ -428,6 +465,7 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
                     ),
                   ),
                 ),
+              ),
               ),
             ),
           ),

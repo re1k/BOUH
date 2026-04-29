@@ -19,6 +19,7 @@ class DoctorPendingPopup extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text(
           'لا يمكنك تسجيل الدخول حالياً',
+          textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.w700,
@@ -32,7 +33,7 @@ class DoctorPendingPopup extends StatelessWidget {
             height: 1.4,
             color: BColors.textDarkestBlue,
           ),
-          textAlign: TextAlign.right,
+          textAlign: TextAlign.center,
         ),
         actions: [
           ElevatedButton(
