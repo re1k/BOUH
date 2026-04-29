@@ -35,19 +35,6 @@ class _UploadDrawingPageState extends State<UploadDrawingPage> {
   final ImagePicker _picker =
       ImagePicker(); //image_picker: opens native Android gallery/camera. It requests permissions when needed.
 
-  @override
-  void initState() {
-    super.initState();
-    _requestPermissions();
-  }
-
-  Future<void> _requestPermissions() async {
-    await Permission.camera.request();
-    await Permission.photos.request();
-    await Permission.storage.request();
-    await Permission.mediaLibrary.request();
-  }
-
   //Main build
   @override
   Widget build(BuildContext context) {
@@ -273,6 +260,39 @@ class _UploadDrawingPageState extends State<UploadDrawingPage> {
   //Picks image from [source] (camera or gallery). image_picker handles permissions.
   Future<void> _pickImage(ImageSource source) async {
     try {
+      if (source == ImageSource.camera) {
+        final status = await Permission.camera.request();
+        if (!status.isGranted) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'لم نتمكن من فتح الصورة. تأكد من منح الصلاحيات (الكاميرا أو الألبوم).',
+                  textDirection: TextDirection.rtl,
+                ),
+                backgroundColor: const Color.fromARGB(255, 146, 47, 29),
+              ),
+            );
+          }
+          return;
+        }
+      } else {
+        final status = await Permission.photos.request();
+        if (!status.isGranted && !status.isLimited) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'لم نتمكن من فتح الصورة. تأكد من منح الصلاحيات (الكاميرا أو الألبوم).',
+                  textDirection: TextDirection.rtl,
+                ),
+                backgroundColor: const Color.fromARGB(255, 146, 47, 29),
+              ),
+            );
+          }
+          return;
+        }
+      }
       //Open native picker; returns null if user cancels
       final XFile? xFile = await _picker.pickImage(
         source: source,

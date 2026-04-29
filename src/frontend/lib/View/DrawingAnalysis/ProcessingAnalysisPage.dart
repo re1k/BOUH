@@ -290,7 +290,6 @@ class _ProcessingAnalysisPageState extends State<ProcessingAnalysisPage>
   //top edge is a moving wave. Percentage text is centered on top.
   Widget _buildCircularProgress() {
     const double size = 210;
-    final percentage = (_progress * 100).round();
     return SizedBox(
       width: size,
       height: size,
@@ -325,16 +324,6 @@ class _ProcessingAnalysisPageState extends State<ProcessingAnalysisPage>
                   ),
                 );
               },
-            ),
-          ),
-
-          //Percentage text in center
-          Text(
-            '$percentage%',
-            style: BTypography.sectionTitle.copyWith(
-              color: BColors.white,
-              fontSize: 55,
-              fontWeight: FontWeight.w700,
             ),
           ),
         ],
