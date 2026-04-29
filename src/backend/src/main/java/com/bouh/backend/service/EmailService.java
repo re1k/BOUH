@@ -83,4 +83,46 @@ public class EmailService {
         }
     }
 
+    public void sendQualificationAcceptedEmail(String toEmail, String name) {
+        try {
+            MimeMessage mimeMessage = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, false, "UTF-8");
+            helper.setFrom(fromEmail, "Bouh بوح");
+            helper.setTo(toEmail);
+            helper.setSubject("تم قبول طلب تحديث المؤهلات");
+            helper.setText(
+                    "<div dir='rtl' style='text-align: right; font-family: Arial, sans-serif;'>" +
+                            "<p>مرحبًا " + name + "،</p>" +
+                            "<p>يسعدنا إعلامك بأنه تم قبول طلب تحديث مؤهلاتك في تطبيق بوح.</p>" +
+                            "<p>تم تحديث ملفك الشخصي بالمؤهلات الجديدة.</p>" +
+                            "<p>فريق بوح</p>" +
+                            "</div>",
+                    true);
+            mailSender.send(mimeMessage);
+        } catch (Exception e) {
+            log.error("Failed to send qualification accepted email to {}: {}", toEmail, e.getMessage());
+        }
+    }
+
+    public void sendQualificationRejectedEmail(String toEmail, String name) {
+        try {
+            MimeMessage mimeMessage = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, false, "UTF-8");
+            helper.setFrom(fromEmail, "Bouh بوح");
+            helper.setTo(toEmail);
+            helper.setSubject("رفض طلب تحديث المؤهلات");
+            helper.setText(
+                    "<div dir='rtl' style='text-align: right; font-family: Arial, sans-serif;'>" +
+                            "<p>مرحبًا " + name + "،</p>" +
+                            "<p>نأسف لإعلامك بأنه تم رفض طلب تحديث مؤهلاتك في تطبيق بوح.</p>" +
+                            "<p>إذا كان لديك أي استفسار، يرجى التواصل معنا.</p>" +
+                            "<p>فريق بوح</p>" +
+                            "</div>",
+                    true);
+            mailSender.send(mimeMessage);
+        } catch (Exception e) {
+            log.error("Failed to send qualification rejected email to {}: {}", toEmail, e.getMessage());
+        }
+    }
+
 }

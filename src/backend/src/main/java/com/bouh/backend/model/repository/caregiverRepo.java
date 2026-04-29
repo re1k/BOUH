@@ -92,9 +92,9 @@ public class caregiverRepo {
             DocumentReference caregiverRef = firestore.collection("caregivers").document(uid);
 
             deleteAccountAppointments(uid);
-            // to delete the collection and all it subCollectins
-            firestore.recursiveDelete(caregiverRef).get();
-            // delete Firebase Authentication account
+            // soft-delete: keep data, mark as deactivated
+            caregiverRef.update("isActivated", false).get();
+            // delete Firebase Authentication account 
             FirebaseAuth.getInstance().deleteUser(uid);
 
         } catch (Exception e) {

@@ -331,7 +331,17 @@ class _PendingRequestsViewState extends State<PendingRequestsView> {
                                 const SizedBox(height: 12),
                                 Text('مجال المعرفة: ${doc.areaOfKnowledge}'),
                                 const SizedBox(height: 8),
-                                Text('المؤهلات: ${doc.qualificationsDisplay}'),
+                                // ─── CHANGED: bullet list instead of plain text ───
+                                const Text(
+                                  'المؤهلات:',
+                                  style: TextStyle(fontWeight: FontWeight.w600),
+                                ),
+                                const SizedBox(height: 4),
+                                _QualificationsList(
+                                  items: doc.qualifications,
+                                  color: BColors.darkerGrey,
+                                ),
+                                // ─────────────────────────────────────────────────
                                 const SizedBox(height: 8),
                                 Text(
                                   'سنوات الخبرة: ${doc.yearsOfExperience} سنوات',
@@ -406,7 +416,7 @@ class _PendingRequestsViewState extends State<PendingRequestsView> {
                               ),
                               columnSpacing: 32,
                               dataRowMinHeight: 68,
-                              dataRowMaxHeight: 68,
+                              dataRowMaxHeight: double.infinity,
                               columns: const [
                                 DataColumn(label: Text('الطبيب')),
                                 DataColumn(label: Text('مجال المعرفة')),
@@ -440,16 +450,17 @@ class _PendingRequestsViewState extends State<PendingRequestsView> {
                                         ),
                                       ),
                                     ),
+                                    // ─── CHANGED: bullet list instead of plain text ───
                                     DataCell(
                                       SizedBox(
-                                        width: 140,
-                                        child: Text(
-                                          doc.qualificationsDisplay,
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
+                                        width: 200,
+                                        child: _QualificationsList(
+                                          items: doc.qualifications,
+                                          color: BColors.darkerGrey,
                                         ),
                                       ),
                                     ),
+                                    // ─────────────────────────────────────────────────
                                     DataCell(
                                       SizedBox(
                                         width: 80,
@@ -580,6 +591,55 @@ class _StatCard extends StatelessWidget {
     );
   }
 }
+
+// ─── Bullet list of qualifications ───────────────────────────────────────────
+class _QualificationsList extends StatelessWidget {
+  final List<String> items;
+  final Color color;
+
+  const _QualificationsList({required this.items, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) {
+      return Text(
+        '—',
+        style: TextStyle(fontSize: 13, color: color.withOpacity(0.5)),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: items
+          .map(
+            (q) => Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '• ',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: color,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Flexible(
+                    child: Text(
+                      q,
+                      style: TextStyle(fontSize: 13, color: color),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+          .toList(),
+    );
+  }
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _DoctorCell extends StatelessWidget {
   final String name;

@@ -712,5 +712,84 @@ if (!isCaregiverOwner && !isDoctorOwner) {
                     return null;
                 });
     }
+public void cancelUpcomingAppointmentsForChild(String caregiverId, String childId)
+        throws ExecutionException, InterruptedException {
+
+    List<appointmentDto> appointments =
+            appointmentRepo.findUpcomingByCaregiverId(caregiverId);
+
+    ZonedDateTime now = ZonedDateTime.now(ZONE);
+
+    for (appointmentDto appt : appointments) {
+        if (!childId.equals(appt.getChildId())) {
+            continue;
+        }
+
+        Timestamp startTs = appt.getStartDateTime();
+        if (startTs == null) {
+            continue;
+        }
+
+        ZonedDateTime start = ZonedDateTime.ofInstant(
+                Instant.ofEpochSecond(startTs.getSeconds(), startTs.getNanos()),
+                ZONE
+        );
+
+        int slotIndex = TimeSlotConfig.getSlotIndexForStartTime(start.toLocalTime());
+        if (slotIndex < 0 || slotIndex >= TimeSlotConfig.SLOT_COUNT) {
+            continue;
+        }
+
+        ZonedDateTime end = start.toLocalDate()
+                .atTime(TimeSlotConfig.slotEnd(slotIndex))
+                .atZone(ZONE);
+
+        // delete the appointment only if its slot end time is in the future, otherwise it would be considered a past appointment and shouldn't be deleted
+        if (end.isAfter(now)) {
+            cancelAppointmentWithoutTimeLimit(appt);
+        }
+    }
+}
+private void cancelAppointmentWithoutTimeLimit(appointmentDto appointment)
+        throws ExecutionException, InterruptedException {
+
+    Timestamp startTs = appointment.getStartDateTime();
+    if (startTs == null) return;
+
+    ZonedDateTime start = ZonedDateTime.ofInstant(
+            Instant.ofEpochSecond(startTs.getSeconds(), startTs.getNanos()),
+            ZONE
+    );
+
+    String doctorId = appointment.getDoctorId();
+    if (doctorId == null || doctorId.isBlank()) return;
+
+    String date = start.toLocalDate().format(DateTimeFormatter.ISO_LOCAL_DATE);
+    int slotIndex = TimeSlotConfig.getSlotIndexForStartTime(start.toLocalTime());
+
+    if (slotIndex < 0 || slotIndex >= TimeSlotConfig.SLOT_COUNT) return;
+
+    AvailabilityDayDto day = availabilityScheduleRepo.getDay(doctorId, date);
+
+    if (day != null && day.getSlots() != null) {
+        for (AvailabilityStoredSlotDto slot : day.getSlots()) {
+            if (slot.getIndex() == slotIndex) {
+                slot.setBooked(false);
+                break;
+            }
+        }
+
+        Map<String, AvailabilityDayDto> daysToUpdate = new HashMap<>();
+        daysToUpdate.put(date, day);
+
+        availabilityScheduleRepo.update(
+                doctorId,
+                daysToUpdate,
+                new HashSet<>()
+        );
+    }
+
+    appointmentRepo.deleteByIdAtomically(appointment.getAppointmentId());
+}
 
 }

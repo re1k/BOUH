@@ -1,4 +1,5 @@
 import 'package:bouh/View/BookAppointment/ApointmentDetails.dart';
+import 'package:bouh/widgets/loading_overlay.dart';
 import 'package:flutter/material.dart';
 import 'package:bouh/theme/base_themes/colors.dart';
 import 'package:table_calendar/table_calendar.dart';
@@ -8,6 +9,7 @@ import 'package:bouh/services/appointmentsService.dart';
 import 'package:bouh/dto/scheduleDto.dart';
 import 'package:bouh/dto/childDto.dart';
 import 'package:bouh/authentication/AuthSession.dart';
+import 'package:bouh/config/slot_config.dart';
 
 class BookingView extends StatefulWidget {
   final String doctorId;
@@ -132,30 +134,9 @@ class _BookingViewState extends State<BookingView> {
     }
   }
 
-  String _slotLabel(int index) {
-    final totalMinutes = index * 30;
-    final hour = 16 + (totalMinutes ~/ 60);
-    final minute = totalMinutes % 60;
+  String _slotLabel(int index) => SlotConfig.slotLabel(index);
 
-    final nextTotal = totalMinutes + 30;
-    final hour2 = 16 + (nextTotal ~/ 60);
-    final minute2 = nextTotal % 60;
-
-    String fmt(int h, int m) {
-      final hh = h > 12 ? h - 12 : h;
-      return "$hh:${m.toString().padLeft(2, '0')}";
-    }
-
-    return "${fmt(hour, minute)} - ${fmt(hour2, minute2)} مساءً";
-  }
-
-  String _slotStartText(int index) {
-    final totalMinutes = index * 30;
-    final hour = 16 + (totalMinutes ~/ 60);
-    final minute = totalMinutes % 60;
-    final hh = hour > 12 ? hour - 12 : hour;
-    return "$hh:${minute.toString().padLeft(2, '0')}";
-  }
+  String _slotStartText(int index) => SlotConfig.slotStartText(index);
 
   Future<bool> _hasConflictBeforeBooking({
     required String caregiverId,
@@ -261,9 +242,7 @@ class _BookingViewState extends State<BookingView> {
 
       if (!isToday) return true;
 
-      final startMinutes = slot.index * 30;
-      final startHour = 16 + (startMinutes ~/ 60);
-      final startMinute = startMinutes % 60;
+      final (startHour, startMinute) = SlotConfig.slotStart(slot.index);
 
       final slotStart = DateTime(
         selectedDay!.year,
@@ -273,10 +252,16 @@ class _BookingViewState extends State<BookingView> {
         startMinute,
       );
 
-      final slotEnd = slotStart.add(const Duration(minutes: 30));
+      final slotEnd = slotStart.add(Duration(minutes: SlotConfig.slotMinutes));
 
       return now.isBefore(slotEnd);
-    }).toList();
+    }).toList()..sort((a, b) {
+      final isMorningA = SlotConfig.isMorningSlot(a.index);
+      final isMorningB = SlotConfig.isMorningSlot(b.index);
+      if (isMorningA && !isMorningB) return -1;
+      if (!isMorningA && isMorningB) return 1;
+      return a.index.compareTo(b.index);
+    });
   }
 
   ChildDto? get selectedChild {
@@ -317,13 +302,7 @@ class _BookingViewState extends State<BookingView> {
               border: Border.all(color: Colors.black.withOpacity(0.10)),
             ),
             child: isLoadingChildren
-                ? const Center(
-                    child: SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  )
+                ? const Center(child: BouhOvalLoadingIndicator())
                 : childrenError != null
                 ? Center(
                     child: Text(
@@ -503,7 +482,7 @@ class _BookingViewState extends State<BookingView> {
         const SizedBox(height: 10),
 
         if (isLoadingSchedule)
-          const CircularProgressIndicator()
+          const Center(child: BouhOvalLoadingIndicator())
         else if (scheduleError != null)
           Text(scheduleError!, style: const TextStyle(color: Colors.red))
         else if (availableTimeSlots.isNotEmpty)
@@ -635,14 +614,7 @@ class _BookingViewState extends State<BookingView> {
               ),
             ),
             child: isCheckingConflict
-                ? const SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.5,
-                      color: Colors.white,
-                    ),
-                  )
+                ? const Center(child: BouhOvalLoadingIndicator())
                 : const Text(
                     "حجز",
                     style: TextStyle(

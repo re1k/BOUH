@@ -51,6 +51,7 @@ public class DoctorSuggestionRepository {
                 .collection("doctors")
                 .whereEqualTo("areaOfKnowledge", emotion)
                 .whereEqualTo("registrationStatus", "APPROVED")
+                .whereEqualTo("isActivated", true)
                 .whereGreaterThanOrEqualTo("averageRating", 4)
                 .get();
 

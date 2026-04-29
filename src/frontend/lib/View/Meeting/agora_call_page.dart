@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
+import 'package:bouh/widgets/loading_overlay.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -292,7 +293,7 @@ class _AgoraCallPageState extends State<AgoraCallPage> {
 
   Widget _buildVideoViews() {
     if (!_engineReady || _engine == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: BouhOvalLoadingIndicator());
     }
 
     print(

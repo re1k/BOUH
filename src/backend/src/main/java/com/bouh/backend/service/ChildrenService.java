@@ -3,6 +3,8 @@ package com.bouh.backend.service;
 import com.bouh.backend.model.Dto.childDto;
 import com.bouh.backend.model.Dto.ChildRequestDto;
 import com.bouh.backend.model.repository.childrenRepo;
+import com.bouh.backend.service.appointments.AppointmentsService;
+
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -15,10 +17,12 @@ public class ChildrenService {
 
     private final childrenRepo childrenRepo;
 
-    public ChildrenService(childrenRepo childrenRepo) {
-        this.childrenRepo = childrenRepo;
-    }
+   private final AppointmentsService appointmentsService;
 
+public ChildrenService(childrenRepo childrenRepo, AppointmentsService appointmentsService) {
+    this.childrenRepo = childrenRepo;
+    this.appointmentsService = appointmentsService;
+}
     public List<childDto> getChildren(String caregiverId) throws Exception {
         return childrenRepo.getChildren(caregiverId);
     }
@@ -71,15 +75,18 @@ public class ChildrenService {
     }
 
     //delete only if > 1 child
-    public void deleteChild(String caregiverId, String childId) throws Exception {
-        int count = childrenRepo.countChildren(caregiverId);
-        if (count <= 1) {
-            throw new IllegalStateException("Cannot delete the only child in the account.");
-        }
-
-        boolean deleted = childrenRepo.deleteChild(caregiverId, childId);
-        if (!deleted) throw new IllegalStateException("Child not found.");
+public void deleteChild(String caregiverId, String childId) throws Exception {
+    int count = childrenRepo.countChildren(caregiverId);
+    if (count <= 1) {
+        throw new IllegalStateException("Cannot delete the only child in the account.");
     }
+
+    boolean deleted = childrenRepo.deleteChild(caregiverId, childId);
+    if (!deleted) throw new IllegalStateException("Child not found.");
+
+
+    appointmentsService.cancelUpcomingAppointmentsForChild(caregiverId, childId);
+}
 
     // ---------------- Helpers ----------------
 

@@ -340,7 +340,34 @@ class _AppointmentDetailsViewState extends State<AppointmentDetailsView> {
                 ),
 
                 const SizedBox(height: 36),
-
+                Directionality(
+                  textDirection: TextDirection.rtl,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Padding(
+                        padding: EdgeInsets.only(top: 2),
+                        child: Icon(
+                          Icons.info_outline,
+                          color: BColors.darkGrey,
+                          size: 18,
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          "بمجرد الدفع، لا يمكنك إلغاء الموعد إذا كان الوقت المتبقي للموعد أقل من 30 دقيقة.",
+                          style: TextStyle(
+                            color: BColors.darkGrey,
+                            fontSize: 15,
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
                 SizedBox(
                   width: 240,
                   height: 56,

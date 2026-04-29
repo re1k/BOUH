@@ -224,7 +224,17 @@ class _AcceptedDoctorsViewState extends State<AcceptedDoctorsView> {
                             const SizedBox(height: 12),
                             Text('مجال المعرفة: ${doc.areaOfKnowledge}'),
                             const SizedBox(height: 8),
-                            Text('المؤهلات: ${doc.qualificationsDisplay}'),
+                            // ─── CHANGED ───
+                            const Text(
+                              'المؤهلات:',
+                              style: TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(height: 4),
+                            _QualificationsList(
+                              items: doc.qualifications,
+                              color: BColors.darkerGrey,
+                            ),
+                            // ───────────────
                             const SizedBox(height: 8),
                             Text(
                               'سنوات الخبرة: ${doc.yearsOfExperience} سنوات',
@@ -282,7 +292,7 @@ class _AcceptedDoctorsViewState extends State<AcceptedDoctorsView> {
                           ),
                           columnSpacing: 32,
                           dataRowMinHeight: 68,
-                          dataRowMaxHeight: 68,
+                          dataRowMaxHeight: double.infinity,
                           columns: const [
                             DataColumn(label: Text('الطبيب')),
                             DataColumn(label: Text('مجال المعرفة')),
@@ -295,11 +305,14 @@ class _AcceptedDoctorsViewState extends State<AcceptedDoctorsView> {
                             return DataRow(
                               cells: [
                                 DataCell(
-                                  _DoctorCell(
-                                    name: doc.name,
-                                    email: doc.email,
-                                    initials: doc.initials,
-                                    photoUrl: doc.profilePhotoURL,
+                                  SizedBox(
+                                    width: 200,
+                                    child: _DoctorCell(
+                                      name: doc.name,
+                                      email: doc.email,
+                                      initials: doc.initials,
+                                      photoUrl: doc.profilePhotoURL,
+                                    ),
                                   ),
                                 ),
                                 DataCell(
@@ -312,16 +325,17 @@ class _AcceptedDoctorsViewState extends State<AcceptedDoctorsView> {
                                     ),
                                   ),
                                 ),
+                                // ─── CHANGED ───
                                 DataCell(
                                   SizedBox(
-                                    width: 140,
-                                    child: Text(
-                                      doc.qualificationsDisplay,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
+                                    width: 300,
+                                    child: _QualificationsList(
+                                      items: doc.qualifications,
+                                      color: BColors.darkerGrey,
                                     ),
                                   ),
                                 ),
+                                // ───────────────
                                 DataCell(
                                   SizedBox(
                                     width: 80,
@@ -370,6 +384,55 @@ class _AcceptedDoctorsViewState extends State<AcceptedDoctorsView> {
   }
 }
 
+// ─── Bullet list of qualifications ───────────────────────────────────────────
+class _QualificationsList extends StatelessWidget {
+  final List<String> items;
+  final Color color;
+
+  const _QualificationsList({required this.items, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) {
+      return Text(
+        '—',
+        style: TextStyle(fontSize: 13, color: color.withOpacity(0.5)),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: items
+          .map(
+            (q) => Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '• ',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: color,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Flexible(
+                    child: Text(
+                      q,
+                      style: TextStyle(fontSize: 13, color: color),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+          .toList(),
+    );
+  }
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _DoctorCell extends StatelessWidget {
   final String name;
   final String email;
@@ -385,10 +448,9 @@ class _DoctorCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      crossAxisAlignment: WrapCrossAlignment.center,
-      spacing: 10,
-      runSpacing: 8,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
       children: [
         AdminAvatarWidget(
           initials: initials,
@@ -398,6 +460,7 @@ class _DoctorCell extends StatelessWidget {
           fontSize: 14,
           photoUrl: photoUrl,
         ),
+        const SizedBox(width: 10),
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,

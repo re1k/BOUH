@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.concurrent.ExecutionException;
+import com.bouh.backend.model.Dto.Qualificationrequestdto;
 
 @RestController
 @RequestMapping("/api/admin/doctors")
@@ -60,6 +61,34 @@ public class DoctorManagementController {
             Authentication authentication)
             throws ExecutionException, InterruptedException {
         doctorManagementService.rejectDoctor(uid);
+        return ResponseEntity.ok().build();
+    }
+
+    // GET /api/admin/doctors/qualification-requests
+    @GetMapping("/qualification-requests")
+    public ResponseEntity<List<Qualificationrequestdto>> getPendingQualificationRequests(
+            Authentication authentication)
+            throws ExecutionException, InterruptedException {
+        return ResponseEntity.ok(doctorManagementService.getPendingQualificationRequests());
+    }
+
+    // PATCH /api/admin/doctors/qualification-requests/{requestId}/accept
+    @PatchMapping("/qualification-requests/{requestId}/accept")
+    public ResponseEntity<Void> acceptQualificationRequest(
+            @PathVariable String requestId,
+            Authentication authentication)
+            throws ExecutionException, InterruptedException {
+        doctorManagementService.acceptQualificationRequest(requestId);
+        return ResponseEntity.ok().build();
+    }
+
+    // PATCH /api/admin/doctors/qualification-requests/{requestId}/reject
+    @PatchMapping("/qualification-requests/{requestId}/reject")
+    public ResponseEntity<Void> rejectQualificationRequest(
+            @PathVariable String requestId,
+            Authentication authentication)
+            throws ExecutionException, InterruptedException {
+        doctorManagementService.rejectQualificationRequest(requestId);
         return ResponseEntity.ok().build();
     }
 }

@@ -10,6 +10,7 @@ import 'package:bouh/services/appointmentsService.dart';
 import 'package:bouh/View/RateDoctor/rate_doctor_bottom_sheet.dart'; // <Rating feature>
 import 'package:bouh/widgets/loading_overlay.dart';
 import 'widgets/previousBookedAppointmentCard.dart';
+import 'package:bouh/config/slot_config.dart';
 
 /// Booked appointments – previous.
 ///
@@ -63,7 +64,7 @@ class _BookedAppointmentsPreviousState
   // One Firestore listener per distinct doctorId in the current list.
   // Triggers a re-fetch when a doctor updates their profile photo.
   final Map<String, StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>>
-      _doctorListeners = {};
+  _doctorListeners = {};
 
   @override
   void initState() {
@@ -177,8 +178,9 @@ class _BookedAppointmentsPreviousState
       if (url != null && url.isNotEmpty) NetworkImage(url).evict();
     }
     try {
-      final data =
-          await _appointmentsService.getFullPreviousWithUpcoming(caregiverId);
+      final data = await _appointmentsService.getFullPreviousWithUpcoming(
+        caregiverId,
+      );
       if (!mounted) return;
       setState(() {
         _list = data.$1;
@@ -520,10 +522,10 @@ class _BookedAppointmentsPreviousState
       showRateButton: showRateButton,
       onRateTap: showRateButton
           ? () => RateDoctorBottomSheet.show(
-                context,
-                doctorId: doctorId!,
-                appointmentId: dto.appointmentId,
-              )
+              context,
+              doctorId: doctorId!,
+              appointmentId: dto.appointmentId,
+            )
           : null,
     );
   }
@@ -543,10 +545,19 @@ class _BookedAppointmentsPreviousState
 
   /// Format startTime and endTime for display.
   static String _formatTimeRange(String? start, String? end) {
-    const suffix = 'مساءً';
     final s = start ?? '';
     final e = end ?? '';
     if (s.isEmpty && e.isEmpty) return '';
+
+    // Find which slot matches this start time to get correct AM/PM
+    String suffix = 'مساءً'; // default
+    for (int i = 0; i < SlotConfig.slotCount; i++) {
+      if (SlotConfig.slotStartText(i) == s) {
+        suffix = SlotConfig.amPmSuffix(i);
+        break;
+      }
+    }
+
     if (e.isEmpty) return '$s $suffix';
     return '$s - $e $suffix';
   }

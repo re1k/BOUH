@@ -1,4 +1,5 @@
 import 'package:bouh/authentication/AuthSession.dart';
+import 'package:bouh/widgets/loading_overlay.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -222,7 +223,7 @@ class _ChildrenManagementViewState extends State<ChildrenManagementView> {
 
                 Expanded(
                   child: isLoading
-                      ? const Center(child: CircularProgressIndicator())
+                      ? const Center(child: BouhOvalLoadingIndicator())
                       : RefreshIndicator(
                           onRefresh: _loadChildren,
                           child: ListView(

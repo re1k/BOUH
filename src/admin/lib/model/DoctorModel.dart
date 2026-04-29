@@ -8,6 +8,9 @@ class DoctorModel {
   final String iban;
   final String scfhsNumber;
   final String? profilePhotoURL;
+  final String? requestId;
+  final List<String> oldQualifications;
+  final List<String> newQualifications;
 
   const DoctorModel({
     required this.uid,
@@ -19,6 +22,9 @@ class DoctorModel {
     required this.iban,
     required this.scfhsNumber,
     this.profilePhotoURL,
+    this.requestId,
+    this.oldQualifications = const [],
+    this.newQualifications = const [],
   });
 
   factory DoctorModel.fromJson(Map<String, dynamic> json) {
@@ -32,6 +38,9 @@ class DoctorModel {
       iban: json['iban'] ?? '',
       scfhsNumber: json['scfhsNumber'] ?? '',
       profilePhotoURL: json['profilePhotoURL'],
+      requestId: json['requestId'],
+      oldQualifications: List<String>.from(json['oldQualifications'] ?? []),
+      newQualifications: List<String>.from(json['newQualifications'] ?? []),
     );
   }
 

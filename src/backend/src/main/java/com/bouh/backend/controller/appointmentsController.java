@@ -121,6 +121,7 @@ public ResponseEntity<?> createAppointment(
         Map<String, Object> err = new HashMap<>();
         err.put("success", false);
         err.put("message", "Failed to create appointment");
+        System.out.println(e.getClass().getSimpleName() + ": " + e.getMessage());
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(err);
     }
 }

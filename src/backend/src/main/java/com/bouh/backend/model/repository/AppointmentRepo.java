@@ -256,6 +256,8 @@ public class AppointmentRepo {
             throw new IllegalArgumentException("Invalid slotIndex");
         }
 
+
+
         LocalDate localDate = LocalDate.parse(date, DateTimeFormatter.ISO_LOCAL_DATE);
         LocalDateTime startLdt = localDate.atTime(TimeSlotConfig.slotStart(slotIndex));
         Timestamp startTimestamp = Timestamp.of(Date.from(startLdt.atZone(ZONE).toInstant()));

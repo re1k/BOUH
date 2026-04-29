@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:bouh/config/slot_config.dart';
 import 'package:flutter/material.dart';
 import 'package:bouh/theme/base_themes/colors.dart';
 import 'package:bouh/View/DoctorAppointment/AvailableScheduleScreen.dart';
@@ -293,10 +294,19 @@ class _PrevAppointmentsScreenState extends State<PrevAppointmentsScreen> {
   }
 
   static String _formatTimeRange(String? start, String? end) {
-    const suffix = 'مساءً';
     final s = start ?? '';
     final e = end ?? '';
     if (s.isEmpty && e.isEmpty) return '';
+
+    // Find which slot matches this start time to get correct AM/PM
+    String suffix = 'مساءً'; // default
+    for (int i = 0; i < SlotConfig.slotCount; i++) {
+      if (SlotConfig.slotStartText(i) == s) {
+        suffix = SlotConfig.amPmSuffix(i);
+        break;
+      }
+    }
+
     if (e.isEmpty) return '$s $suffix';
     return '$s - $e $suffix';
   }

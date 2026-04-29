@@ -209,7 +209,7 @@ class _CaregiversViewState extends State<CaregiversView> {
                             Text(
                               cg.email,
                               style: const TextStyle(
-                                color: BColors.primary,
+                                color: BColors.darkGrey,
                                 fontSize: 14,
                               ),
                             ),
@@ -281,7 +281,7 @@ class _CaregiversViewState extends State<CaregiversView> {
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
-                                        color: BColors.primary,
+                                        color: BColors.black,
                                         fontSize: 14,
                                       ),
                                     ),
@@ -345,10 +345,6 @@ class _CaregiverCell extends StatelessWidget {
                 color: BColors.textDarkestBlue,
                 fontSize: 15,
               ),
-            ),
-            Text(
-              email,
-              style: const TextStyle(fontSize: 13, color: BColors.darkGrey),
             ),
           ],
         ),

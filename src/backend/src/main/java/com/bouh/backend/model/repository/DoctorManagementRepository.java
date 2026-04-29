@@ -12,6 +12,10 @@ import java.util.List;
 import java.util.concurrent.ExecutionException;
 import com.bouh.backend.service.GcsImageService;
 
+import com.bouh.backend.model.Dto.Qualificationrequestdto;
+import com.google.cloud.firestore.DocumentReference;
+import com.google.cloud.firestore.DocumentSnapshot;
+
 @Repository
 public class DoctorManagementRepository {
 
@@ -27,6 +31,7 @@ public class DoctorManagementRepository {
         var snapshot = firestore
                 .collection("doctors")
                 .whereEqualTo("registrationStatus", status)
+                .whereEqualTo("isActivated", true)
                 .get()
                 .get();
 
@@ -74,6 +79,7 @@ public class DoctorManagementRepository {
         ApiFuture<QuerySnapshot> acceptedFuture = firestore
                 .collection("doctors")
                 .whereEqualTo("registrationStatus", "APPROVED")
+                .whereEqualTo("isActivated", true)
                 .get();
 
         ApiFuture<QuerySnapshot> rejectedFuture = firestore
@@ -92,6 +98,10 @@ public class DoctorManagementRepository {
     public String[] getDoctorEmailAndName(String uid) throws ExecutionException, InterruptedException {
         var doc = firestore.collection("doctors").document(uid).get().get();
         if (!doc.exists())
+            return null;
+
+        Boolean isActivated = doc.getBoolean("isActivated");
+        if (isActivated == null || !isActivated)
             return null;
         return new String[] { doc.getString("email"), doc.getString("name") };
     }
@@ -119,5 +129,117 @@ public class DoctorManagementRepository {
         doctor.setQualifications(qualifications != null ? qualifications : new ArrayList<>());
 
         return doctor;
+    }
+
+    public void applyQualificationUpdate(String doctorId, String requestId) {
+        try {
+            // Reference to doctor document
+            DocumentReference doctorRef = firestore.collection("doctors").document(doctorId);
+
+            // Reference to the qualification edit request
+            DocumentReference requestRef = firestore.collection("qualificationEditRequests").document(requestId);
+
+            // Fetch the request document
+            DocumentSnapshot requestSnap = requestRef.get().get();
+
+            // Validate that the request exists
+            if (!requestSnap.exists()) {
+                throw new RuntimeException("Request not found");
+            }
+
+            // Extract the new qualifications from the request
+            List<String> newQualifications = (List<String>) requestSnap.get("newQualifications");
+
+            // If null, initialize as empty list to avoid errors
+            if (newQualifications == null) {
+                newQualifications = new ArrayList<>();
+            }
+
+            // Replace the doctor's qualifications with the new list
+            doctorRef.update("qualifications", newQualifications).get();
+
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to update qualifications", e);
+        }
+    }
+
+    public List<Qualificationrequestdto> getPendingQualificationRequests()
+            throws ExecutionException, InterruptedException {
+
+        var snapshot = firestore
+                .collection("qualificationEditRequests")
+                .get()
+                .get();
+
+        List<Qualificationrequestdto> result = new ArrayList<>();
+
+        for (QueryDocumentSnapshot doc : snapshot.getDocuments()) {
+            String doctorId = doc.getString("doctorId");
+            if (doctorId == null)
+                continue;
+
+            // Fetch doctor info
+            DocumentSnapshot doctorSnap = firestore
+                    .collection("doctors")
+                    .document(doctorId)
+                    .get()
+                    .get();
+
+            if (!doctorSnap.exists())
+                continue;
+            Boolean isActivated = doctorSnap.getBoolean("isActivated");
+            if (isActivated == null || !isActivated)
+                continue;
+
+            String name = doctorSnap.getString("name");
+            String email = doctorSnap.getString("email");
+            String profilePath = doctorSnap.getString("profilePhotoURL");
+
+            // Generate signed URL for profile photo
+            String photoUrl = null;
+            try {
+                if (profilePath != null && !profilePath.isBlank()) {
+                    photoUrl = gcsImageService.generateDownloadUrl(profilePath);
+                }
+            } catch (Exception e) {
+                photoUrl = null;
+            }
+
+            List<String> oldQualifications = (List<String>) doc.get("oldQualifications");
+            List<String> newQualifications = (List<String>) doc.get("newQualifications");
+
+            Qualificationrequestdto dto = new Qualificationrequestdto(
+                    doc.getId(),
+                    doctorId,
+                    name,
+                    email,
+                    photoUrl,
+                    oldQualifications != null ? oldQualifications : new ArrayList<>(),
+                    newQualifications != null ? newQualifications : new ArrayList<>());
+
+            result.add(dto);
+        }
+
+        return result;
+    }
+
+    public void deleteQualificationRequest(String requestId)
+            throws ExecutionException, InterruptedException {
+        firestore.collection("qualificationEditRequests")
+                .document(requestId)
+                .delete()
+                .get();
+    }
+
+    public String getDoctorIdFromRequest(String requestId)
+            throws ExecutionException, InterruptedException {
+        DocumentSnapshot snap = firestore
+                .collection("qualificationEditRequests")
+                .document(requestId)
+                .get()
+                .get();
+        if (!snap.exists())
+            throw new RuntimeException("Request not found: " + requestId);
+        return snap.getString("doctorId");
     }
 }

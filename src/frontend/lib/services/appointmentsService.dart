@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:bouh/config/slot_config.dart';
 import 'package:bouh/dto/bookAppointmentRequestDto.dart';
 import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -216,8 +217,35 @@ class AppointmentsService {
     int? h = int.tryParse(t[0]);
     final min = int.tryParse(t[1]);
     if (h == null || min == null) return null;
-    h += 12; // 4–9 PM → 16–21 in 24h
-    return DateTime(y, m, day, h, min);
+
+    int resolvedHour = h;
+    bool matched = false;
+
+    // Check start times
+    for (int i = 0; i < SlotConfig.slotCount; i++) {
+      if (SlotConfig.slotStartText(i) == time) {
+        final (fullHour, _) = SlotConfig.slotStart(i);
+        resolvedHour = fullHour;
+        matched = true;
+        break;
+      }
+    }
+
+    // If no start match, check end times
+    if (!matched) {
+      for (int i = 0; i < SlotConfig.slotCount; i++) {
+        final (endH, endM) = SlotConfig.slotEnd(i);
+        final hh = endH > 12 ? endH - 12 : (endH == 0 ? 12 : endH);
+        final endText = '$hh:${endM.toString().padLeft(2, '0')}';
+        if (endText == time) {
+          resolvedHour = endH;
+          matched = true;
+          break;
+        }
+      }
+    }
+
+    return DateTime(y, m, day, resolvedHour, min);
   }
 
   /// Returns (merged previous list, upcoming list). Widget shows merged and

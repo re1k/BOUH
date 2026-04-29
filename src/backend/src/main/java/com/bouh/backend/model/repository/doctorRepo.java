@@ -348,9 +348,9 @@ public class doctorRepo {
                  gcsImageService.deleteImage(doctor.getProfilePhotoURL());
             }
 
-            // 3. delete doctor + subcollections (ONLY HERE)
-            firestore.recursiveDelete(
-                    firestore.collection("doctors").document(uid));
+            // 3. soft-delete: keep data, mark as deactivated
+            firestore.collection("doctors").document(uid)
+                    .update("isActivated", false).get();
 
             // 4. delete auth
             FirebaseAuth.getInstance().deleteUser(uid);

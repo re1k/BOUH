@@ -3,9 +3,12 @@ import '../theme/colors.dart';
 import 'PendingRequestsView.dart';
 import 'AcceptedDoctorsView.dart';
 import 'CaregiversView.dart';
+import 'QualificationRequestsView.dart'; // ← NEW
 import 'package:bouh_admin/services/auth_service.dart';
 import 'package:bouh_admin/views/login_page.dart';
 import 'responsive.dart';
+import 'package:bouh_admin/services/DoctorService.dart';
+import 'package:bouh_admin/views/Widgets/ConfirmActionDialog.dart';
 
 class AdminDashboardView extends StatefulWidget {
   const AdminDashboardView({super.key});
@@ -17,63 +20,48 @@ class AdminDashboardView extends StatefulWidget {
 class _AdminDashboardViewState extends State<AdminDashboardView> {
   int _selectedIndex = 0;
   int _pendingCount = 0;
+  int _qualificationCount = 0; // ← NEW
+
+  @override
+  void initState() {
+    super.initState();
+    _loadQualificationCount();
+  }
+
+  Future<void> _loadQualificationCount() async {
+    try {
+      final requests = await DoctorService.instance
+          .getPendingQualificationRequests(context);
+      if (mounted) {
+        setState(() => _qualificationCount = requests.length);
+      }
+    } catch (_) {}
+  }
 
   final List<String> _pageTitles = [
     'طلبات التسجيل',
     'الأطباء المقبولون',
     'مقدمو الرعاية',
+    'طلبات تحديث المؤهلات', // ← NEW
   ];
 
   void _confirmLogout() {
     showDialog(
       context: context,
-      builder: (_) => Directionality(
-        textDirection: TextDirection.rtl,
-        child: AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          actionsAlignment: MainAxisAlignment.center,
-          title: const Text(
-            'تسجيل الخروج',
-            style: TextStyle(
-              fontWeight: FontWeight.w700,
-              color: BColors.textDarkestBlue,
-            ),
-          ),
-          content: const Text(
-            'هل تريد تسجيل الخروج من لوحة التحكم؟',
-            style: TextStyle(color: BColors.darkerGrey),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text(
-                'إلغاء',
-                style: TextStyle(color: BColors.darkGrey),
-              ),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: BColors.primary,
-                foregroundColor: BColors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              onPressed: () async {
-                Navigator.pop(context);
-                await AdminAuthService.instance.logout();
-                if (context.mounted) {
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(builder: (_) => const LoginPage()),
-                  );
-                }
-              },
-              child: const Text('تأكيد'),
-            ),
-          ],
-        ),
+      builder: (_) => ConfirmActionDialog(
+        title: 'تسجيل الخروج',
+        message: 'هل تريد تسجيل الخروج من لوحة التحكم؟',
+        confirmText: 'تأكيد',
+        confirmColor: BColors.primary,
+        onConfirm: () async {
+          Navigator.pop(context);
+          await AdminAuthService.instance.logout();
+          if (context.mounted) {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (_) => const LoginPage()),
+            );
+          }
+        },
       ),
     );
   }
@@ -91,6 +79,7 @@ class _AdminDashboardViewState extends State<AdminDashboardView> {
                 child: _SidebarWidget(
                   selectedIndex: _selectedIndex,
                   pendingCount: _pendingCount,
+                  qualificationCount: _qualificationCount, // ← NEW
                   onSelectIndex: (i) {
                     setState(() => _selectedIndex = i);
                     Navigator.pop(context);
@@ -114,6 +103,7 @@ class _AdminDashboardViewState extends State<AdminDashboardView> {
                   _SidebarWidget(
                     selectedIndex: _selectedIndex,
                     pendingCount: _pendingCount,
+                    qualificationCount: _qualificationCount, // ← NEW
                     onSelectIndex: (i) => setState(() => _selectedIndex = i),
                     onLogout: _confirmLogout,
                   ),
@@ -143,6 +133,12 @@ class _AdminDashboardViewState extends State<AdminDashboardView> {
         return const AcceptedDoctorsView();
       case 2:
         return const CaregiversView();
+      case 3: // ← NEW
+        return QualificationRequestsView(
+          onCountLoaded: (count) {
+            if (mounted) setState(() => _qualificationCount = count);
+          },
+        );
       default:
         return const SizedBox();
     }
@@ -152,12 +148,14 @@ class _AdminDashboardViewState extends State<AdminDashboardView> {
 class _SidebarWidget extends StatelessWidget {
   final int selectedIndex;
   final int pendingCount;
+  final int qualificationCount; // ← NEW
   final ValueChanged<int> onSelectIndex;
   final VoidCallback onLogout;
 
   const _SidebarWidget({
     required this.selectedIndex,
     required this.pendingCount,
+    required this.qualificationCount, // ← NEW
     required this.onSelectIndex,
     required this.onLogout,
   });
@@ -247,6 +245,14 @@ class _SidebarWidget extends StatelessWidget {
             label: 'مقدمو الرعاية',
             isSelected: selectedIndex == 2,
             onTap: () => onSelectIndex(2),
+          ),
+          _NavItemWidget(
+            // ← NEW
+            icon: Icons.verified_outlined,
+            label: 'تحديث طلبات المؤهلات',
+            isSelected: selectedIndex == 3,
+            badge: qualificationCount,
+            onTap: () => onSelectIndex(3),
           ),
           const Spacer(),
           Container(

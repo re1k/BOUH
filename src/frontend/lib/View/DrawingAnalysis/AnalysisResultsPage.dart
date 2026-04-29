@@ -67,7 +67,8 @@ class AnalysisResultsPage extends StatelessWidget {
                     children: [
                       //Interpretations section
                       _buildInterpretationsSection(),
-                      if (doctorIds.isNotEmpty) ...[
+                      if (doctorIds.isNotEmpty &&
+                          emotionalInterpretation.isNotEmpty) ...[
                         _buildDoctorsSection(context),
                         const SizedBox(height: 32),
                       ],

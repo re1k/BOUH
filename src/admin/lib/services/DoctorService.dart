@@ -170,4 +170,94 @@ class DoctorService {
       throw Exception(body['message'] ?? 'فشل حذف الحساب');
     }
   }
+
+  Future<List<DoctorModel>> getPendingQualificationRequests(
+    BuildContext context,
+  ) async {
+    final token = await AdminAuthService.instance.getValidToken();
+    if (token == null) {
+      await AdminAuthService.handleUnauthorized(context);
+      return [];
+    }
+
+    final uri = Uri.parse(
+      '${ApiConfig.baseUrl}/api/admin/doctors/qualification-requests',
+    );
+
+    final response = await http.get(
+      uri,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final List<dynamic> jsonList = jsonDecode(response.body);
+      return jsonList.map((json) => DoctorModel.fromJson(json)).toList();
+    } else if (response.statusCode == 401 || response.statusCode == 403) {
+      await AdminAuthService.handleUnauthorized(context);
+      return [];
+    } else {
+      throw Exception('فشل تحميل طلبات تحديث المؤهلات');
+    }
+  }
+
+  Future<void> acceptQualificationRequest(
+    BuildContext context,
+    String requestId,
+  ) async {
+    final token = await AdminAuthService.instance.getValidToken();
+    if (token == null) {
+      await AdminAuthService.handleUnauthorized(context);
+      return;
+    }
+
+    final uri = Uri.parse(
+      '${ApiConfig.baseUrl}/api/admin/doctors/qualification-requests/$requestId/accept',
+    );
+
+    final response = await http.patch(
+      uri,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      await AdminAuthService.handleUnauthorized(context);
+    } else if (response.statusCode != 200) {
+      throw Exception('فشل قبول طلب تحديث المؤهلات');
+    }
+  }
+
+  Future<void> rejectQualificationRequest(
+    BuildContext context,
+    String requestId,
+  ) async {
+    final token = await AdminAuthService.instance.getValidToken();
+    if (token == null) {
+      await AdminAuthService.handleUnauthorized(context);
+      return;
+    }
+
+    final uri = Uri.parse(
+      '${ApiConfig.baseUrl}/api/admin/doctors/qualification-requests/$requestId/reject',
+    );
+
+    final response = await http.patch(
+      uri,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      await AdminAuthService.handleUnauthorized(context);
+    } else if (response.statusCode != 200) {
+      throw Exception('فشل رفض طلب تحديث المؤهلات');
+    }
+  }
 }

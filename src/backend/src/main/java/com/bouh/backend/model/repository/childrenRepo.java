@@ -26,23 +26,32 @@ public class childrenRepo {
     }
 
     public List<childDto> getChildren(String caregiverId) throws ExecutionException, InterruptedException {
-        var result = new ArrayList<childDto>();
+    var result = new ArrayList<childDto>();
 
-        var snap = childrenCollection(caregiverId).get().get();
-        for (DocumentSnapshot doc : snap.getDocuments()) {
-            var dto = new childDto();
-            dto.setChildID(doc.getId());
-            dto.setName(getString(doc, "name"));
-            dto.setDateOfBirth(getLocalDate(doc, "dateOfBirth")); //  LocalDate
-            dto.setGender(getString(doc, "gender"));
-            result.add(dto);
-        }
-        return result;
-    }
+    var snap = childrenCollection(caregiverId)
+            .whereEqualTo("isActivated", true)
+            .get()
+            .get();
 
-    public int countChildren(String caregiverId) throws ExecutionException, InterruptedException {
-        return childrenCollection(caregiverId).get().get().size();
+    for (DocumentSnapshot doc : snap.getDocuments()) {
+        var dto = new childDto();
+        dto.setChildID(doc.getId());
+        dto.setName(getString(doc, "name"));
+        dto.setDateOfBirth(getLocalDate(doc, "dateOfBirth"));
+        dto.setGender(getString(doc, "gender"));
+        result.add(dto);
     }
+    return result;
+}
+
+
+   public int countChildren(String caregiverId) throws ExecutionException, InterruptedException {
+    return childrenCollection(caregiverId)
+            .whereEqualTo("isActivated", true)
+            .get()
+            .get()
+            .size();
+}
 
     public childDto getChildById(String caregiverId, String childId) throws ExecutionException, InterruptedException {
         var ref = childrenCollection(caregiverId).document(childId);
@@ -58,24 +67,24 @@ public class childrenRepo {
     }
 
     // Adds a new child
-    public childDto addChild(String caregiverId, String name, String dateOfBirth, String gender)
-            throws ExecutionException, InterruptedException {
+public childDto addChild(String caregiverId, String name, String dateOfBirth, String gender)
+        throws ExecutionException, InterruptedException {
 
-        DocumentReference newRef = childrenCollection(caregiverId).document(); // auto ID
+    DocumentReference newRef = childrenCollection(caregiverId).document();
 
-        // Validate/normalize DOB (expects yyyy-MM-dd), If invalid store null
-        LocalDate dob = parseLocalDate(dateOfBirth);
+    LocalDate dob = parseLocalDate(dateOfBirth);
 
-        newRef.set(new java.util.HashMap<String, Object>() {{
-            put("name", name);
-            put("dateOfBirth", dob == null ? null : dob.toString()); // stored as ISO string
-            put("gender", gender);
-            put("createdAt", FieldValue.serverTimestamp());
-            put("updatedAt", FieldValue.serverTimestamp());
-        }}).get();
+    newRef.set(new java.util.HashMap<String, Object>() {{
+        put("name", name);
+        put("dateOfBirth", dob == null ? null : dob.toString());
+        put("gender", gender);
+        put("isActivated", true);
+        put("createdAt", FieldValue.serverTimestamp());
+        put("updatedAt", FieldValue.serverTimestamp());
+    }}).get();
 
-        return getChildById(caregiverId, newRef.getId());
-    }
+    return getChildById(caregiverId, newRef.getId());
+}
 
     /**
      * Updates an existing child.
@@ -109,14 +118,18 @@ public class childrenRepo {
         return getChildById(caregiverId, childId);
     }
 
-    public boolean deleteChild(String caregiverId, String childId) throws ExecutionException, InterruptedException {
-        var ref = childrenCollection(caregiverId).document(childId);
-        var doc = ref.get().get();
-        if (doc == null || !doc.exists()) return false;
+public boolean deleteChild(String caregiverId, String childId) throws ExecutionException, InterruptedException {
+    var ref = childrenCollection(caregiverId).document(childId);
+    var doc = ref.get().get();
+    if (doc == null || !doc.exists()) return false;
 
-        ref.delete().get();
-        return true;
-    }
+    ref.update(
+            "isActivated", false,
+            "updatedAt", FieldValue.serverTimestamp()
+    ).get();
+
+    return true;
+}
 
     public String findChildName(String caregiverId, String childId) throws ExecutionException, InterruptedException {
 

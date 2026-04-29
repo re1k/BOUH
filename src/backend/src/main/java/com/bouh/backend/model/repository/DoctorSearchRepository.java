@@ -23,6 +23,7 @@ public class DoctorSearchRepository {
     public List<QueryDocumentSnapshot> getAllDoctors() throws ExecutionException, InterruptedException {
         QuerySnapshot snapshot = firestore.collection("doctors")
                 .whereEqualTo("registrationStatus", "APPROVED")
+                .whereEqualTo("isActivated", true)
                 .get()
                 .get();
         return snapshot.getDocuments();
@@ -32,6 +33,7 @@ public class DoctorSearchRepository {
             throws ExecutionException, InterruptedException {
         QuerySnapshot snapshot = firestore.collection("doctors")
                 .whereEqualTo("registrationStatus", "APPROVED")
+                .whereEqualTo("isActivated", true)
                 .whereEqualTo("areaOfKnowledge", area)
                 .orderBy("averageRating", Query.Direction.DESCENDING)
                 .get()
@@ -44,6 +46,7 @@ public class DoctorSearchRepository {
 
         Query query = firestore.collection("doctors")
                 .whereEqualTo("registrationStatus", "APPROVED")
+                .whereEqualTo("isActivated", true)
                 .orderBy("averageRating", Query.Direction.DESCENDING)
                 .limit(PAGE_SIZE + 1); // fetch 21 to check if there are more
 

@@ -519,7 +519,7 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
     );
   }
 
-  Future<void> _loadProfile({
+  Future<bool> _loadProfile({
     bool silent = false,
     bool updateAvatar = true,
   }) async {

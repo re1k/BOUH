@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.concurrent.ExecutionException;
+import com.bouh.backend.model.Dto.Qualificationrequestdto;
 
 @Service
 public class DoctorManagementService {
@@ -47,6 +48,46 @@ public class DoctorManagementService {
         String[] emailAndName = doctorManagementRepository.getDoctorEmailAndName(uid);
         if (emailAndName != null) {
             emailService.sendRegistrationRejectedEmail(emailAndName[0], emailAndName[1]);
+        }
+    }
+
+    public List<Qualificationrequestdto> getPendingQualificationRequests()
+            throws ExecutionException, InterruptedException {
+        return doctorManagementRepository.getPendingQualificationRequests();
+    }
+
+    public void acceptQualificationRequest(String requestId)
+            throws ExecutionException, InterruptedException {
+
+        // 1. Get doctorId from the request
+        String doctorId = doctorManagementRepository.getDoctorIdFromRequest(requestId);
+
+        // 2. Apply new qualifications to doctor document
+        doctorManagementRepository.applyQualificationUpdate(doctorId, requestId);
+
+        // 3. Delete the request document
+        doctorManagementRepository.deleteQualificationRequest(requestId);
+
+        // 4. Send acceptance email
+        String[] emailAndName = doctorManagementRepository.getDoctorEmailAndName(doctorId);
+        if (emailAndName != null) {
+            emailService.sendQualificationAcceptedEmail(emailAndName[0], emailAndName[1]);
+        }
+    }
+
+    public void rejectQualificationRequest(String requestId)
+            throws ExecutionException, InterruptedException {
+
+        // 1. Get doctorId before deleting
+        String doctorId = doctorManagementRepository.getDoctorIdFromRequest(requestId);
+
+        // 2. Delete the request document (no qualification update)
+        doctorManagementRepository.deleteQualificationRequest(requestId);
+
+        // 3. Send rejection email
+        String[] emailAndName = doctorManagementRepository.getDoctorEmailAndName(doctorId);
+        if (emailAndName != null) {
+            emailService.sendQualificationRejectedEmail(emailAndName[0], emailAndName[1]);
         }
     }
 }

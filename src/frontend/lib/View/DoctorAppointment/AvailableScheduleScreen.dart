@@ -6,6 +6,7 @@ import 'package:table_calendar/table_calendar.dart';
 import 'package:bouh/dto/AvailabilityDto.dart';
 import 'package:bouh/services/AvailabilityService.dart';
 import 'package:bouh/authentication/AuthSession.dart';
+import 'package:bouh/config/slot_config.dart';
 
 class AvailableScheduleScreen extends StatefulWidget {
   const AvailableScheduleScreen({super.key});
@@ -41,7 +42,7 @@ class _AvailableScheduleScreenState extends State<AvailableScheduleScreen> {
   final Map<String, Set<int>> draftByDate = {};
 
   //Fixed slot count
-  static const int slotCount = 10;
+  static final int slotCount = SlotConfig.slotCount;
 
   // ─────────────────────────────────────────────────────────────
   // Date helpers
@@ -77,8 +78,8 @@ class _AvailableScheduleScreenState extends State<AvailableScheduleScreen> {
 
   // start time of a slot (today's date + 16:00 + index*30min)
   DateTime _slotStart(DateTime day, int index) {
-    final start = DateTime(day.year, day.month, day.day, 16, 0);
-    return start.add(Duration(minutes: index * 30));
+    final (h, m) = SlotConfig.slotStart(index);
+    return DateTime(day.year, day.month, day.day, h, m);
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -177,25 +178,7 @@ class _AvailableScheduleScreenState extends State<AvailableScheduleScreen> {
     return found.first.booked;
   }
 
-  // Convert slot index to UI label (4:00 -> 9:00, 30 min)
-  String _slotLabel(int index) {
-    // start 16:00
-    final totalMinutes = index * 30;
-    final hour = 16 + (totalMinutes ~/ 60);
-    final minute = totalMinutes % 60;
-    final nextTotal = totalMinutes + 30;
-    final hour2 = 16 + (nextTotal ~/ 60);
-    final minute2 = nextTotal % 60;
-
-    String fmt(int h, int m) {
-      // show Arabic PM format (مساءً)
-      final hh = (h > 12) ? (h - 12) : h;
-      final mm = _two(m);
-      return "$hh:$mm";
-    }
-
-    return "${fmt(hour, minute)} - ${fmt(hour2, minute2)} مساءً";
-  }
+  String _slotLabel(int index) => SlotConfig.slotLabel(index);
 
   bool _isSameDate(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
@@ -219,6 +202,17 @@ class _AvailableScheduleScreenState extends State<AvailableScheduleScreen> {
         backgroundColor: BColors.white,
         elevation: 0,
         centerTitle: true,
+        automaticallyImplyLeading: false,
+        actions: [
+          IconButton(
+            icon: const Icon(
+              Icons.arrow_forward_ios,
+              color: BColors.textDarkestBlue,
+              size: 20,
+            ),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
         title: const Text(
           'جدولة الأوقات المتاحة',
           style: TextStyle(
@@ -544,10 +538,18 @@ class _AvailableScheduleScreenState extends State<AvailableScheduleScreen> {
           LayoutBuilder(
             builder: (context, constraints) {
               final itemWidth = (constraints.maxWidth - (2 * 12)) / 3;
-              final visibleIndexes = List<int>.generate(
-                slotCount,
-                (i) => i,
-              ).where((i) => !_shouldHideSlot(day, i)).toList();
+              final visibleIndexes =
+                  List<int>.generate(
+                      slotCount,
+                      (i) => i,
+                    ).where((i) => !_shouldHideSlot(day, i)).toList()
+                    ..sort((a, b) {
+                      final isMorningA = SlotConfig.isMorningSlot(a);
+                      final isMorningB = SlotConfig.isMorningSlot(b);
+                      if (isMorningA && !isMorningB) return -1; // morning first
+                      if (!isMorningA && isMorningB) return 1;
+                      return a.compareTo(b);
+                    });
               return Wrap(
                 spacing: 12,
                 runSpacing: 12,

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:bouh/View/Meeting/agora_call_page.dart';
 import 'package:bouh/config/api_config.dart';
+import 'package:bouh/config/slot_config.dart';
 import 'package:bouh/dto/Meeting/join_meeting_response_dto.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -206,10 +207,19 @@ class CaregiverHomepageState extends State<CaregiverHomepage>
   }
 
   static String _formatTimeRange(String? start, String? end) {
-    const suffix = 'مساءً';
     final s = start ?? '';
     final e = end ?? '';
     if (s.isEmpty && e.isEmpty) return '';
+
+    // Find which slot matches this start time to get correct AM/PM
+    String suffix = 'مساءً'; // default
+    for (int i = 0; i < SlotConfig.slotCount; i++) {
+      if (SlotConfig.slotStartText(i) == s) {
+        suffix = SlotConfig.amPmSuffix(i);
+        break;
+      }
+    }
+
     if (e.isEmpty) return '$s $suffix';
     return '$s - $e $suffix';
   }
