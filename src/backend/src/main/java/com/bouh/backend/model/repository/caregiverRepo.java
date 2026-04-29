@@ -30,6 +30,9 @@ public class caregiverRepo {
         this.firestore = firestore; // set the instance so this repo use it
     }
 
+    /*
+     * Creates a caregiver Account
+     */
     public void createCaregiver(String uid, caregiverDto dto) {
         try {
             // to prevent having a caregiver without connecting it to its children
@@ -42,6 +45,10 @@ public class caregiverRepo {
             caregiverData.put("name", dto.getName() != null ? dto.getName() : "");
             caregiverData.put("email", dto.getEmail());
             caregiverData.put("fcmToken", dto.getFcmToken());
+            caregiverData.put("isActivated", true);
+
+
+
             batch.set(caregiverRef, caregiverData);
 
             if (dto.getChildren() != null) {
@@ -71,6 +78,9 @@ public class caregiverRepo {
         }
     }
 
+    /*
+     * checks if a caregiver exists
+     */
     public boolean existsByUid(String uid) {
         try {
             DocumentSnapshot snapshot = firestore
@@ -87,13 +97,19 @@ public class caregiverRepo {
         }
     }
 
+    /*
+     * Soft Deletes a caregiver
+     */
     public void deleteCaregiver(String uid) {
         try {
             DocumentReference caregiverRef = firestore.collection("caregivers").document(uid);
 
-            deleteAccountAppointments(uid);
             // soft-delete: keep data, mark as deactivated
-            caregiverRef.update("isActivated", false).get();
+            caregiverRef.update("isActivated", false,
+                "email", FieldValue.delete(),
+                "fcmToken", FieldValue.delete()
+            ).get();
+
             // delete Firebase Authentication account 
             FirebaseAuth.getInstance().deleteUser(uid);
 
@@ -113,18 +129,6 @@ public class caregiverRepo {
                                 .toInstant()));
     }
 
-    private void deleteAccountAppointments(String uid) throws Exception {
-        ApiFuture<QuerySnapshot> future = firestore.collection("appointments")
-                .whereEqualTo("caregiverId", uid)
-                .get();
-
-        List<QueryDocumentSnapshot> documents = future.get().getDocuments();
-
-        for (QueryDocumentSnapshot doc : documents) {
-            doc.getReference().delete().get();
-        }
-    }
-
     public void updateFcmToken(String uid, String fcmToken) {
         try {
             firestore.collection("caregivers")
@@ -137,7 +141,9 @@ public class caregiverRepo {
         }
     }
 
-    // caregiver profile Info Id,email,name,fcmToken
+    /*
+     * Returns caregiver profile Info Id,email,name,fcmToken
+     */
     public caregiverDto findByUid(String uid) {
         try {
             DocumentSnapshot snapshot = firestore
