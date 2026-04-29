@@ -41,6 +41,9 @@ public class doctorRepo {
         this.gcsImageService = gcsImageService;
     }
 
+     /*
+     * Creates a new doctor account
+     */
     public void createDoctor(String uid, doctorDto dto) {
         try {
             // to ensure full write of all fields
@@ -62,6 +65,8 @@ public class doctorRepo {
             doctorData.put("profilePhotoURL", dto.getProfilePhotoURL());
             doctorData.put("registrationStatus", "PENDING");
             doctorData.put("fcmToken", dto.getFcmToken());
+            doctorData.put("isActivated", true );
+
 
             batch.set(doctorRef, doctorData);
             batch.commit().get();
@@ -72,6 +77,9 @@ public class doctorRepo {
         }
     }
 
+    /*
+     * Finds a doctor by ID
+     */
     public doctorDto findByUid(String uid) {
         try {
             DocumentSnapshot snapshot = firestore
@@ -109,7 +117,7 @@ public class doctorRepo {
         }
     }
 
-    /**
+    /*
      * Returns list of approved doctors for caregiver browsing screen.
      */
     public java.util.List<com.bouh.backend.model.Dto.DoctorSummaryDto> getDoctorsForCaregiverList()
@@ -138,8 +146,8 @@ public class doctorRepo {
             dto.setAreaOfKnowledge(getString(doc, "areaOfKnowledge"));
 
             Object raw = doc.get("rating");
-            System.out.println("🔥 rating raw = " + raw);
-            System.out.println("🔥 rating type = " + (raw == null ? "null" : raw.getClass()));
+            System.out.println(" rating raw = " + raw);
+            System.out.println(" rating type = " + (raw == null ? "null" : raw.getClass()));
 
             dto.setAverageRating(getDouble(doc, "averageRating"));
 
@@ -161,7 +169,7 @@ public class doctorRepo {
         return result;
     }
 
-    /**
+    /*
      * Returns full doctor details for Doctor Details screen.
      */
     public com.bouh.backend.model.Dto.DoctorDetailsDto getDoctorDetails(String doctorId)
@@ -309,7 +317,11 @@ public class doctorRepo {
                 .toList();
     }
 
-        public String deleteDoctor(String uid) {
+
+    /*
+     * Checks to allow delete
+     */
+    public String deleteDoctor(String uid) {
 
         try {
             doctorDto doctor = findByUid(uid);
@@ -325,7 +337,7 @@ public class doctorRepo {
                 return "upcoming-appointment-found";
             }
 
-           // async call via proxy
+           // async call via proxy, for faster deletion
            context.getBean(doctorRepo.class).deleteDoctorAsync(uid, doctor);
 
             return "deleted";
@@ -336,23 +348,32 @@ public class doctorRepo {
         }
     }
 
+    /*
+     * Soft Deletes a doctor account
+     */
     @Async
     public void deleteDoctorAsync(String uid, doctorDto doctor) {
         try {
 
-            // 1. delete appointments
-            deleteByDoctorId(uid);
-
-             // 2. delete image
+             // delete image
            if (doctor.getProfilePhotoURL() != null) {
                  gcsImageService.deleteImage(doctor.getProfilePhotoURL());
             }
 
-            // 3. soft-delete: keep data, mark as deactivated
+            // soft-delete: keep appointments data, and mark as deactivated
             firestore.collection("doctors").document(uid)
-                    .update("isActivated", false).get();
+                    .update("isActivated", false,
+                    "profilePhotoURL",null,
+                    "email", FieldValue.delete(),
+                    "fcmToken", FieldValue.delete(),
+                    "iban", FieldValue.delete(),
+                    "gender", FieldValue.delete(),
+                    "qualifications", FieldValue.delete(),
+                    "yearsOfExperience", FieldValue.delete(),
+                    "averageRating",FieldValue.delete()
+                 ).get();
 
-            // 4. delete auth
+            // delete the firebase auth account
             FirebaseAuth.getInstance().deleteUser(uid);
 
         } catch (Exception e) {
@@ -361,23 +382,9 @@ public class doctorRepo {
         }
     }
 
-    public void deleteByDoctorId(String uid) throws Exception {
-
-        ApiFuture<QuerySnapshot> future = firestore.collection("appointments")
-                .whereEqualTo("doctorId", uid)
-                .get();
-
-        List<QueryDocumentSnapshot> docs = future.get().getDocuments();
-
-        docs.parallelStream().forEach(doc -> {
-            try {
-                doc.getReference().delete().get();
-            } catch (Exception e) {
-                log.error("Failed to delete appointment {}", doc.getId(), e);
-            }
-        });
-    }
-
+    /*
+     * Updates FCM tocken
+     */
     public void updateFcmToken(String uid, String fcmToken) {
         try {
             firestore.collection("doctors")
@@ -390,7 +397,9 @@ public class doctorRepo {
         }
     }
 
-    // set a new rate from the caregiver and update the Avg
+    /*
+     * Sets a new rate from a caregiver and updates the average
+     */
     public void addRating(String doctorId, int rating) throws Exception {
 
         DocumentReference doctorRef = firestore.collection("doctors").document(doctorId);
