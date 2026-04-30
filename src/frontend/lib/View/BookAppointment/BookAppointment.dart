@@ -10,15 +10,17 @@ import 'package:bouh/dto/scheduleDto.dart';
 import 'package:bouh/dto/childDto.dart';
 import 'package:bouh/authentication/AuthSession.dart';
 import 'package:bouh/config/slot_config.dart';
+import 'package:bouh/widgets/confirmation_popup.dart';
 
 class BookingView extends StatefulWidget {
   final String doctorId;
   final String doctorName;
-
+  final ValueChanged<bool>? onHasChanges;
   const BookingView({
     super.key,
     required this.doctorId,
     required this.doctorName,
+    this.onHasChanges,
   });
 
   @override
@@ -500,7 +502,10 @@ class _BookingViewState extends State<BookingView> {
                   return SizedBox(
                     width: itemWidth,
                     child: InkWell(
-                      onTap: () => setState(() => selectedTimeIndex = i),
+                      onTap: () {
+                        setState(() => selectedTimeIndex = i);
+                        widget.onHasChanges?.call(true);
+                      },
                       borderRadius: BorderRadius.circular(14),
                       child: Container(
                         height: 44,

@@ -1,3 +1,4 @@
+import 'package:bouh/widgets/confirmation_popup.dart';
 import 'package:flutter/material.dart';
 import 'package:bouh/theme/base_themes/colors.dart';
 import 'package:bouh/dto/doctorSummaryDto.dart';
@@ -16,6 +17,7 @@ class DoctorDetailsView extends StatefulWidget {
 
 class _DoctorDetailsViewState extends State<DoctorDetailsView> {
   int tabIndex = 0;
+  bool hasBookingChanges = false;
   Future<DoctorDto>? _doctorDetailsFuture;
 
   @override
@@ -75,6 +77,11 @@ class _DoctorDetailsViewState extends State<DoctorDetailsView> {
                               BookingView(
                                 doctorId: widget.doctor.doctorId!,
                                 doctorName: doctorName,
+                                onHasChanges: (val) {
+                                  setState(() {
+                                    hasBookingChanges = val;
+                                  });
+                                },
                               ),
                             const SizedBox(height: 18),
                           ],
@@ -90,7 +97,24 @@ class _DoctorDetailsViewState extends State<DoctorDetailsView> {
               right: 12,
               child: SafeArea(
                 child: InkWell(
-                  onTap: () => Navigator.pop(context),
+                  onTap: () async {
+                    if (tabIndex != 1 || !hasBookingChanges) {
+                      Navigator.pop(context);
+                      return;
+                    }
+
+                    final confirmed = await ConfirmationPopup.show(
+                      context,
+                      title: "الخروج من الحجز",
+                      message: "هل تريدين الخروج قبل إكمال حجز الموعد؟",
+                      confirmText: "خروج",
+                      cancelText: "متابعة ",
+                    );
+
+                    if (confirmed == true && context.mounted) {
+                      Navigator.pop(context);
+                    }
+                  },
                   child: const Icon(Icons.chevron_left, size: 34),
                 ),
               ),
