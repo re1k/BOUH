@@ -79,6 +79,10 @@ public class ProfilesRepo {
             putIfNotNull(updates, "yearsOfExperience", dto.getYearsOfExperience());
             putIfNotNull(updates, "iban", dto.getIban());
 
+            // if (dto.getQualifications() != null) {
+            // updates.put("qualifications", cleanQualifications(dto.getQualifications()));
+            // }
+
             if (dto.getQualifications() != null) {
                 if (hasPendingRequest(uid)) {
                     throw new RuntimeException("لديك طلب تعديل مؤهلات قيد المراجعة حالياً.");

@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:async';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:bouh/authentication/AuthService.dart';
 import 'package:bouh/authentication/AuthSession.dart';
@@ -29,6 +31,10 @@ class AccountUpdateResult {
 /// `GET /api/accounts/profile`
 /// ` PATCH /api/accounts/doctor/update`
 class ProfileService {
+  static const String _networkErrorMessage =
+      'حدث خطأ، تأكد أنك متصل بالشبكة وحاول مرة أخرى';
+  static const Duration _requestTimeout = Duration(seconds: 15);
+
   Uri _url(String path) => Uri.parse('${ApiConfig.baseUrl}$path');
 
   Map<String, String> _authHeaders({bool json = false}) {
@@ -44,17 +50,38 @@ class ProfileService {
 
   /// `GET /api/accounts/profile`
   Future<DoctorProfileResponseDto> fetchDoctorProfile() async {
-    var res = await http.get(
-      _url('/api/accounts/profile'),
-      headers: _authHeaders(json: true),
-    );
+    http.Response res;
+    try {
+      res = await http
+          .get(
+            _url('/api/accounts/profile'),
+            headers: _authHeaders(json: true),
+          )
+          .timeout(_requestTimeout);
+    } on SocketException {
+      throw Exception(_networkErrorMessage);
+    } on TimeoutException {
+      throw Exception(_networkErrorMessage);
+    } on http.ClientException {
+      throw Exception(_networkErrorMessage);
+    }
 
     if (res.statusCode == 401) {
       await AuthService.instance.refreshSession();
-      res = await http.get(
-        _url('/api/accounts/profile'),
-        headers: _authHeaders(json: true),
-      );
+      try {
+        res = await http
+            .get(
+              _url('/api/accounts/profile'),
+              headers: _authHeaders(json: true),
+            )
+            .timeout(_requestTimeout);
+      } on SocketException {
+        throw Exception(_networkErrorMessage);
+      } on TimeoutException {
+        throw Exception(_networkErrorMessage);
+      } on http.ClientException {
+        throw Exception(_networkErrorMessage);
+      }
     }
 
     if (res.statusCode == 401 || res.statusCode == 403) {

@@ -345,6 +345,11 @@ class _LoginViewState extends State<LoginView> {
                           keyboardType: TextInputType.emailAddress,
                           obscure: false,
                           controller: _emailCtrl,
+                          prefixIcon: const Icon(
+                            Icons.email_outlined,
+                            color: BColors.primary,
+                            size: 22,
+                          ),
                           focusNode: _emailFocusNode,
                           fieldKey: _emailFieldKey,
                           validator: (v) =>
@@ -364,6 +369,11 @@ class _LoginViewState extends State<LoginView> {
                           keyboardType: TextInputType.text,
                           obscure: _obscurePassword,
                           controller: _passwordCtrl,
+                          prefixIcon: const Icon(
+                            Icons.lock_outline_rounded,
+                            color: BColors.primary,
+                            size: 22,
+                          ),
                           focusNode: _passwordFocusNode,
                           fieldKey: _passwordFieldKey,
                           validator: (v) =>
@@ -380,7 +390,7 @@ class _LoginViewState extends State<LoginView> {
                               _obscurePassword
                                   ? Icons.visibility_off_outlined
                                   : Icons.visibility_outlined,
-                              color: BColors.darkGrey,
+                              color: BColors.primary,
                               size: 22,
                             ),
                             onPressed: () =>
@@ -527,6 +537,7 @@ class _LabeledField extends StatelessWidget {
   final ValueChanged<String>? onFieldSubmitted;
   final String? serverError;
   final VoidCallback? onChanged;
+  final Widget? prefixIcon;
   final Widget? suffixIcon;
 
   const _LabeledField({
@@ -541,6 +552,7 @@ class _LabeledField extends StatelessWidget {
     this.onFieldSubmitted,
     this.serverError,
     this.onChanged,
+    this.prefixIcon,
     this.suffixIcon,
   });
 
@@ -572,7 +584,16 @@ class _LabeledField extends StatelessWidget {
               horizontal: 14,
               vertical: 12,
             ),
+            prefixIcon: prefixIcon,
+            prefixIconConstraints: const BoxConstraints(
+              minWidth: 44,
+              minHeight: 44,
+            ),
             suffixIcon: suffixIcon,
+            suffixIconConstraints: const BoxConstraints(
+              minWidth: 44,
+              minHeight: 44,
+            ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
               borderSide: const BorderSide(color: BColors.grey),

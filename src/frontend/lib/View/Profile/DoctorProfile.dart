@@ -180,6 +180,18 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
 
   static bool _isAllowedProfileYearsOfExperience(int? y) =>
       y != null && y >= 1 && y <= 5;
+  static const String _discardChangesMessage =
+      'لديك تغييرات غير محفوظة. هل تريد المغادرة؟';
+
+  Future<bool> _confirmDiscardUnsavedChanges() {
+    return ConfirmationPopup.show(
+      context,
+      title: 'تغييرات غير محفوظة',
+      message: _discardChangesMessage,
+      confirmText: 'مغادرة',
+      cancelText: 'بقاء',
+    );
+  }
 
   String _userFriendlyError(Object error) {
     final raw = error.toString().trim();
@@ -855,9 +867,31 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
                   (_nameCtrl.text.trim() != baselineNameBody ||
                       _ibanCtrl.text.trim() != baselineIbanSuffix ||
                       pageGender.trim().toLowerCase() != baselineGender);
+              bool hasUnsavedPersonalChanges() {
+                if (!personalEditing) return false;
+                return _nameCtrl.text.trim() != baselineNameBody ||
+                    _ibanCtrl.text.trim() != baselineIbanSuffix ||
+                    pageGender.trim().toLowerCase() != baselineGender;
+              }
               return Directionality(
                 textDirection: TextDirection.rtl,
-                child: Scaffold(
+                child: WillPopScope(
+                  onWillPop: () async {
+                    if (!hasUnsavedPersonalChanges()) return true;
+                    final shouldDiscard = await _confirmDiscardUnsavedChanges();
+                    if (!shouldDiscard) return false;
+                    setState(() {
+                      _saveError = null;
+                      _nameCtrl.text = baselineNameBody;
+                      _ibanCtrl.text = baselineIbanSuffix;
+                      _gender = baselineGender;
+                    });
+                    pageGender = _gender;
+                    personalEditing = false;
+                    setPage(() {});
+                    return true;
+                  },
+                  child: Scaffold(
                   backgroundColor: BColors.white,
                   appBar: AppBar(
                     backgroundColor: BColors.white,
@@ -869,7 +903,25 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
                         size: 20,
                         color: BColors.textDarkestBlue,
                       ),
-                      onPressed: () => Navigator.of(routeCtx).pop(),
+                      onPressed: () async {
+                        if (!hasUnsavedPersonalChanges()) {
+                          Navigator.of(routeCtx).pop();
+                          return;
+                        }
+                        final shouldDiscard =
+                            await _confirmDiscardUnsavedChanges();
+                        if (!shouldDiscard || !context.mounted) return;
+                        setState(() {
+                          _saveError = null;
+                          _nameCtrl.text = baselineNameBody;
+                          _ibanCtrl.text = baselineIbanSuffix;
+                          _gender = baselineGender;
+                        });
+                        pageGender = _gender;
+                        personalEditing = false;
+                        setPage(() {});
+                        Navigator.of(routeCtx).pop();
+                      },
                     ),
                     title: const Text(
                       'المعلومات الشخصية',
@@ -1059,6 +1111,11 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
                                           onPressed: _saving || _loadingProfile
                                               ? null
                                               : () async {
+                                                  if (hasUnsavedPersonalChanges()) {
+                                                    final shouldDiscard =
+                                                        await _confirmDiscardUnsavedChanges();
+                                                    if (!shouldDiscard) return;
+                                                  }
                                                   setState(() {
                                                     _saveError = null;
                                                     _nameCtrl.text =
@@ -1099,6 +1156,7 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
                           ],
                         ),
                       ),
+                      if (_isDeletingAccount) BouhLoadingOverlay(),
                     ],
                   ),
                   bottomNavigationBar: SafeArea(
@@ -1131,6 +1189,7 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
                       ),
                     ),
                   ),
+                ),
                 ),
               );
             },
@@ -1182,9 +1241,28 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
                   yearsError == null &&
                   (_qualificationsForSubmit().join('\n') != baselineQuals ||
                       _yearsOfExperience != baselineYears);
+              bool hasUnsavedProfessionalChanges() {
+                if (!professionalEditing) return false;
+                return _qualificationsForSubmit().join('\n') != baselineQuals ||
+                    _yearsOfExperience != baselineYears;
+              }
               return Directionality(
                 textDirection: TextDirection.rtl,
-                child: Scaffold(
+                child: WillPopScope(
+                  onWillPop: () async {
+                    if (!hasUnsavedProfessionalChanges()) return true;
+                    final shouldDiscard = await _confirmDiscardUnsavedChanges();
+                    if (!shouldDiscard) return false;
+                    setState(() {
+                      _replaceQualificationEditors(baselineQualsList);
+                      _yearsOfExperience = baselineYears;
+                      _saveError = null;
+                    });
+                    professionalEditing = false;
+                    setPage(() {});
+                    return true;
+                  },
+                  child: Scaffold(
                   backgroundColor: BColors.white,
                   appBar: AppBar(
                     backgroundColor: BColors.white,
@@ -1196,7 +1274,23 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
                         size: 20,
                         color: BColors.textDarkestBlue,
                       ),
-                      onPressed: () => Navigator.of(routeCtx).pop(),
+                      onPressed: () async {
+                        if (!hasUnsavedProfessionalChanges()) {
+                          Navigator.of(routeCtx).pop();
+                          return;
+                        }
+                        final shouldDiscard =
+                            await _confirmDiscardUnsavedChanges();
+                        if (!shouldDiscard || !context.mounted) return;
+                        setState(() {
+                          _replaceQualificationEditors(baselineQualsList);
+                          _yearsOfExperience = baselineYears;
+                          _saveError = null;
+                        });
+                        professionalEditing = false;
+                        setPage(() {});
+                        Navigator.of(routeCtx).pop();
+                      },
                     ),
                     title: const Text(
                       'المعلومات المهنية',
@@ -1446,6 +1540,11 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
                                               _saving || _loadingProfile
                                                   ? null
                                                   : () async {
+                                                      if (hasUnsavedProfessionalChanges()) {
+                                                        final shouldDiscard =
+                                                            await _confirmDiscardUnsavedChanges();
+                                                        if (!shouldDiscard) return;
+                                                      }
                                                       setState(
                                                         () {
                                                             _replaceQualificationEditors(
@@ -1490,6 +1589,7 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
                       ),
                     ],
                   ),
+                ),
                 ),
               );
             },
@@ -2015,8 +2115,8 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
                           textAlign: TextAlign.center,
                           style: const TextStyle(
                             fontSize: 13,
-                            color: BColors.validationError,
-                            fontWeight: FontWeight.w600,
+                            color: Colors.grey,
+                            fontWeight: FontWeight.normal,
                           ),
                         ),
                         const SizedBox(height: 8),
