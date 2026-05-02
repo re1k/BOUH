@@ -79,6 +79,22 @@ public class RefundService {
         }
     }
 
+    public boolean refundByAdmin(String paymentIntentId) {
+        try {
+            PaymentIntent intent = PaymentIntent.retrieve(paymentIntentId);
+            String chargeId = intent.getLatestCharge();
+            if (chargeId == null || chargeId.isBlank()) {
+                log.warn("Cannot refund paymentIntent={}: no latest_charge", paymentIntentId);
+                return false;
+            }
+            Refund.create(RefundCreateParams.builder().setCharge(chargeId).build());
+            return true;
+        } catch (StripeException e) {
+            log.error("Stripe refund failed for paymentIntent={}: {}", paymentIntentId, e.getMessage());
+            return false;
+        }
+    }
+
     private void notifyOtherPartyAboutCanceledAppointment(String paymentIntentId, String actorUid) {
         if (paymentIntentId == null || paymentIntentId.isBlank() || actorUid == null || actorUid.isBlank()) {
             return;
