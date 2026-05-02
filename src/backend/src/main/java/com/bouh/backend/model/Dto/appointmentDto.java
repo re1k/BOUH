@@ -20,7 +20,7 @@ public class appointmentDto {
     private String timeSlotId;
     private Timestamp startDateTime;
     private String endTime;
-    private String meetingLink;
+  private String meetingLink;
     private Long amount;
     /** 0 = absent, 1 = present. */
     private Integer status;

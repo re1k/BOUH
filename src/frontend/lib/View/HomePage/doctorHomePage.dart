@@ -6,7 +6,6 @@ import 'package:bouh/config/slot_config.dart';
 import 'package:bouh/dto/Meeting/join_meeting_response_dto.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:url_launcher/url_launcher.dart';
 import 'package:bouh/View/HomePage/widgets/appointment_card.dart';
 import 'package:bouh/View/HomePage/widgets/doctorBottomNav.dart';
 import 'package:bouh/theme/base_themes/colors.dart';
@@ -20,6 +19,7 @@ import 'package:bouh/widgets/loading_overlay.dart';
 import 'package:bouh/services/doctorsService.dart';
 import 'package:bouh/dto/doctorBarInfoDto.dart';
 import 'package:bouh/services/profileService.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// When used inside [DoctorNavbar], pass [currentIndex] and [onTap] so the
 /// bottom nav reflects the active tab and handles tab changes.
@@ -51,6 +51,10 @@ class DoctorHomePageState extends State<DoctorHomePage>
   final RefundService _refundService = RefundService();
   StreamSubscription<List<UpcomingAppointmentDto>>? _subscription;
   Timer? _ticker;
+  final Map<String, StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>>
+  _childListeners = {};
+  final Map<String, StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>>
+  _caregiverListeners = {};
   String? _doctorId;
   final ProfileService _profileService = ProfileService();
   String? _headerDoctorName;
@@ -75,6 +79,14 @@ class DoctorHomePageState extends State<DoctorHomePage>
     WidgetsBinding.instance.removeObserver(this);
     _subscription?.cancel();
     _ticker?.cancel();
+    for (final sub in _childListeners.values) {
+      sub.cancel();
+    }
+    _childListeners.clear();
+    for (final sub in _caregiverListeners.values) {
+      sub.cancel();
+    }
+    _caregiverListeners.clear();
     super.dispose();
   }
 
@@ -156,6 +168,14 @@ class DoctorHomePageState extends State<DoctorHomePage>
   void _subscribeToStream(String? doctorId) {
     _subscription?.cancel();
     _ticker?.cancel();
+    for (final sub in _childListeners.values) {
+      sub.cancel();
+    }
+    _childListeners.clear();
+    for (final sub in _caregiverListeners.values) {
+      sub.cancel();
+    }
+    _caregiverListeners.clear();
 
     if (doctorId == null || doctorId.isEmpty) {
       setState(() {
@@ -183,6 +203,8 @@ class DoctorHomePageState extends State<DoctorHomePage>
               _error = null;
             });
             _startTicker();
+            _updateChildListeners(_todayList);
+            _updateCaregiverListeners(_todayList);
           },
           onError: (e) {
             if (!mounted) return;
@@ -428,14 +450,6 @@ class DoctorHomePageState extends State<DoctorHomePage>
       buttonType: buttonType,
       onActionTap: onActionTap,
     );
-  }
-
-  Future<void> _openMeetingLink(String url) async {
-    final uri = Uri.tryParse(url);
-    if (uri == null) return;
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
   }
 
   static bool _isJoinEnabled(UpcomingAppointmentDto dto) {
@@ -750,7 +764,6 @@ class DoctorHomePageState extends State<DoctorHomePage>
         ),
       );
 
-      // بعد الرجوع من الميتنق رجع التحميل
       _prepareSessionAndLoad();
     } catch (e) {
       print('JOIN ERROR: $e');
@@ -760,6 +773,101 @@ class DoctorHomePageState extends State<DoctorHomePage>
   void _pauseLiveUpdates() {
     _ticker?.cancel();
     _subscription?.cancel();
+    for (final sub in _childListeners.values) {
+      sub.cancel();
+    }
+    _childListeners.clear();
+    for (final sub in _caregiverListeners.values) {
+      sub.cancel();
+    }
+    _caregiverListeners.clear();
+  }
+
+  void _updateChildListeners(List<UpcomingAppointmentDto> list) {
+    final currentKeys = list
+        .where((d) => d.childId != null && d.caregiverId != null)
+        .map((d) => '${d.caregiverId}_${d.childId}')
+        .toSet();
+
+    _childListeners.keys
+        .where((k) => !currentKeys.contains(k))
+        .toList()
+        .forEach((k) => _childListeners.remove(k)?.cancel());
+
+    for (final dto in list) {
+      final caregiverId = dto.caregiverId;
+      final childId = dto.childId;
+
+      if (caregiverId == null || childId == null) continue;
+
+      final key = '${caregiverId}_$childId';
+      if (_childListeners.containsKey(key)) continue;
+
+      _childListeners[key] = FirebaseFirestore.instance
+          .collection('caregivers')
+          .doc(caregiverId)
+          .collection('children')
+          .doc(childId)
+          .snapshots()
+          .skip(1)
+          .listen((_) => _refetchOnChildChange());
+    }
+  }
+
+  Future<void> _refetchOnChildChange() async {
+    final doctorId = AuthSession.instance.userId;
+    if (doctorId == null || doctorId.isEmpty || !mounted) return;
+
+    try {
+      final list = await _appointmentsService.getUpcomingAppointmentsByDoctor(
+        doctorId,
+      );
+
+      if (!mounted) return;
+
+      setState(() => _todayList = _filterTodayAndRemoveExpired(list));
+      _updateChildListeners(_todayList);
+    } catch (_) {}
+  }
+
+  void _updateCaregiverListeners(List<UpcomingAppointmentDto> list) {
+    final currentIds = list
+        .map((d) => d.caregiverId)
+        .whereType<String>()
+        .where((id) => id.isNotEmpty)
+        .toSet();
+
+    _caregiverListeners.keys
+        .where((id) => !currentIds.contains(id))
+        .toList()
+        .forEach((id) => _caregiverListeners.remove(id)?.cancel());
+
+    for (final caregiverId in currentIds) {
+      if (_caregiverListeners.containsKey(caregiverId)) continue;
+
+      _caregiverListeners[caregiverId] = FirebaseFirestore.instance
+          .collection('caregivers')
+          .doc(caregiverId)
+          .snapshots()
+          .skip(1)
+          .listen((_) => _refetchOnCaregiverChange());
+    }
+  }
+
+  Future<void> _refetchOnCaregiverChange() async {
+    final doctorId = AuthSession.instance.userId;
+    if (doctorId == null || doctorId.isEmpty || !mounted) return;
+
+    try {
+      final list = await _appointmentsService.getUpcomingAppointmentsByDoctor(
+        doctorId,
+      );
+
+      if (!mounted) return;
+
+      setState(() => _todayList = _filterTodayAndRemoveExpired(list));
+      _updateCaregiverListeners(_todayList);
+    } catch (_) {}
   }
 }
 

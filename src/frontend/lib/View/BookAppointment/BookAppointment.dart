@@ -38,7 +38,7 @@ class _BookingViewState extends State<BookingView> {
 
   late DateTime focusedDay;
   DateTime? selectedDay;
-
+  bool isLoadingAvailability = false;
   int selectedTimeIndex = -1;
 
   bool isLoadingSchedule = false;
@@ -49,7 +49,7 @@ class _BookingViewState extends State<BookingView> {
   String? childrenError;
 
   ScheduleDto? selectedSchedule;
-
+  Map<String, bool> availableDays = {};
   @override
   void initState() {
     super.initState();
@@ -58,6 +58,9 @@ class _BookingViewState extends State<BookingView> {
     selectedDay = DateTime(now.year, now.month, now.day);
     _loadChildren();
     _loadScheduleForSelectedDay();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadMonthAvailability(focusedDay);
+    });
   }
 
   String _two(int n) => n.toString().padLeft(2, '0');
@@ -69,6 +72,34 @@ class _BookingViewState extends State<BookingView> {
     final now = DateTime.now();
     final plus2 = DateTime(now.year, now.month + 2, now.day);
     return d(plus2.year, plus2.month, plus2.day);
+  }
+
+  Future<void> _loadMonthAvailability(DateTime month) async {
+    setState(() {
+      isLoadingAvailability = true;
+    });
+
+    try {
+      final result = await ScheduleService.getDoctorMonthAvailability(
+        doctorId: widget.doctorId,
+        year: month.year,
+        month: month.month,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        availableDays = result;
+        isLoadingAvailability = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        availableDays = {};
+        isLoadingAvailability = false;
+      });
+    }
   }
 
   Future<void> _loadChildren() async {
@@ -275,6 +306,44 @@ class _BookingViewState extends State<BookingView> {
     }
   }
 
+  Widget _buildDay(DateTime day, bool selected) {
+    final date = _iso(day);
+    final hasAvailable = availableDays[date] ?? false;
+
+    return Center(
+      child: Container(
+        width: 36,
+        height: 42,
+        alignment: Alignment.center,
+        decoration: selected
+            ? BoxDecoration(color: BColors.accent, shape: BoxShape.circle)
+            : null,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              "${day.day}",
+              style: TextStyle(
+                color: selected ? Colors.white : Colors.black.withOpacity(0.75),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            if (hasAvailable)
+              Container(
+                margin: const EdgeInsets.only(top: 3),
+                width: 6,
+                height: 6,
+                decoration: const BoxDecoration(
+                  color: Colors.red,
+                  shape: BoxShape.circle,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -362,7 +431,14 @@ class _BookingViewState extends State<BookingView> {
             ),
           ),
         ),
-
+        if (isLoadingAvailability)
+          const Padding(
+            padding: EdgeInsets.only(top: 6),
+            child: Text(
+              "جاري تحميل الأيام المتاحة...",
+              style: TextStyle(fontSize: 12, color: BColors.darkGrey),
+            ),
+          ),
         Container(
           width: double.infinity,
           padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
@@ -388,6 +464,13 @@ class _BookingViewState extends State<BookingView> {
               availableGestures: AvailableGestures.horizontalSwipe,
               selectedDayPredicate: (day) =>
                   selectedDay != null && isSameDay(day, selectedDay),
+              enabledDayPredicate: (day) {
+                final now = DateTime.now();
+                final today = DateTime(now.year, now.month, now.day);
+                final currentDay = DateTime(day.year, day.month, day.day);
+
+                return !currentDay.isBefore(today);
+              },
               onDaySelected: (sel, foc) {
                 setState(() {
                   selectedDay = sel;
@@ -399,6 +482,8 @@ class _BookingViewState extends State<BookingView> {
                 setState(() {
                   focusedDay = foc;
                 });
+
+                _loadMonthAvailability(foc);
               },
               headerStyle: HeaderStyle(
                 formatButtonVisible: false,
@@ -441,27 +526,10 @@ class _BookingViewState extends State<BookingView> {
               ),
               calendarBuilders: CalendarBuilders(
                 defaultBuilder: (context, day, _) {
-                  if (_isAvailable(day)) {
-                    return Center(
-                      child: Container(
-                        width: 36,
-                        height: 36,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade500,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Text(
-                          "${day.day}",
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                    );
-                  }
-                  return null;
+                  return _buildDay(day, false);
+                },
+                selectedBuilder: (context, day, _) {
+                  return _buildDay(day, true);
                 },
               ),
             ),
