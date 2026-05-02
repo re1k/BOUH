@@ -749,6 +749,7 @@ class _AvailableScheduleScreenState extends State<AvailableScheduleScreen> {
                       const SnackBar(
                         content: Text(
                           "تم الحفظ بنجاح",
+                          textDirection: TextDirection.rtl,
                           style: TextStyle(color: BColors.white),
                         ),
                         backgroundColor: BColors.primary,
@@ -760,7 +761,9 @@ class _AvailableScheduleScreenState extends State<AvailableScheduleScreen> {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
-                          "فشل الحفظ: $e",
+                          "فشل الحفظ",
+                          textDirection: TextDirection.rtl,
+
                           style: TextStyle(color: BColors.white),
                         ),
                         backgroundColor: BColors.validationError,

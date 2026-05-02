@@ -258,7 +258,9 @@ class _RequestAnalysisPageState extends State<RequestAnalysisPage> {
       shape: RoundedRectangleBorder(borderRadius: BRadius.dropdownRadius),
       color: BColors.secondry,
       items: _children.asMap().entries.map((entry) {
-        final itemColor = entry.key.isEven ? BColors.secondry : BColors.white;
+        final itemColor = _selectedChild?.id == entry.value.id
+            ? BColors.white
+            : BColors.secondry;
         return PopupMenuItem<({String id, String name})>(
           value: entry.value,
           padding: EdgeInsets.zero,
