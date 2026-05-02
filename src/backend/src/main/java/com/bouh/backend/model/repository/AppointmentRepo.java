@@ -313,6 +313,7 @@ public class AppointmentRepo {
             data.put("status", dto.getStatus() == null ? 0 : dto.getStatus());
             data.put("paymentIntentId", dto.getPaymentIntentId());
             data.put("timeSlotId", String.valueOf(slotIndex));
+            data.put("rated", dto.getRated() != null ? dto.getRated() : false);
 
             transaction.set(appointmentRef, data);
 
