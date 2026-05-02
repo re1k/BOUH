@@ -28,4 +28,6 @@ public class upcomingAppointmentDto {
     private String paymentIntentId;
     private String doctorId;
     private Boolean rated;
+    private String childId;
+    private String caregiverId;
 }

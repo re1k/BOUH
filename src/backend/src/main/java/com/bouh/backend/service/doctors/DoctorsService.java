@@ -9,6 +9,7 @@ import com.bouh.backend.model.repository.doctorRepo;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
 @Service
@@ -35,11 +36,19 @@ public class DoctorsService {
     public DoctorScheduleDto getDoctorScheduleByDate(String doctorId, String date) throws Exception {
         return doctorRepo.getDoctorScheduleByDate(doctorId, date);
     }
-
+public Map<String, Boolean> getDoctorMonthAvailability(
+        String doctorId,
+        int year,
+        int month
+) throws Exception {
+    return doctorRepo.getDoctorMonthAvailability(doctorId, year, month);
+}
     // doctor bar info listner
     public DoctorBarInfoDto getDoctorBarInfo(String doctorId) throws Exception {
     doctorDto doctor = doctorRepo.findByUid(doctorId);
     return new DoctorBarInfoDto(doctor.getName(), doctor.getAverageRating());
     }
+
+ 
 
 }

@@ -14,7 +14,6 @@ import 'package:bouh/dto/upcomingAppointmentDto.dart';
 import 'package:bouh/authentication/AuthSession.dart';
 import 'package:bouh/authentication/AuthService.dart';
 import 'package:bouh/services/appointmentsService.dart';
-import 'package:bouh/dto/payment/RefundResponseDto.dart';
 import 'package:bouh/services/payment/RefundService.dart';
 import 'package:bouh/widgets/confirmation_popup.dart';
 import 'package:bouh/widgets/loading_overlay.dart';
@@ -97,7 +96,8 @@ class _BookedAppointmentsUpcomingState
   // Triggers a re-fetch when a doctor updates their profile photo.
   final Map<String, StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>>
   _doctorListeners = {};
-
+  final Map<String, StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>>
+  _childListeners = {};
   @override
   void initState() {
     super.initState();
@@ -156,6 +156,10 @@ class _BookedAppointmentsUpcomingState
     }
     _doctorListeners.clear();
 
+    for (final sub in _childListeners.values) {
+      sub.cancel();
+    }
+    _childListeners.clear();
     if (caregiverId == null || caregiverId.isEmpty) {
       setState(() {
         _list = [];
@@ -187,6 +191,7 @@ class _BookedAppointmentsUpcomingState
             _startTicker();
             // Keep doctor-photo listeners up to date with the current list
             _updateDoctorListeners(_list);
+            _updateChildListeners(_list);
           },
           onError: (e) {
             if (!mounted) return;
@@ -227,6 +232,51 @@ class _BookedAppointmentsUpcomingState
     }
   }
 
+  void _updateChildListeners(List<UpcomingAppointmentDto> list) {
+    final currentIds = list
+        .map((d) => d.childId)
+        .whereType<String>()
+        .where((id) => id.isNotEmpty)
+        .toSet();
+
+    _childListeners.keys
+        .where((id) => !currentIds.contains(id))
+        .toList()
+        .forEach((id) => _childListeners.remove(id)?.cancel());
+
+    for (final childId in currentIds) {
+      if (_childListeners.containsKey(childId)) continue;
+
+      final caregiverId = AuthSession.instance.userId;
+      if (caregiverId == null || caregiverId.isEmpty) return;
+
+      _childListeners[childId] = FirebaseFirestore.instance
+          .collection('caregivers')
+          .doc(caregiverId)
+          .collection('children')
+          .doc(childId)
+          .snapshots()
+          .skip(1)
+          .listen((_) => _refetchOnChildChange());
+    }
+  }
+
+  Future<void> _refetchOnChildChange() async {
+    final caregiverId = AuthSession.instance.userId;
+    if (caregiverId == null || caregiverId.isEmpty || !mounted) return;
+
+    try {
+      final list = await _appointmentsService.getUpcomingAppointments(
+        caregiverId,
+      );
+      if (!mounted) return;
+
+      setState(() => _list = _removeExpired(list));
+      _updateDoctorListeners(_list);
+      _updateChildListeners(_list);
+    } catch (_) {}
+  }
+
   /// Called when any watched doctor document changes.
   /// Evicts stale cached images then re-fetches the appointment list.
   Future<void> _refetchOnDoctorChange() async {
@@ -243,6 +293,7 @@ class _BookedAppointmentsUpcomingState
       if (!mounted) return;
       setState(() => _list = _removeExpired(list));
       _updateDoctorListeners(_list);
+      _updateChildListeners(_list);
     } catch (_) {
       // Silent — the main stream will re-sync on the next appointment change.
     }
@@ -301,6 +352,10 @@ class _BookedAppointmentsUpcomingState
       sub.cancel();
     }
     _doctorListeners.clear();
+    for (final sub in _childListeners.values) {
+      sub.cancel();
+    }
+    _childListeners.clear();
     super.dispose();
   }
 
@@ -650,14 +705,6 @@ class _BookedAppointmentsUpcomingState
     );
   }
 
-  Future<void> _openMeetingLink(String url) async {
-    final uri = Uri.tryParse(url);
-    if (uri == null) return;
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
-  }
-
   /// Join is active when startTime <= now < endTime (device time).
   static bool _isJoinEnabled(UpcomingAppointmentDto dto) {
     final now = DateTime.now();
@@ -846,5 +893,9 @@ class _BookedAppointmentsUpcomingState
       sub.cancel();
     }
     _doctorListeners.clear();
+    for (final sub in _childListeners.values) {
+      sub.cancel();
+    }
+    _childListeners.clear();
   }
 }

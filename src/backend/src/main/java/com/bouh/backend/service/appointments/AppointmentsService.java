@@ -212,6 +212,8 @@ public class AppointmentsService {
             dto.setEndTime(displayTimes[1]);
             dto.setCaregiverName(caregiverName);
             dto.setChildName(childName);
+            dto.setCaregiverId(doc.getCaregiverId());
+            dto.setChildId(doc.getChildId());
             dto.setStatus(doc.getStatus() != null && doc.getStatus() == 1 ? 1 : 0);
             dto.setMeetingLink(doc.getMeetingLink());
             dto.setPaymentIntentId(doc.getPaymentIntentId());
@@ -340,6 +342,7 @@ public class AppointmentsService {
                             ? gcsImageService.generateDownloadUrl(profilePath)
                             : null);
             dto.setChildName(childName);
+            dto.setChildId(doc.getChildId());
             dto.setStatus(doc.getStatus() != null && doc.getStatus() == 1 ? 1 : 0);
             dto.setMeetingLink(doc.getMeetingLink());
             dto.setPaymentIntentId(doc.getPaymentIntentId());

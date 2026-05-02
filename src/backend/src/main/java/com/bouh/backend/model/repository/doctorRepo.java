@@ -284,7 +284,77 @@ public class doctorRepo {
 
         return dto;
     }
+public Map<String, Boolean> getDoctorMonthAvailability(
+        String doctorId,
+        int year,
+        int month
+) throws ExecutionException, InterruptedException {
 
+    Map<String, Boolean> result = new HashMap<>();
+
+    java.time.LocalDate firstDay = java.time.LocalDate.of(year, month, 1);
+    java.time.LocalDate lastDay = firstDay.withDayOfMonth(firstDay.lengthOfMonth());
+
+    QuerySnapshot snap = firestore.collection("doctors")
+            .document(doctorId)
+            .collection("schedule")
+            .document("current")
+            .collection("TimeSlots")
+            .whereGreaterThanOrEqualTo(FieldPath.documentId(), firstDay.toString())
+            .whereLessThanOrEqualTo(FieldPath.documentId(), lastDay.toString())
+            .get()
+            .get();
+
+    Map<String, DocumentSnapshot> docsMap = new HashMap<>();
+    for (DocumentSnapshot doc : snap.getDocuments()) {
+        docsMap.put(doc.getId(), doc);
+    }
+
+    java.time.LocalDate today = java.time.LocalDate.now();
+
+    java.time.LocalDate current = firstDay;
+
+    while (!current.isAfter(lastDay)) {
+
+        String date = current.toString();
+
+        if (current.isBefore(today)) {
+            result.put(date, false);
+            current = current.plusDays(1);
+            continue;
+        }
+
+        DocumentSnapshot doc = docsMap.get(date);
+
+        if (doc == null || !doc.exists()) {
+            result.put(date, false);
+        } else {
+
+            Object rawSlots = doc.get("slots");
+            boolean hasAvailable = false;
+
+            if (rawSlots instanceof List<?>) {
+                for (Object item : (List<?>) rawSlots) {
+                    if (item instanceof Map<?, ?> map) {
+
+                        Boolean booked = (Boolean) map.get("booked");
+
+                        if (booked == null || !booked) {
+                            hasAvailable = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            result.put(date, hasAvailable);
+        }
+
+        current = current.plusDays(1);
+    }
+
+    return result;
+}
     private static String getString(DocumentSnapshot doc, String field) {
         Object value = doc.get(field);
         return value == null ? null : value.toString();
