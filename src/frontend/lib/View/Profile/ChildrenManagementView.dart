@@ -98,6 +98,7 @@ class _ChildrenManagementViewState extends State<ChildrenManagementView> {
   Future<void> _openAddChildDialog() async {
     final result = await showDialog<_AddChildResult>(
       context: context,
+      barrierDismissible: false,
       builder: (ctx) => const _AddChildDialog(),
     );
 
@@ -125,6 +126,7 @@ class _ChildrenManagementViewState extends State<ChildrenManagementView> {
   Future<void> _openEditChildDialog(ChildDto child) async {
     final result = await showDialog<_AddChildResult>(
       context: context,
+      barrierDismissible: false,
       builder: (ctx) => _AddChildDialog(
         initialName: child.name,
         initialDob: child.dateOfBirth,
@@ -224,7 +226,7 @@ class _ChildrenManagementViewState extends State<ChildrenManagementView> {
                 Expanded(
                   child: isLoading
                       ? const Center(child: BouhOvalLoadingIndicator())
-                      : RefreshIndicator(
+                      : RefreshIndicator.noSpinner(
                           onRefresh: _loadChildren,
                           child: ListView(
                             padding: const EdgeInsets.only(bottom: 90),
@@ -684,7 +686,26 @@ class _AddChildDialogState extends State<_AddChildDialog> {
       nameCtrl.text.trim().isNotEmpty &&
       yearCtrl.text.trim().isNotEmpty &&
       monthCtrl.text.trim().isNotEmpty &&
-      dayCtrl.text.trim().isNotEmpty;
+      dayCtrl.text.trim().isNotEmpty &&
+      _hasChanges;
+  bool get _hasChanges {
+    if (!widget.isEdit) return true;
+
+    final originalDob = widget.initialDob ?? "";
+    final currentDob =
+        "${yearCtrl.text.trim().padLeft(4, '0')}-${monthCtrl.text.trim().padLeft(2, '0')}-${dayCtrl.text.trim().padLeft(2, '0')}";
+
+    final originalGender =
+        (widget.initialGender ?? "").toLowerCase() == "female"
+        ? "female"
+        : "male";
+    final currentGender = isFemale ? "female" : "male";
+
+    return nameCtrl.text.trim() != (widget.initialName ?? "").trim() ||
+        currentDob != originalDob ||
+        currentGender != originalGender;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Directionality(

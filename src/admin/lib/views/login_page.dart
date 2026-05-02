@@ -20,6 +20,7 @@ class _LoginPageState extends State<LoginPage> {
 
   String? _emailError;
   String? _passwordError;
+  bool _isCredentialError = false;
   bool _isLoggingIn = false;
   bool _obscurePassword = true;
 
@@ -114,6 +115,7 @@ class _LoginPageState extends State<LoginPage> {
     setState(() {
       _emailError = null;
       _passwordError = null;
+      _isCredentialError = false;
       _emailTouched = true;
       _passwordTouched = true;
     });
@@ -152,6 +154,7 @@ class _LoginPageState extends State<LoginPage> {
           case 'wrong-password':
           case 'invalid-login-credentials':
             _passwordError = 'البريد الإلكتروني أو كلمة المرور غير صحيحة.';
+            _isCredentialError = true;
             break;
           case 'too-many-requests':
             _passwordError =
@@ -166,6 +169,7 @@ class _LoginPageState extends State<LoginPage> {
       setState(() {
         _isLoggingIn = false;
         _passwordError = 'البريد الإلكتروني أو كلمة المرور غير صحيحة.';
+        _isCredentialError = true;
       });
     }
   }
@@ -479,8 +483,11 @@ class _LoginPageState extends State<LoginPage> {
                           validator: (v) =>
                               _passwordTouched ? _validatePassword(v) : null,
                           onChanged: (_) {
-                            if (_passwordError != null) {
-                              setState(() => _passwordError = null);
+                            if (_passwordError != null || _isCredentialError) {
+                              setState(() {
+                                _passwordError = null;
+                                _isCredentialError = false;
+                              });
                             }
                             if (_passwordTouched) {
                               _passwordFieldKey.currentState?.validate();
@@ -488,6 +495,7 @@ class _LoginPageState extends State<LoginPage> {
                           },
                           decoration: _inputDecoration(
                             errorText: _passwordError,
+                            suppressErrorBorder: _isCredentialError,
                             suffixIcon: IconButton(
                               icon: Icon(
                                 _obscurePassword
@@ -582,7 +590,11 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  InputDecoration _inputDecoration({String? errorText, Widget? suffixIcon}) {
+  InputDecoration _inputDecoration({
+    String? errorText,
+    Widget? suffixIcon,
+    bool suppressErrorBorder = false,
+  }) {
     return InputDecoration(
       filled: true,
       fillColor: BColors.white,
@@ -608,14 +620,15 @@ class _LoginPageState extends State<LoginPage> {
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: BColors.validationError),
+        borderSide: suppressErrorBorder
+            ? const BorderSide(color: BColors.grey)
+            : const BorderSide(color: BColors.validationError),
       ),
       focusedErrorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(
-          color: BColors.validationError,
-          width: 1.5,
-        ),
+        borderSide: suppressErrorBorder
+            ? BorderSide(color: BColors.primary.withValues(alpha: 0.6))
+            : const BorderSide(color: BColors.validationError, width: 1.5),
       ),
     );
   }

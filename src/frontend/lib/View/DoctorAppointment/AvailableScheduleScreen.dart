@@ -746,14 +746,26 @@ class _AvailableScheduleScreenState extends State<AvailableScheduleScreen> {
 
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("تم الحفظ بنجاح")),
+                      const SnackBar(
+                        content: Text(
+                          "تم الحفظ بنجاح",
+                          style: TextStyle(color: BColors.white),
+                        ),
+                        backgroundColor: BColors.primary,
+                      ),
                     );
                   }
                 } catch (e) {
                   if (mounted) {
-                    ScaffoldMessenger.of(
-                      context,
-                    ).showSnackBar(SnackBar(content: Text("فشل الحفظ: $e")));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          "فشل الحفظ: $e",
+                          style: TextStyle(color: BColors.white),
+                        ),
+                        backgroundColor: BColors.validationError,
+                      ),
+                    );
                   }
                   setState(() => isLoading = false);
                 }
@@ -782,10 +794,10 @@ class _AvailableScheduleScreenState extends State<AvailableScheduleScreen> {
 
     final confirmed = await ConfirmationPopup.show(
       context,
-      title: "تجاهل التغييرات",
+      title: "تغييرات غير محفوظة",
       message: "لديك تغييرات غير محفوظة. هل تريد الخروج بدون حفظ؟",
-      confirmText: "خروج",
-      cancelText: "إلغاء",
+      confirmText: "مغادرة",
+      cancelText: "بقاء",
     );
 
     return confirmed;
