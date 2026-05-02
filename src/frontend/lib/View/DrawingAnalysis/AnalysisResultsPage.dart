@@ -242,7 +242,9 @@ class AnalysisResultsPage extends StatelessWidget {
               content: Text(
                 'تعذر تحميل بيانات الطبيب، يرجى المحاولة مرة أخرى',
                 textDirection: TextDirection.rtl,
+                style: TextStyle(color: BColors.white),
               ),
+              backgroundColor: BColors.validationError,
             ),
           );
         }

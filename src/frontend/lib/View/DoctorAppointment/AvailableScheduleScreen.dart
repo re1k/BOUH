@@ -210,7 +210,10 @@ class _AvailableScheduleScreenState extends State<AvailableScheduleScreen> {
               color: BColors.textDarkestBlue,
               size: 20,
             ),
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () async {
+              final shouldPop = await _confirmDiscard();
+              if (shouldPop && mounted) Navigator.of(context).pop();
+            },
           ),
         ],
         title: const Text(
@@ -240,8 +243,12 @@ class _AvailableScheduleScreenState extends State<AvailableScheduleScreen> {
                           child: _circleIconButton(
                             icon: isEditMode ? Icons.close : Icons.edit,
                             iconColor: BColors.textDarkestBlue,
-                            onTap: () {
+                            onTap: () async {
                               if (isEditMode) {
+                                if (draftByDate.isNotEmpty) {
+                                  final confirmed = await _confirmDiscard();
+                                  if (!confirmed) return;
+                                }
                                 _cancelEdit();
                                 return;
                               }
@@ -739,14 +746,26 @@ class _AvailableScheduleScreenState extends State<AvailableScheduleScreen> {
 
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("تم الحفظ بنجاح")),
+                      const SnackBar(
+                        content: Text(
+                          "تم الحفظ بنجاح",
+                          style: TextStyle(color: BColors.white),
+                        ),
+                        backgroundColor: BColors.primary,
+                      ),
                     );
                   }
                 } catch (e) {
                   if (mounted) {
-                    ScaffoldMessenger.of(
-                      context,
-                    ).showSnackBar(SnackBar(content: Text("فشل الحفظ: $e")));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          "فشل الحفظ: $e",
+                          style: TextStyle(color: BColors.white),
+                        ),
+                        backgroundColor: BColors.validationError,
+                      ),
+                    );
                   }
                   setState(() => isLoading = false);
                 }
@@ -767,6 +786,21 @@ class _AvailableScheduleScreenState extends State<AvailableScheduleScreen> {
     }
 
     return true;
+  }
+
+  Future<bool> _confirmDiscard() async {
+    if (!isEditMode || draftByDate.isEmpty)
+      return true; // no changes, allow freely
+
+    final confirmed = await ConfirmationPopup.show(
+      context,
+      title: "تغييرات غير محفوظة",
+      message: "لديك تغييرات غير محفوظة. هل تريد الخروج بدون حفظ؟",
+      confirmText: "مغادرة",
+      cancelText: "بقاء",
+    );
+
+    return confirmed;
   }
 
   Widget _circleIconButton({

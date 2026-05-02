@@ -120,7 +120,7 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
                           ),
                         ],
 
-                        const Spacer(),
+                        const SizedBox(height: 34),
                         _settingsCard(
                           children: [
                             _settingsItem(
@@ -145,7 +145,7 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
                           ),
                         ],
 
-                        const SizedBox(height: 250),
+                        const SizedBox(height: 24),
                       ],
                     ),
                   ),

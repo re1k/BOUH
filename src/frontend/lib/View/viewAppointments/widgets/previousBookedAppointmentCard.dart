@@ -229,10 +229,6 @@ class PreviousBookedAppointmentCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: BColors.white,
         borderRadius: BorderRadius.circular(_cardRadius),
-        border: Border.all(
-          color: const Color(0xFFE4E6ED),
-          width: _cardBorderWidth,
-        ),
       ),
       alignment: Alignment.center,
       child: Text(

@@ -270,7 +270,7 @@ class _UploadDrawingPageState extends State<UploadDrawingPage> {
                   'لم نتمكن من فتح الصورة. تأكد من منح الصلاحيات (الكاميرا أو الألبوم).',
                   textDirection: TextDirection.rtl,
                 ),
-                backgroundColor: const Color.fromARGB(255, 146, 47, 29),
+                backgroundColor: BColors.validationError,
               ),
             );
           }
@@ -286,7 +286,7 @@ class _UploadDrawingPageState extends State<UploadDrawingPage> {
                   'لم نتمكن من فتح الصورة. تأكد من منح الصلاحيات (الكاميرا أو الألبوم).',
                   textDirection: TextDirection.rtl,
                 ),
-                backgroundColor: const Color.fromARGB(255, 146, 47, 29),
+                backgroundColor: BColors.validationError,
               ),
             );
           }
@@ -315,7 +315,7 @@ class _UploadDrawingPageState extends State<UploadDrawingPage> {
               'لم نتمكن من فتح الصورة. تأكد من منح الصلاحيات (الكاميرا أو الألبوم).',
               textDirection: TextDirection.rtl,
             ),
-            backgroundColor: const Color.fromARGB(255, 146, 47, 29),
+            backgroundColor: BColors.validationError,
           ),
         );
       }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bouh/View/DrawingAnalysis/DrawingHistoryPage.dart';
 import 'package:bouh/View/DrawingAnalysis/UploadDrawingPage.dart';
 import 'package:bouh/View/caregiverHomepage/widgets/caregiverBottomNav.dart';
@@ -32,10 +34,15 @@ class _RequestAnalysisPageState extends State<RequestAnalysisPage> {
   bool _loadingChildren = true;
   ({String id, String name})? _selectedChild;
 
+  Timer? _refreshTimer;
+
   @override
   void initState() {
     super.initState();
     _loadChildren();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      _loadChildren();
+    });
   }
 
   Future<void> _loadChildren() async {
@@ -305,5 +312,11 @@ class _RequestAnalysisPageState extends State<RequestAnalysisPage> {
         child: Text('بدء', style: BTypography.buttonText),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
   }
 }
