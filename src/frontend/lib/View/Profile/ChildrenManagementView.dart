@@ -98,6 +98,7 @@ class _ChildrenManagementViewState extends State<ChildrenManagementView> {
   Future<void> _openAddChildDialog() async {
     final result = await showDialog<_AddChildResult>(
       context: context,
+      barrierDismissible: false,
       builder: (ctx) => const _AddChildDialog(),
     );
 
@@ -125,6 +126,7 @@ class _ChildrenManagementViewState extends State<ChildrenManagementView> {
   Future<void> _openEditChildDialog(ChildDto child) async {
     final result = await showDialog<_AddChildResult>(
       context: context,
+      barrierDismissible: false,
       builder: (ctx) => _AddChildDialog(
         initialName: child.name,
         initialDob: child.dateOfBirth,
@@ -224,7 +226,7 @@ class _ChildrenManagementViewState extends State<ChildrenManagementView> {
                 Expanded(
                   child: isLoading
                       ? const Center(child: BouhOvalLoadingIndicator())
-                      : RefreshIndicator(
+                      : RefreshIndicator.noSpinner(
                           onRefresh: _loadChildren,
                           child: ListView(
                             padding: const EdgeInsets.only(bottom: 90),
