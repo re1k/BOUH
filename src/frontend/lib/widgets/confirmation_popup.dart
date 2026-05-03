@@ -13,6 +13,7 @@ class ConfirmationPopup extends StatelessWidget {
     this.onCancel,
     this.isDestructive = false,
     this.singleButton = false,
+    this.useDarkMessageText = false,
   });
 
   final String? title;
@@ -23,6 +24,7 @@ class ConfirmationPopup extends StatelessWidget {
   final VoidCallback? onCancel;
   final bool isDestructive;
   final bool singleButton;
+  final bool useDarkMessageText;
 
   //Shows the confirmation dialog. Returns a [Future] that completes with
   static Future<bool> show(
@@ -33,6 +35,7 @@ class ConfirmationPopup extends StatelessWidget {
     String cancelText = 'إلغاء',
     bool isDestructive = false,
     bool singleButton = false,
+    bool useDarkMessageText = false,
   }) async {
     final result = await showDialog<bool>(
       context: context,
@@ -44,6 +47,7 @@ class ConfirmationPopup extends StatelessWidget {
         cancelText: cancelText,
         isDestructive: isDestructive,
         singleButton: singleButton,
+        useDarkMessageText: useDarkMessageText,
         onConfirm: () {},
       ),
     );
@@ -86,9 +90,11 @@ class ConfirmationPopup extends StatelessWidget {
             child: Text(
               message,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 15,
-                color: BColors.darkGrey,
+                color: useDarkMessageText
+                    ? BColors.textDarkestBlue
+                    : BColors.darkGrey,
                 height: 1.4,
               ),
             ),

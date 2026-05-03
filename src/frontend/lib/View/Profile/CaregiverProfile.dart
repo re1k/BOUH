@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:bouh/theme/base_themes/colors.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:bouh/View/Profile/ChildrenManagementView.dart';
 import 'package:bouh/View/caregiverHomepage/widgets/caregiverBottomNav.dart';
@@ -10,6 +11,7 @@ import 'package:bouh/config/api_config.dart';
 import 'package:bouh/View/Login/login_view.dart';
 import 'package:bouh/widgets/confirmation_popup.dart';
 import 'package:bouh/widgets/loading_overlay.dart';
+import 'package:bouh/utils/profile_field_validation.dart';
 
 class CaregiverAccountView extends StatefulWidget {
   const CaregiverAccountView({
@@ -34,10 +36,6 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
   static const double _kControlRadius = 10;
   static const String _profileLoadFallbackErrorMessage =
       'حدث خطأ في استرجاع البيانات، تأكد من اتصالك بالشبكة وحاول مرة اخرى';
-  static final RegExp _nameArabicOrEnglishRegex = RegExp(
-    r'^[A-Za-z\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\s]+$',
-  );
-
   final TextEditingController _nameCtrl = TextEditingController();
   String _name = '';
   String _email = '';
@@ -47,7 +45,9 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
   String? _profileError;
   String? _nameError;
   bool _isDeletingAccount = false;
-  bool get _hasNameChanged => _nameCtrl.text.trim() != _name.trim();
+  bool get _hasNameChanged =>
+      ProfileFieldValidation.normalizePersonName(_nameCtrl.text) !=
+      ProfileFieldValidation.normalizePersonName(_name);
 
   @override
   void initState() {
@@ -71,18 +71,17 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
           children: [
             Column(
               children: [
-            SizedBox(
-              height: 220,
-              width: double.infinity,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Image.asset(
-                    'assets/images/ProfileBackground.png',
-                    fit: BoxFit.cover,
-                    alignment: Alignment.topCenter,
-                  ),
-
+                SizedBox(
+                  height: 220,
+                  width: double.infinity,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Image.asset(
+                        'assets/images/ProfileBackground.png',
+                        fit: BoxFit.cover,
+                        alignment: Alignment.topCenter,
+                      ),
                     ],
                   ),
                 ),
@@ -229,12 +228,25 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
       _nameError = null;
       _nameCtrl.text = _name;
     });
-    var pageEditingName = false;
-    const discardChangesMessage =
-        'لديك تغييرات غير محفوظة. هل تريد المغادرة؟';
+    final nameFocusNode = FocusNode();
+    var nameTouched = false;
+    void Function()? refreshPersonalPage;
+    final editingNameRef = <bool>[false];
+    void onNameFocusChange() {
+      if (!nameFocusNode.hasFocus && editingNameRef[0]) {
+        nameTouched = true;
+        setState(() {
+          _nameError = _validateName(_nameCtrl.text);
+        });
+        refreshPersonalPage?.call();
+      }
+    }
+
+    nameFocusNode.addListener(onNameFocusChange);
+    const discardChangesMessage = 'لديك تغييرات غير محفوظة. هل تريد المغادرة؟';
 
     Future<bool> confirmDiscardIfNeeded() async {
-      final hasUnsavedChanges = pageEditingName && _hasNameChanged;
+      final hasUnsavedChanges = editingNameRef[0] && _hasNameChanged;
       if (!hasUnsavedChanges) return true;
       return ConfirmationPopup.show(
         context,
@@ -248,230 +260,263 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => StatefulBuilder(
-          builder: (context, setPage) => Directionality(
-            textDirection: TextDirection.rtl,
-            child: WillPopScope(
-              onWillPop: () async {
-                FocusManager.instance.primaryFocus?.unfocus();
-                await Future.delayed(const Duration(milliseconds: 160));
-                if (!context.mounted) return false;
-                final shouldDiscard = await confirmDiscardIfNeeded();
-                if (!shouldDiscard) return false;
-                setState(() {
-                  _nameError = null;
-                  _nameCtrl.text = _name;
-                });
-                return true;
-              },
-              child: Scaffold(
-              backgroundColor: Colors.white,
-              appBar: AppBar(
-                backgroundColor: Colors.white,
-                elevation: 0,
-                surfaceTintColor: Colors.transparent,
-                leading: IconButton(
-                  icon: const Icon(
-                    Icons.arrow_back_ios_new_rounded,
-                    size: 20,
-                    color: BColors.textDarkestBlue,
-                  ),
-                  onPressed: () async {
-                    FocusManager.instance.primaryFocus?.unfocus();
-                    await Future.delayed(const Duration(milliseconds: 160));
-                    if (!context.mounted) return;
-                    final shouldDiscard = await confirmDiscardIfNeeded();
-                    if (!shouldDiscard || !context.mounted) return;
-                    setState(() {
-                      _nameError = null;
-                      _nameCtrl.text = _name;
-                    });
-                    Navigator.of(context).pop();
-                  },
-                ),
-                title: const Text(
-                  'المعلومات الشخصية',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    color: BColors.textDarkestBlue,
-                  ),
-                ),
-                centerTitle: true,
-              ),
-              body: Stack(
-                children: [
-                  SafeArea(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(22, 10, 22, 24),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                      _sectionFieldItem(
-                        label: 'البريد الالكتروني',
-                        child: _field(
-                          text: _email.isEmpty ? '—' : _email,
-                          textColor: BColors.darkGrey,
-                          backgroundColor: const Color(0xFFF5F5F5),
-                        ),
+          builder: (context, setPage) {
+            refreshPersonalPage = () => setPage(() {});
+            return Directionality(
+              textDirection: TextDirection.rtl,
+              child: WillPopScope(
+                onWillPop: () async {
+                  FocusManager.instance.primaryFocus?.unfocus();
+                  await Future.delayed(const Duration(milliseconds: 160));
+                  if (!context.mounted) return false;
+                  final shouldDiscard = await confirmDiscardIfNeeded();
+                  if (!shouldDiscard) return false;
+                  setState(() {
+                    _nameError = null;
+                    _nameCtrl.text = _name;
+                  });
+                  return true;
+                },
+                child: Scaffold(
+                  backgroundColor: Colors.white,
+                  appBar: AppBar(
+                    backgroundColor: Colors.white,
+                    elevation: 0,
+                    surfaceTintColor: Colors.transparent,
+                    leading: IconButton(
+                      icon: const Icon(
+                        Icons.arrow_back_ios_new_rounded,
+                        size: 20,
+                        color: BColors.textDarkestBlue,
                       ),
-                      _sectionFieldItem(
-                        label: 'الاسم',
-                        child: Container(
-                          height: _kControlHeight,
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(_kControlRadius),
-                            border: Border.all(color: Colors.black.withOpacity(0.1)),
-                          ),
-                          child: Row(
+                      onPressed: () async {
+                        FocusManager.instance.primaryFocus?.unfocus();
+                        await Future.delayed(const Duration(milliseconds: 160));
+                        if (!context.mounted) return;
+                        final shouldDiscard = await confirmDiscardIfNeeded();
+                        if (!shouldDiscard || !context.mounted) return;
+                        setState(() {
+                          _nameError = null;
+                          _nameCtrl.text = _name;
+                        });
+                        Navigator.of(context).pop();
+                      },
+                    ),
+                    title: const Text(
+                      'المعلومات الشخصية',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: BColors.textDarkestBlue,
+                      ),
+                    ),
+                    centerTitle: true,
+                  ),
+                  body: Stack(
+                    children: [
+                      SafeArea(
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.fromLTRB(22, 10, 22, 24),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              Expanded(
-                                child: TextField(
-                                  controller: _nameCtrl,
-                                  readOnly: !pageEditingName || _savingName,
-                                  textAlign: TextAlign.right,
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.black,
-                                  ),
-                                  decoration: const InputDecoration(
-                                    isDense: true,
-                                    border: InputBorder.none,
-                                    hintText: '—',
-                                  ),
-                                  onChanged: (_) {
-                                    setState(() {
-                                      if (_nameError != null) _nameError = null;
-                                    });
-                                    setPage(() {});
-                                  },
+                              _sectionFieldItem(
+                                label: 'البريد الالكتروني',
+                                child: _field(
+                                  text: _email.isEmpty ? '—' : _email,
+                                  textColor: BColors.darkGrey,
+                                  backgroundColor: const Color(0xFFF5F5F5),
                                 ),
                               ),
-                              if (pageEditingName) ...[
-                                if (_savingName)
-                                  const Padding(
-                                    padding: EdgeInsets.symmetric(horizontal: 8),
-                                    child: BouhOvalLoadingIndicator(
-                                      width: 30,
-                                      height: 20,
-                                      strokeWidth: 2.5,
+                              _sectionFieldItem(
+                                label: 'الاسم',
+                                child: Container(
+                                  height: _kControlHeight,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(
+                                      _kControlRadius,
                                     ),
-                                  )
-                                else ...[
-                                  IconButton(
-                                    onPressed: !_hasNameChanged
-                                        ? null
-                                        : () async {
-                                            await _saveNameInline();
-                                            if (!mounted) return;
-                                            if (_nameError == null) {
-                                              pageEditingName = false;
+                                    border: Border.all(
+                                      color: Colors.black.withOpacity(0.1),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: TextField(
+                                          controller: _nameCtrl,
+                                          focusNode: nameFocusNode,
+                                          readOnly:
+                                              !editingNameRef[0] || _savingName,
+                                          textAlign: TextAlign.right,
+                                          style: const TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.black,
+                                          ),
+                                          inputFormatters: [
+                                            LengthLimitingTextInputFormatter(
+                                              ProfileFieldValidation
+                                                  .caregiverOrDoctorNameMaxLength,
+                                            ),
+                                          ],
+                                          decoration: const InputDecoration(
+                                            isDense: true,
+                                            border: InputBorder.none,
+                                            hintText: '—',
+                                          ),
+                                          onChanged: (_) {
+                                            if (nameTouched) {
+                                              setState(() {
+                                                _nameError = _validateName(
+                                                  _nameCtrl.text,
+                                                );
+                                              });
                                             }
                                             setPage(() {});
                                           },
-                                    icon: Icon(
-                                      Icons.check,
-                                      color: _hasNameChanged
-                                          ? BColors.primary
-                                          : BColors.grey,
-                                    ),
+                                        ),
+                                      ),
+                                      if (editingNameRef[0]) ...[
+                                        if (_savingName)
+                                          const Padding(
+                                            padding: EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                            ),
+                                            child: BouhOvalLoadingIndicator(
+                                              width: 30,
+                                              height: 20,
+                                              strokeWidth: 2.5,
+                                            ),
+                                          )
+                                        else ...[
+                                          IconButton(
+                                            onPressed: !_hasNameChanged
+                                                ? null
+                                                : () async {
+                                                    nameTouched = true;
+                                                    await _saveNameInline();
+                                                    if (!mounted) return;
+                                                    if (_nameError == null) {
+                                                      editingNameRef[0] = false;
+                                                      nameTouched = false;
+                                                    }
+                                                    setPage(() {});
+                                                  },
+                                            icon: Icon(
+                                              Icons.check,
+                                              color: _hasNameChanged
+                                                  ? BColors.primary
+                                                  : BColors.grey,
+                                            ),
+                                          ),
+                                          IconButton(
+                                            onPressed: () async {
+                                              final shouldDiscard =
+                                                  await confirmDiscardIfNeeded();
+                                              if (!shouldDiscard) return;
+                                              setState(() {
+                                                _nameError = null;
+                                                _nameCtrl.text = _name;
+                                              });
+                                              editingNameRef[0] = false;
+                                              nameTouched = false;
+                                              setPage(() {});
+                                            },
+                                            icon: const Icon(
+                                              Icons.close,
+                                              color: Colors.grey,
+                                            ),
+                                          ),
+                                        ],
+                                      ] else
+                                        _editIcon(
+                                          onTap: () {
+                                            nameTouched = false;
+                                            editingNameRef[0] = true;
+                                            setState(() {
+                                              _nameError = null;
+                                              _nameCtrl.text = _name;
+                                            });
+                                            setPage(() {});
+                                          },
+                                        ),
+                                    ],
                                   ),
-                                  IconButton(
-                                    onPressed: () async {
-                                      final shouldDiscard =
-                                          await confirmDiscardIfNeeded();
-                                      if (!shouldDiscard) return;
-                                      setState(() {
-                                        _nameError = null;
-                                        _nameCtrl.text = _name;
-                                      });
-                                      pageEditingName = false;
-                                      setPage(() {});
-                                    },
-                                    icon: const Icon(Icons.close, color: Colors.grey),
-                                  ),
-                                ],
-                              ] else
-                                _editIcon(
-                                  onTap: () {
-                                    pageEditingName = true;
-                                    setState(() {
-                                      _nameError = null;
-                                      _nameCtrl.text = _name;
-                                    });
-                                    setPage(() {});
-                                  },
                                 ),
+                              ),
+                              if (_nameError != null) ...[
+                                const SizedBox(height: 8),
+                                Text(
+                                  _nameError!,
+                                  textAlign: TextAlign.right,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: BColors.validationError,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                              if (_deleteError != null) ...[
+                                const SizedBox(height: 8),
+                                Text(
+                                  _deleteError!,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    color: BColors.validationError,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
                         ),
                       ),
-                      if (_nameError != null) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          _nameError!,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: BColors.validationError,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                      if (_deleteError != null) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          _deleteError!,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: BColors.validationError,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                        ],
-                      ),
-                    ),
+                      if (_isDeletingAccount) BouhLoadingOverlay(),
+                    ],
                   ),
-                  if (_isDeletingAccount) BouhLoadingOverlay(),
-                ],
-              ),
-              bottomNavigationBar: SafeArea(
-                minimum: const EdgeInsets.fromLTRB(22, 0, 22, 28),
-                child: SizedBox(
-                  height: 46,
-                  child: ElevatedButton.icon(
-                    onPressed: _isDeletingAccount
-                        ? null
-                        : () => _handleDeleteAccount(context),
-                    style: ElevatedButton.styleFrom(
-                      elevation: 0,
-                      backgroundColor: BColors.destructiveError,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    icon: const Icon(Icons.delete_outline_rounded),
-                    label: const Text(
-                      'حذف الحساب',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
+                  bottomNavigationBar: SafeArea(
+                    minimum: const EdgeInsets.fromLTRB(22, 0, 22, 28),
+                    child: SizedBox(
+                      height: 46,
+                      child: ElevatedButton.icon(
+                        onPressed: _isDeletingAccount
+                            ? null
+                            : () => _handleDeleteAccount(context),
+                        style: ElevatedButton.styleFrom(
+                          elevation: 0,
+                          backgroundColor: BColors.destructiveError,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        icon: const Icon(Icons.delete_outline_rounded),
+                        label: const Text(
+                          'حذف الحساب',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-              ),
-            ),
-          ),
+            );
+          },
         ),
       ),
     );
+
+    nameFocusNode.removeListener(onNameFocusChange);
+    nameFocusNode.dispose();
 
     if (!mounted) return;
     setState(() {
@@ -544,23 +589,19 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
     }
   }
 
-  String? _validateName(String value) {
-    final trimmed = value.trim();
-    if (trimmed.isEmpty) return 'يرجى إدخال الاسم';
-    if (!_nameArabicOrEnglishRegex.hasMatch(trimmed)) {
-      return 'يرجى إدخال الاسم بحروف عربية أو إنجليزية فقط';
-    }
-    return null;
-  }
+  String? _validateName(String value) =>
+      ProfileFieldValidation.caregiverDisplayName(value);
 
   Future<void> _saveNameInline() async {
-    final candidate = _nameCtrl.text.trim();
-    final validation = _validateName(candidate);
+    final candidate = ProfileFieldValidation.normalizePersonName(
+      _nameCtrl.text,
+    );
+    final validation = _validateName(_nameCtrl.text);
     if (validation != null) {
       setState(() => _nameError = validation);
       return;
     }
-    if (candidate == _name) {
+    if (candidate == ProfileFieldValidation.normalizePersonName(_name)) {
       return;
     }
 
@@ -591,6 +632,7 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
       if (!mounted) return;
       setState(() {
         _name = candidate;
+        _nameCtrl.text = candidate;
       });
       await AuthSession.instance.updateCachedUserName(candidate);
       if (!mounted) return;
@@ -734,19 +776,12 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
     );
   }
 
-  Widget _sectionFieldItem({
-    required String label,
-    required Widget child,
-  }) {
+  Widget _sectionFieldItem({required String label, required Widget child}) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _label(label),
-          const SizedBox(height: 6),
-          child,
-        ],
+        children: [_label(label), const SizedBox(height: 6), child],
       ),
     );
   }
@@ -758,9 +793,7 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
         onTap: () {
           Navigator.push(
             context,
-            MaterialPageRoute(
-              builder: (_) => const ChildrenManagementView(),
-            ),
+            MaterialPageRoute(builder: (_) => const ChildrenManagementView()),
           );
         },
         child: Padding(

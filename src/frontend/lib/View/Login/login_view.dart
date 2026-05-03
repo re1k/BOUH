@@ -11,6 +11,7 @@ import 'package:bouh/widgets/confirmation_popup.dart';
 import 'package:bouh/widgets/email_reset_popup.dart';
 import 'package:bouh/widgets/doctor_pending_popup.dart';
 import 'package:bouh/widgets/loading_overlay.dart';
+import 'package:bouh/utils/profile_field_validation.dart';
 
 /// Login: validate form → AuthService.login(email, password) → backend returns uid, role → route by role.
 class LoginView extends StatefulWidget {
@@ -32,12 +33,16 @@ class LoginView extends StatefulWidget {
 }
 
 class _LoginViewState extends State<LoginView> {
+  static const String _kInvalidCredentialsMessage =
+      'البريد الإلكتروني أو كلمة المرور غير صحيحة. لم يتم العثور على الحساب.';
+
   final _formKey = GlobalKey<FormState>();
   final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
 
   String? _emailError;
   String? _passwordError;
+  String? _loginErrorMessage;
   bool _isLoggingIn = false;
   bool _obscurePassword = true;
 
@@ -48,82 +53,32 @@ class _LoginViewState extends State<LoginView> {
   bool _emailTouched = false;
   bool _passwordTouched = false;
 
-  static String? _validateEmail(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return 'يرجى إدخال البريد الإلكتروني';
-    }
-    final trimmed = value.trim();
-    final emailRegex = RegExp(
-      r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
-    );
-    if (!emailRegex.hasMatch(trimmed)) {
-      return 'يرجى إدخال بريد إلكتروني صحيح';
-    }
-
-    // Provider/domain enforcement: accept only a known set of email providers.
-    const allowedDomains = <String>{
-      'gmail.com',
-      'outlook.com',
-      'hotmail.com',
-      'yahoo.com',
-      'icloud.com',
-      'live.com',
-    };
-
-    final parts = trimmed.split('@');
-    if (parts.length != 2) {
-      return 'يرجى إدخال بريد إلكتروني صحيح';
-    }
-    final domain = parts.last.toLowerCase();
-    final domainParts = domain.split('.');
-    if (domainParts.length < 2) {
-      return 'يرجى إدخال بريد إلكتروني صحيح';
-    }
-
-    // Validate top-level domain (e.g. reject gmail.vrgt, gmail.ff).
-    const allowedTlds = <String>{
-      'com',
-      'net',
-      'org',
-      'edu',
-      'gov',
-      'sa',
-    };
-    final tld = domainParts.last;
-    final tldRegex = RegExp(r'^[a-zA-Z]{2,}$');
-    if (!tldRegex.hasMatch(tld) || !allowedTlds.contains(tld)) {
-      return 'يرجى إدخال بريد إلكتروني صحيح';
-    }
-
-    if (!allowedDomains.contains(domain)) {
-      return 'يرجى استخدام بريد من مزوّد معتمد (مثل Gmail / Outlook)';
-    }
-
-    return null;
-  }
-
   static String? _validatePassword(String? value) {
     if (value == null || value.isEmpty) return 'يرجى إدخال كلمة المرور';
     return null;
   }
 
+  void _onEmailFocusChange() {
+    if (!_emailFocusNode.hasFocus) {
+      _emailTouched = true;
+      _emailFieldKey.currentState?.validate();
+      if (mounted) setState(() {});
+    }
+  }
+
+  void _onPasswordFocusChange() {
+    if (!_passwordFocusNode.hasFocus) {
+      _passwordTouched = true;
+      _passwordFieldKey.currentState?.validate();
+      if (mounted) setState(() {});
+    }
+  }
+
   @override
   void initState() {
     super.initState();
-    _emailFocusNode.addListener(() {
-      if (!_emailFocusNode.hasFocus) {
-        _emailTouched = true;
-        _emailFieldKey.currentState?.validate();
-        if (mounted) setState(() {});
-      }
-    });
-    _passwordFocusNode.addListener(() {
-      if (!_passwordFocusNode.hasFocus) {
-        _passwordTouched = true;
-        _passwordFieldKey.currentState?.validate();
-        if (mounted) setState(() {});
-      }
-    });
+    _emailFocusNode.addListener(_onEmailFocusChange);
+    _passwordFocusNode.addListener(_onPasswordFocusChange);
     if (widget.showPendingDoctorDialog) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -140,8 +95,8 @@ class _LoginViewState extends State<LoginView> {
 
   @override
   void dispose() {
-    _emailFocusNode.removeListener(() {});
-    _passwordFocusNode.removeListener(() {});
+    _emailFocusNode.removeListener(_onEmailFocusChange);
+    _passwordFocusNode.removeListener(_onPasswordFocusChange);
     _emailFocusNode.dispose();
     _passwordFocusNode.dispose();
     _emailCtrl.dispose();
@@ -153,6 +108,7 @@ class _LoginViewState extends State<LoginView> {
     setState(() {
       _emailError = null;
       _passwordError = null;
+      _loginErrorMessage = null;
       _emailTouched = true;
       _passwordTouched = true;
     });
@@ -163,7 +119,7 @@ class _LoginViewState extends State<LoginView> {
     final password = _passwordCtrl.text;
 
     // Check email format again before calling login (so wrong format never gets mistaken for network).
-    final emailFormatError = _validateEmail(email);
+    final emailFormatError = ProfileFieldValidation.accountEmail(email);
     if (emailFormatError != null) {
       setState(() => _emailError = emailFormatError);
       return;
@@ -219,29 +175,41 @@ class _LoginViewState extends State<LoginView> {
           case 'wrong-password':
           case 'invalid-login-credentials':
             _emailError = null;
-            _passwordError =
-                'البريد الإلكتروني أو كلمة المرور غير صحيحة. لم يتم العثور على الحساب.';
+            _passwordError = null;
+            _loginErrorMessage = _kInvalidCredentialsMessage;
             break;
           case 'too-many-requests':
             _emailError = null;
             _passwordError =
                 'تم تجاوز عدد المحاولات. انتظر قليلاً ثم حاول مرة أخرى.';
+            _loginErrorMessage = null;
             break;
           case 'user-disabled':
             _emailError = null;
             _passwordError = 'تم تعطيل هذا الحساب. تواصل مع الدعم.';
+            _loginErrorMessage = null;
             break;
           default:
             _emailError = null;
             _passwordError = _mapLoginErrorToMessage(e);
+            _loginErrorMessage = null;
         }
       });
     } catch (e) {
       if (!mounted) return;
+      final mappedMessage = _mapLoginErrorToMessage(e);
+      final isInvalidCredentials = mappedMessage == _kInvalidCredentialsMessage;
       setState(() {
         _isLoggingIn = false;
-        _emailError = null;
-        _passwordError = _mapLoginErrorToMessage(e);
+        if (isInvalidCredentials) {
+          _emailError = null;
+          _passwordError = null;
+          _loginErrorMessage = mappedMessage;
+        } else {
+          _emailError = null;
+          _passwordError = mappedMessage;
+          _loginErrorMessage = null;
+        }
       });
     }
   }
@@ -252,7 +220,7 @@ class _LoginViewState extends State<LoginView> {
     if (msg.contains('wrong_credentials') ||
         msg.contains('invalid-credential') ||
         msg.contains('INVALID_LOGIN_CREDENTIALS')) {
-      return 'البريد الإلكتروني أو كلمة المرور غير صحيحة. لم يتم العثور على حساب.';
+      return _kInvalidCredentialsMessage;
     }
 
     if (e is SocketException) {
@@ -263,7 +231,7 @@ class _LoginViewState extends State<LoginView> {
     }
 
     if (msg.contains('UNAUTHORIZED') || msg.contains('401')) {
-      return 'البريد الإلكتروني أو كلمة المرور غير صحيحة. لم يتم العثور على حساب.';
+      return _kInvalidCredentialsMessage;
     }
 
     return 'حدث خطأ غير متوقع. حاول مرة أخرى.';
@@ -282,9 +250,12 @@ class _LoginViewState extends State<LoginView> {
       if (submitted && mounted) {
         ConfirmationPopup.show(
           context,
-          message: 'تم إرسال رابط استعادة كلمة المرور إلى بريدك الإلكتروني.',
+          title: 'تحقق من بريدك الإلكتروني',
+          message:
+              'إذا كان البريد الإلكتروني مسجلاً، فستصلك رسالة تحتوي على رابط لإعادة تعيين كلمة المرور. يرجى التحقق من صندوق الوارد أو البريد غير الهام.',
           confirmText: 'حسناً',
           singleButton: true,
+          useDarkMessageText: true,
         );
       }
     });
@@ -352,13 +323,22 @@ class _LoginViewState extends State<LoginView> {
                           ),
                           focusNode: _emailFocusNode,
                           fieldKey: _emailFieldKey,
-                          validator: (v) =>
-                              _emailTouched ? _validateEmail(v) : null,
+                          validator: (v) => _emailTouched
+                              ? ProfileFieldValidation.accountEmail(v)
+                              : null,
                           textInputAction: TextInputAction.next,
                           serverError: _emailError,
                           onChanged: () {
-                            if (_emailError != null)
-                              setState(() => _emailError = null);
+                            setState(() {
+                              if (_emailError != null) _emailError = null;
+                              if (_passwordError != null) _passwordError = null;
+                              if (_loginErrorMessage != null) {
+                                _loginErrorMessage = null;
+                              }
+                            });
+                            if (_emailTouched) {
+                              _emailFieldKey.currentState?.validate();
+                            }
                           },
                         ),
                         const SizedBox(height: 14),
@@ -382,8 +362,15 @@ class _LoginViewState extends State<LoginView> {
                           onFieldSubmitted: (_) => _handleLogin(),
                           serverError: _passwordError,
                           onChanged: () {
-                            if (_passwordError != null)
-                              setState(() => _passwordError = null);
+                            setState(() {
+                              if (_passwordError != null) _passwordError = null;
+                              if (_loginErrorMessage != null) {
+                                _loginErrorMessage = null;
+                              }
+                            });
+                            if (_passwordTouched) {
+                              _passwordFieldKey.currentState?.validate();
+                            }
                           },
                           suffixIcon: IconButton(
                             icon: Icon(
@@ -399,6 +386,19 @@ class _LoginViewState extends State<LoginView> {
                         ),
                         const SizedBox(height: 18),
 
+                        if (_loginErrorMessage != null) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            _loginErrorMessage!,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: BColors.validationError,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                        ],
                         /// Login button.
                         SizedBox(
                           width: 237,

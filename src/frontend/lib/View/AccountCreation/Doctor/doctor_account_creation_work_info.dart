@@ -7,6 +7,7 @@ import 'package:bouh/theme/base_themes/colors.dart';
 import 'package:bouh/dto/doctorSignupData.dart';
 import 'package:bouh/dto/doctorDto.dart';
 import 'package:bouh/authentication/AuthService.dart';
+import 'package:bouh/utils/profile_field_validation.dart';
 import 'package:bouh/View/AccountCreation/verify_email_view.dart';
 import 'package:bouh/widgets/loading_overlay.dart';
 
@@ -50,46 +51,44 @@ class _DoctorAccountCreationStep2State
   String? _submitError;
 
   static final _qualificationsTextRegex = RegExp(
-    r'^[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF0-9\s]+$',
+    r'^[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF0-9\s\.,]+$',
   );
 
+  void _trimQualificationsInPlace() {
+    for (final c in _qualificationCtrls) {
+      final normalized = ProfileFieldValidation.normalizeQualificationLine(
+        c.text,
+      );
+      if (c.text != normalized) {
+        c.value = TextEditingValue(
+          text: normalized,
+          selection: TextSelection.collapsed(offset: normalized.length),
+        );
+      }
+    }
+  }
+
   String? _validateQualificationsList() {
-    final nonEmpty = _qualificationCtrls
-        .map((c) => c.text.trim())
-        .where((s) => s.isNotEmpty)
+    final all = _qualificationCtrls
+        .map((c) => ProfileFieldValidation.normalizeQualificationLine(c.text))
         .toList();
+    final nonEmpty = all.where((s) => s.isNotEmpty).toList();
     if (nonEmpty.isEmpty) {
       return 'يرجى إدخال مؤهل واحد على الأقل';
     }
     for (final s in nonEmpty) {
       if (!_qualificationsTextRegex.hasMatch(s)) {
-        return 'يرجى إدخال المؤهلات بالعربية مع السماح بالأرقام';
+        return 'يرجى إدخال المؤهلات باللغة العربية';
       }
     }
     return null;
   }
 
-  static String? _validateSpecNumber(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return 'يرجى إدخال رقم التخصص';
-    }
-    final digits = value.trim().replaceAll(RegExp(r'\s'), '');
-    if (digits.length != 10 || !RegExp(r'^[0-9]{10}$').hasMatch(digits)) {
-      return 'رقم التخصص يجب أن يكون 10 أرقام ';
-    }
-    return null;
-  }
+  static String? _validateSpecNumber(String? value) =>
+      ProfileFieldValidation.scfhsRegistrationNumber(value);
 
-  static String? _validateIbanSuffix(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return 'يرجى إدخال صيغة آيبان صحيحة';
-    }
-    final digits = value.trim().replaceAll(RegExp(r'\s'), '');
-    if (digits.length != 22 || !RegExp(r'^[0-9]{22}$').hasMatch(digits)) {
-      return 'يجب إدخال صيغة آيبان صحيحة';
-    }
-    return null;
-  }
+  static String? _validateIbanSuffix(String? value) =>
+      ProfileFieldValidation.ibanSuffixDigits(value);
 
   final List<String> _specialties = const [
     'توتر وقلق',
@@ -126,6 +125,7 @@ class _DoctorAccountCreationStep2State
     final focusNode = FocusNode();
     focusNode.addListener(() {
       if (!focusNode.hasFocus) {
+        _trimQualificationsInPlace();
         _qualificationsTouched = true;
         _qualificationsError = _validateQualificationsList();
         if (mounted) setState(() {});
@@ -177,8 +177,11 @@ class _DoctorAccountCreationStep2State
 
   Future<void> _submitCreateAccount() async {
     final signupData = widget.signupData;
-    print('[DoctorReg Step2] _submitCreateAccount: signupData=${signupData != null ? "present" : "null"}, profileImage=${signupData?.profileImage != null ? signupData!.profileImage!.path : "null"}');
+    print(
+      '[DoctorReg Step2] _submitCreateAccount: signupData=${signupData != null ? "present" : "null"}, profileImage=${signupData?.profileImage != null ? signupData!.profileImage!.path : "null"}',
+    );
     if (signupData == null || _isSubmitting) return;
+    _trimQualificationsInPlace();
     setState(() {
       _qualificationsTouched = true;
       _classificationTouched = true;
@@ -194,7 +197,7 @@ class _DoctorAccountCreationStep2State
     });
 
     final qualificationsList = _qualificationCtrls
-        .map((c) => c.text.trim())
+        .map((c) => ProfileFieldValidation.normalizeQualificationLine(c.text))
         .where((s) => s.isNotEmpty)
         .toList();
 
@@ -206,20 +209,27 @@ class _DoctorAccountCreationStep2State
       areaOfKnowledge: _specialty!,
       qualifications: qualificationsList,
       yearsOfExperience: _parseYears(_years!),
-      scfhsNumber: _classificationCtrl.text.trim().replaceAll(RegExp(r'\s'), ''),
+      scfhsNumber: _classificationCtrl.text.trim().replaceAll(
+        RegExp(r'\s'),
+        '',
+      ),
       iban: 'SA${_ibanSuffixCtrl.text.trim().replaceAll(RegExp(r'\s'), '')}',
       profilePhotoURL: signupData.profileImagePath,
       registrationStatus: 'PENDING',
     );
 
     try {
-      print('[DoctorReg Step2] _submitCreateAccount: calling AuthService.createDoctorAccount with profileImageFile=${signupData.profileImage != null ? signupData.profileImage!.path : "null"}');
+      print(
+        '[DoctorReg Step2] _submitCreateAccount: calling AuthService.createDoctorAccount with profileImageFile=${signupData.profileImage != null ? signupData.profileImage!.path : "null"}',
+      );
       await AuthService.instance.createDoctorAccount(
         doctorDto: doctorDto,
         password: signupData.password,
         profileImageFile: signupData.profileImage,
       );
-      print('[DoctorReg Step2] _submitCreateAccount: createDoctorAccount returned');
+      print(
+        '[DoctorReg Step2] _submitCreateAccount: createDoctorAccount returned',
+      );
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const VerifyEmailView()),
@@ -231,7 +241,8 @@ class _DoctorAccountCreationStep2State
         if (e is FirebaseAuthException && e.code == 'email-already-in-use') {
           message = 'البريد الإلكتروني مستخدم بالفعل بحساب آخر.';
         } else if (e is SocketException || e is TimeoutException) {
-          message = 'الخادم لا يستجيب أو لا يوجد اتصال. تحقق من الإنترنت وحاول مرة أخرى.';
+          message =
+              'الخادم لا يستجيب أو لا يوجد اتصال. تحقق من الإنترنت وحاول مرة أخرى.';
         } else {
           message = 'تعذر إنشاء الحساب. تحقق من البيانات وحاول مرة أخرى.';
         }
@@ -276,315 +287,357 @@ class _DoctorAccountCreationStep2State
   }
 
   InputDecoration _inputDecorationWithCounter(
-      TextEditingController ctrl, int maxLength) {
+    TextEditingController ctrl,
+    int maxLength,
+  ) {
     return _inputDecoration().copyWith(
       counterText: '',
       counter: Align(
         alignment: Alignment.centerRight,
         child: Text(
           '${ctrl.text.length}/$maxLength',
-          style: const TextStyle(
-            fontSize: 12,
-            color: BColors.darkGrey,
-          ),
+          style: const TextStyle(fontSize: 12, color: BColors.darkGrey),
         ),
       ),
     );
   }
 
+  Future<void> _popStep2() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    await SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
+    await Future<void>.delayed(const Duration(milliseconds: 180));
+    if (!mounted) return;
+    Navigator.of(context).pop();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
+    final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, Object? result) async {
+        if (didPop) return;
+        await _popStep2();
+      },
+      child: Directionality(
+        textDirection: TextDirection.rtl,
+        child: Scaffold(
         backgroundColor: BColors.white,
+        resizeToAvoidBottomInset: true,
         body: SafeArea(
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              // ================== CONTENT ==================
-              SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(22, 30, 22, 30),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      children: [
-                      // ================= HEADER =================
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            IconButton(
-                              icon: const Icon(
-                                Icons.arrow_back_ios_new_rounded,
-                                size: 20,
-                                color: BColors.textDarkestBlue,
-                              ),
-                              onPressed: () => Navigator.pop(context),
-                            ),
-                            const SizedBox(width: 6),
-                            const Expanded(
-                              child: Text(
-                                'دقائق ويكتمل إنشاء الحساب',
-                                textAlign: TextAlign.right,
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: BColors.textDarkestBlue,
+          child: GestureDetector(
+            onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+            behavior: HitTestBehavior.translucent,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                // ================== CONTENT ==================
+                SingleChildScrollView(
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      22,
+                      30,
+                      22,
+                      keyboardInset + 30,
+                    ),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        children: [
+                          // ================= HEADER =================
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.arrow_back_ios_new_rounded,
+                                    size: 20,
+                                    color: BColors.textDarkestBlue,
+                                  ),
+                                  onPressed: _popStep2,
                                 ),
-                              ),
-                            ),
-                            const SizedBox(width: 35),
-                            Image.asset(
-                              'assets/images/login_header.png',
-                              width: 60,
-                              fit: BoxFit.contain,
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(height: 14),
-
-                      // ================= PROGRESS =================
-                      const _DoctorProgressStep2(),
-
-                      const SizedBox(height: 18),
-
-                      // ================= FIELDS (مؤهلات: dynamic list 1–12) =================
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: RichText(
-                          text: const TextSpan(
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: BColors.darkGrey,
-                            ),
-                            children: [
-                              TextSpan(text: 'المؤهلات '),
-                              TextSpan(
-                                text: '*',
-                                style: TextStyle(color: BColors.validationError),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      ...List.generate(_qualificationCtrls.length, (i) {
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            textDirection: TextDirection.rtl,
-                            children: [
-                              Expanded(
-                                child: TextField(
-                                  controller: _qualificationCtrls[i],
-                                  focusNode: _qualificationFocusNodes[i],
-                                  keyboardType: TextInputType.text,
-                                  decoration: _inputDecorationWithCounter(
-                                    _qualificationCtrls[i],
-                                    70,
-                                  ).copyWith(
-                                    hintText: 'مثال: بكالوريوس علم نفس',
-                                    hintStyle: const TextStyle(
-                                      color: BColors.darkGrey,
-                                      fontSize: 13,
+                                const SizedBox(width: 6),
+                                const Expanded(
+                                  child: Text(
+                                    'دقائق ويكتمل إنشاء الحساب',
+                                    textAlign: TextAlign.right,
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: BColors.textDarkestBlue,
                                     ),
                                   ),
-                                  textAlign: TextAlign.right,
-                                  textDirection: TextDirection.rtl,
-                                  maxLength: 70,
-                                  inputFormatters: [
-                                    LengthLimitingTextInputFormatter(70),
-                                  ],
-                                  onChanged: (_) {
-                                    if (_qualificationsTouched) {
-                                      _qualificationsError =
-                                          _validateQualificationsList();
-                                    }
-                                    setState(() {});
-                                  },
                                 ),
-                              ),
-                              if (_qualificationCtrls.length > _minQualifications) ...[
-                                const SizedBox(width: 8),
-                                IconButton(
-                                  onPressed: () => _removeQualification(i),
-                                  icon: const Icon(
-                                    Icons.remove_circle_outline,
-                                    color: BColors.validationError,
-                                    size: 20,
-                                  ),
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints(
-                                    minWidth: 40,
-                                    minHeight: 46,
-                                  ),
+                                const SizedBox(width: 35),
+                                Image.asset(
+                                  'assets/images/login_header.png',
+                                  width: 60,
+                                  fit: BoxFit.contain,
                                 ),
                               ],
-                            ],
+                            ),
                           ),
-                        );
-                      }),
-                      if (_qualificationCtrls.length < _maxQualifications)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: Align(
+
+                          const SizedBox(height: 14),
+
+                          // ================= PROGRESS =================
+                          const _DoctorProgressStep2(),
+
+                          const SizedBox(height: 18),
+
+                          // ================= FIELDS (مؤهلات: dynamic list 1–12) =================
+                          Align(
                             alignment: Alignment.centerRight,
-                            child: TextButton.icon(
-                              onPressed: _addQualification,
-                              icon: const Icon(Icons.add_circle_outline,
-                                  size: 20, color: BColors.primary),
-                              label: const Text(
-                                'إضافة مؤهل',
+                            child: RichText(
+                              text: const TextSpan(
                                 style: TextStyle(
                                   fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: BColors.primary,
+                                  color: BColors.darkGrey,
+                                ),
+                                children: [
+                                  TextSpan(text: 'المؤهلات '),
+                                  TextSpan(
+                                    text: '*',
+                                    style: TextStyle(
+                                      color: BColors.validationError,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          ...List.generate(_qualificationCtrls.length, (i) {
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                textDirection: TextDirection.rtl,
+                                children: [
+                                  Expanded(
+                                    child: TextField(
+                                      controller: _qualificationCtrls[i],
+                                      focusNode: _qualificationFocusNodes[i],
+                                      keyboardType: TextInputType.text,
+                                      decoration:
+                                          _inputDecorationWithCounter(
+                                            _qualificationCtrls[i],
+                                            70,
+                                          ).copyWith(
+                                            hintText: 'مثال: بكالوريوس علم نفس',
+                                            hintStyle: const TextStyle(
+                                              color: BColors.darkGrey,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                      textAlign: TextAlign.right,
+                                      textDirection: TextDirection.rtl,
+                                      maxLength: 70,
+                                      inputFormatters: [
+                                        LengthLimitingTextInputFormatter(70),
+                                      ],
+                                      onChanged: (_) {
+                                        if (_qualificationsTouched) {
+                                          _qualificationsError =
+                                              _validateQualificationsList();
+                                        }
+                                        setState(() {});
+                                      },
+                                    ),
+                                  ),
+                                  if (_qualificationCtrls.length >
+                                      _minQualifications) ...[
+                                    const SizedBox(width: 8),
+                                    IconButton(
+                                      onPressed: () => _removeQualification(i),
+                                      icon: const Icon(
+                                        Icons.remove_circle_outline,
+                                        color: BColors.validationError,
+                                        size: 20,
+                                      ),
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(
+                                        minWidth: 40,
+                                        minHeight: 46,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            );
+                          }),
+                          if (_qualificationCtrls.length < _maxQualifications)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton.icon(
+                                  onPressed: _addQualification,
+                                  icon: const Icon(
+                                    Icons.add_circle_outline,
+                                    size: 20,
+                                    color: BColors.primary,
+                                  ),
+                                  label: const Text(
+                                    'إضافة مؤهل',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: BColors.primary,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          if (_qualificationsError != null) ...[
+                            const SizedBox(height: 4),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: Text(
+                                _qualificationsError!,
+                                style: const TextStyle(
+                                  color: BColors.validationError,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 14),
+
+                          _LabeledFormField(
+                            fieldKey: _classificationFieldKey,
+                            label: 'رقم التخصص *',
+                            placeholder: 'أدخل رقم التخصص (10 أرقام)',
+                            controller: _classificationCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: _inputDecorationWithCounter(
+                              _classificationCtrl,
+                              10,
+                            ),
+                            focusNode: _classificationFocusNode,
+                            onChanged: (_) {
+                              if (_classificationTouched) {
+                                _classificationFieldKey.currentState
+                                    ?.validate();
+                              }
+                              setState(() {});
+                            },
+                            validator: (v) => _classificationTouched
+                                ? _validateSpecNumber(v)
+                                : null,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                              LengthLimitingTextInputFormatter(10),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+
+                          _IbanField(
+                            fieldKey: _ibanFieldKey,
+                            controller: _ibanSuffixCtrl,
+                            decoration: _inputDecorationWithCounter(
+                              _ibanSuffixCtrl,
+                              22,
+                            ),
+                            placeholder: 'أدخل 22 رقمًا بعد SA',
+                            focusNode: _ibanFocusNode,
+                            onChanged: (_) {
+                              if (_ibanTouched) {
+                                _ibanFieldKey.currentState?.validate();
+                              }
+                              setState(() {});
+                            },
+                            validator: (v) =>
+                                _ibanTouched ? _validateIbanSuffix(v) : null,
+                          ),
+
+                          const SizedBox(height: 14),
+
+                          // ================= DROPDOWNS ROW =================
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _LabeledDropdown(
+                                  label: 'التخصص *',
+                                  hint: 'اختر التخصص',
+                                  value: _specialty,
+                                  items: _specialties,
+                                  onChanged: (v) =>
+                                      setState(() => _specialty = v),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _LabeledDropdown(
+                                  label: 'سنوات الخبرة *',
+                                  hint: 'اختر عدد السنوات',
+                                  value: _years,
+                                  items: _yearsList,
+                                  onChanged: (v) => setState(() => _years = v),
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 26),
+
+                          // ================= SUBMIT BUTTON =================
+                          SizedBox(
+                            width: 220,
+                            height: 46,
+                            child: ElevatedButton(
+                              onPressed: _isFormComplete && !_isSubmitting
+                                  ? _submitCreateAccount
+                                  : null,
+                              style: ElevatedButton.styleFrom(
+                                elevation: 0,
+                                backgroundColor: BColors.secondary,
+                                foregroundColor: BColors.textDarkestBlue,
+                                disabledBackgroundColor: BColors.secondary
+                                    .withOpacity(0.4),
+                                disabledForegroundColor: BColors.textDarkestBlue
+                                    .withOpacity(0.5),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                              ),
+                              child: const Text(
+                                'إنشاء حساب',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800,
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                      if (_qualificationsError != null) ...[
-                        const SizedBox(height: 4),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: Text(
-                            _qualificationsError!,
-                            style: const TextStyle(
-                              color: BColors.validationError,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
+                          if (_submitError != null) ...[
+                            const SizedBox(height: 10),
+                            Text(
+                              _submitError!,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: BColors.validationError,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 14),
-
-                      _LabeledFormField(
-                        fieldKey: _classificationFieldKey,
-                        label: 'رقم التخصص *',
-                        placeholder: 'أدخل رقم التخصص (10 أرقام)',
-                        controller: _classificationCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: _inputDecoration(),
-                        focusNode: _classificationFocusNode,
-                        onChanged: (_) {
-                          if (_classificationTouched) {
-                            _classificationFieldKey.currentState?.validate();
-                          }
-                          setState(() {});
-                        },
-                        validator: (v) => _classificationTouched ? _validateSpecNumber(v) : null,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                          LengthLimitingTextInputFormatter(10),
+                          ],
                         ],
                       ),
-                      const SizedBox(height: 14),
-
-                      _IbanField(
-                        fieldKey: _ibanFieldKey,
-                        controller: _ibanSuffixCtrl,
-                        decoration: _inputDecorationWithCounter(
-                          _ibanSuffixCtrl,
-                          22,
-                        ),
-                        placeholder: 'أدخل 22 رقمًا بعد SA',
-                        focusNode: _ibanFocusNode,
-                        onChanged: (_) {
-                          if (_ibanTouched) {
-                            _ibanFieldKey.currentState?.validate();
-                          }
-                          setState(() {});
-                        },
-                        validator: (v) => _ibanTouched ? _validateIbanSuffix(v) : null,
-                      ),
-
-                      const SizedBox(height: 14),
-
-                      // ================= DROPDOWNS ROW =================
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _LabeledDropdown(
-                              label: 'التخصص *',
-                              hint: 'اختر التخصص',
-                              value: _specialty,
-                              items: _specialties,
-                              onChanged: (v) => setState(() => _specialty = v),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _LabeledDropdown(
-                              label: 'سنوات الخبرة *',
-                              hint: 'اختر عدد السنوات',
-                              value: _years,
-                              items: _yearsList,
-                              onChanged: (v) => setState(() => _years = v),
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 26),
-
-                      // ================= SUBMIT BUTTON =================
-                      SizedBox(
-                        width: 220,
-                        height: 46,
-                        child: ElevatedButton(
-                          onPressed: _isFormComplete && !_isSubmitting
-                              ? _submitCreateAccount
-                              : null,
-                          style: ElevatedButton.styleFrom(
-                            elevation: 0,
-                            backgroundColor: BColors.secondary,
-                            foregroundColor: BColors.textDarkestBlue,
-                            disabledBackgroundColor: BColors.secondary
-                                .withOpacity(0.4),
-                            disabledForegroundColor: BColors.textDarkestBlue
-                                .withOpacity(0.5),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                          ),
-                          child: const Text(
-                            'إنشاء حساب',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                      ),
-                      if (_submitError != null) ...[
-                        const SizedBox(height: 10),
-                        Text(
-                          _submitError!,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: BColors.validationError,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ],
+                    ),
                   ),
                 ),
-                ),
-              ),
-              if (_isSubmitting) BouhLoadingOverlay(),
-            ],
+                if (_isSubmitting) BouhLoadingOverlay(),
+              ],
+            ),
           ),
         ),
+      ),
       ),
     );
   }
@@ -719,10 +772,7 @@ class _LabeledFormField extends StatelessWidget {
           keyboardType: keyboardType,
           decoration: decoration.copyWith(
             hintText: placeholder,
-            hintStyle: const TextStyle(
-              color: BColors.darkGrey,
-              fontSize: 13,
-            ),
+            hintStyle: const TextStyle(color: BColors.darkGrey, fontSize: 13),
           ),
           textAlign: TextAlign.right,
           textDirection: TextDirection.rtl,

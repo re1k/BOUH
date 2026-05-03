@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:io' show SocketException;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:bouh/theme/base_themes/colors.dart';
+import 'package:bouh/utils/profile_field_validation.dart';
 import 'package:bouh/dto/caregiverSignupData.dart';
 import 'package:bouh/dto/caregiverDto.dart';
 import 'package:bouh/authentication/AuthService.dart';
@@ -210,7 +212,9 @@ class _CaregiverAccountCreationStep2State
 
         await childrenService.addChild(
           caregiverId: caregiverId,
-          name: c.nameController.text.trim(),
+          name: ProfileFieldValidation.normalizePersonName(
+            c.nameController.text,
+          ),
           dateOfBirth: dateOfBirth,
           gender: c.gender,
         );
@@ -286,9 +290,18 @@ class _CaregiverAccountCreationStep2State
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
+                            IconButton(
+                              icon: const Icon(
+                                Icons.arrow_back_ios_new_rounded,
+                                size: 20,
+                                color: BColors.textDarkestBlue,
+                              ),
+                              onPressed: () => Navigator.pop(context),
+                            ),
+                            const SizedBox(width: 6),
                             const Expanded(
                               child: Text(
-                                ' أضف طفلاً واحداً على الأقل للمتابعة',
+                                ' أضف طفلاً واحداً للمتابعة',
                                 textAlign: TextAlign.right,
                                 style: TextStyle(
                                   fontSize: 16,
@@ -345,6 +358,12 @@ class _CaregiverAccountCreationStep2State
                                   keyboardType: TextInputType.name,
                                   textAlign: TextAlign.right,
                                   decoration: _inputDecoration(),
+                                  inputFormatters: [
+                                    LengthLimitingTextInputFormatter(
+                                      ProfileFieldValidation
+                                          .personDisplayNameMaxLength,
+                                    ),
+                                  ],
                                   onChanged: (_) => setState(() {}),
                                 ),
                                 const SizedBox(height: 14),
@@ -528,19 +547,6 @@ class _CaregiverAccountCreationStep2State
               ),
 
               if (_isSubmitting) const BouhLoadingOverlay(),
-
-              Positioned(
-                top: 8,
-                right: 16,
-                child: IconButton(
-                  icon: const Icon(
-                    Icons.arrow_back_ios_new_rounded,
-                    size: 20,
-                    color: BColors.textDarkestBlue,
-                  ),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ),
             ],
           ),
         ),

@@ -13,6 +13,8 @@ import 'package:bouh/widgets/confirmation_popup.dart';
 import 'package:bouh/widgets/loading_overlay.dart';
 import 'package:bouh/services/profileService.dart';
 import 'package:bouh/dto/doctorUpdateDto.dart';
+import 'package:bouh/utils/profile_field_validation.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 const TextStyle _kProfileFieldValueStyle = TextStyle(
   fontFamily: 'Markazi Text',
@@ -20,6 +22,12 @@ const TextStyle _kProfileFieldValueStyle = TextStyle(
   fontWeight: FontWeight.w600,
   color: BColors.textDarkestBlue,
 );
+
+enum _ProfessionalSaveOutcome {
+  none,
+  qualificationsRequestSent,
+  qualificationsAlreadyPending,
+}
 
 class DoctorProfileView extends StatefulWidget {
   const DoctorProfileView({
@@ -74,7 +82,8 @@ class DoctorProfileView extends StatefulWidget {
   State<DoctorProfileView> createState() => _DoctorProfileViewState();
 }
 
-class _DoctorProfileViewState extends State<DoctorProfileView> {
+class _DoctorProfileViewState extends State<DoctorProfileView>
+    with WidgetsBindingObserver {
   final ProfileService _profileService = ProfileService();
 
   String? _deleteError;
@@ -123,21 +132,20 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
   static const double _kAppBarEditTrailingPadding = 15;
 
   static final RegExp _qualificationsTextRegex = RegExp(
-    r'^[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF0-9\s]+$',
+    r'^[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF0-9\s\.,]+$',
   );
 
   static const String _doctorNameHonorificPrefix = 'د. ';
-
-  static final RegExp _arabicNameOnlyRegex = RegExp(
-    r'^[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\s]+$',
-  );
+  static const String _kGalleryPermissionDeniedMessage =
+      'لم يتم السماح بالوصول إلى الصور/الوسائط. يرجى تفعيل إذن الصور (وليس الكاميرا) من إعدادات التطبيق ثم المحاولة مرة أخرى.';
 
   static String _nameWithoutHonorificPrefix(String? value) {
     final trimmed = (value ?? '').trim();
     if (trimmed.startsWith(_doctorNameHonorificPrefix)) {
-      return trimmed.substring(_doctorNameHonorificPrefix.length).trim();
+      final body = trimmed.substring(_doctorNameHonorificPrefix.length);
+      return ProfileFieldValidation.normalizePersonName(body);
     }
-    return trimmed;
+    return ProfileFieldValidation.normalizePersonName(trimmed);
   }
 
   static String _ibanSuffixFromStored(String? iban) {
@@ -183,7 +191,8 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
   static const String _discardChangesMessage =
       'لديك تغييرات غير محفوظة. هل تريد المغادرة؟';
 
-  Future<bool> _confirmDiscardUnsavedChanges() {
+  Future<bool> _confirmDiscardUnsavedChanges() async {
+    await _closeKeyboardBeforePopup();
     return ConfirmationPopup.show(
       context,
       title: 'تغييرات غير محفوظة',
@@ -195,11 +204,7 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
 
   String _userFriendlyError(Object error) {
     final raw = error.toString().trim();
-    const prefixes = <String>[
-      'Exception:',
-      'StateError:',
-      'FormatException:',
-    ];
+    const prefixes = <String>['Exception:', 'StateError:', 'FormatException:'];
     for (final prefix in prefixes) {
       if (raw.startsWith(prefix)) {
         return raw.substring(prefix.length).trim();
@@ -213,28 +218,25 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
     if (trimmed.isEmpty) {
       return 'يرجى إدخال الاسم';
     }
-    final userPart = trimmed.startsWith(_doctorNameHonorificPrefix)
-        ? trimmed.substring(_doctorNameHonorificPrefix.length).trim()
+    final userPartRaw = trimmed.startsWith(_doctorNameHonorificPrefix)
+        ? trimmed.substring(_doctorNameHonorificPrefix.length)
         : trimmed;
+    final userPart = ProfileFieldValidation.normalizePersonName(userPartRaw);
     if (userPart.isEmpty) {
       return 'يرجى إدخال الاسم';
     }
-    if (!_arabicNameOnlyRegex.hasMatch(userPart)) {
-      return 'يرجى إدخال الاسم باللغة العربية فقط';
-    }
-    return null;
+    return ProfileFieldValidation.doctorNameUserPart(userPart);
   }
 
-  String? _validateIbanSuffix(String? raw) {
-    if (raw == null || raw.trim().isEmpty) {
-      return 'يرجى إدخال صيغة آيبان صحيحة';
-    }
-    final digits = raw.trim().replaceAll(RegExp(r'\s'), '');
-    if (digits.length != 22 || !RegExp(r'^[0-9]{22}$').hasMatch(digits)) {
-      return 'يجب إدخال صيغة آيبان صحيحة';
-    }
-    return null;
-  }
+  /// User-entered body after honorific, whitespace-normalized for submit/compare.
+  String get _doctorNameBodyNormalized =>
+      ProfileFieldValidation.normalizePersonName(_nameCtrl.text);
+
+  String get _doctorFullNameNormalized =>
+      '$_doctorNameHonorificPrefix$_doctorNameBodyNormalized';
+
+  String? _validateIbanSuffix(String? raw) =>
+      ProfileFieldValidation.ibanSuffixDigits(raw);
 
   String _ibanReadOnlyDisplay() {
     final d = _ibanCtrl.text.trim();
@@ -245,6 +247,7 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
 
     _emailCtrl = TextEditingController(text: widget.initialEmail ?? '');
     _nameCtrl = TextEditingController(
@@ -256,9 +259,10 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
     _specNoCtrl = TextEditingController(text: widget.initialSpecNo ?? '');
     _areaCtrl = TextEditingController(text: widget.initialSpecialty ?? '');
 
-    final initialQ = widget.initialQualificationsText
+    final initialQ =
+        widget.initialQualificationsText
             ?.split('\n')
-            .map((e) => e.trim())
+            .map(ProfileFieldValidation.normalizeQualificationLine)
             .where((e) => e.isNotEmpty)
             .toList() ??
         const <String>[];
@@ -278,7 +282,22 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed && mounted) {
+      final futures = <Future<PermissionStatus>>[
+        Permission.photos.status,
+        if (Platform.isAndroid) Permission.storage.status,
+      ];
+      Future.wait(futures).then((_) {
+        if (mounted) setState(() {});
+      });
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _deleteErrorTimer?.cancel();
     _emailCtrl.dispose();
     _nameCtrl.dispose();
@@ -305,6 +324,15 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
     final focusNode = FocusNode();
     focusNode.addListener(() {
       if (!focusNode.hasFocus) {
+        final normalized = ProfileFieldValidation.normalizeQualificationLine(
+          ctrl.text,
+        );
+        if (ctrl.text != normalized) {
+          ctrl.value = TextEditingValue(
+            text: normalized,
+            selection: TextSelection.collapsed(offset: normalized.length),
+          );
+        }
         _qualificationsTouched = true;
         _qualificationsError = _validateQualificationsList();
         if (mounted) setState(() {});
@@ -318,8 +346,10 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
     _disposeQualificationEditors();
     _qualificationsError = null;
     _qualificationsTouched = false;
-    final trimmed =
-        qualifications.map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+    final trimmed = qualifications
+        .map(ProfileFieldValidation.normalizeQualificationLine)
+        .where((e) => e.isNotEmpty)
+        .toList();
     if (trimmed.isEmpty) {
       _appendQualificationEditor('');
     } else {
@@ -349,10 +379,10 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
   }
 
   String? _validateQualificationsList() {
-    final nonEmpty = _qualificationCtrls
-        .map((c) => c.text.trim())
-        .where((s) => s.isNotEmpty)
+    final all = _qualificationCtrls
+        .map((c) => ProfileFieldValidation.normalizeQualificationLine(c.text))
         .toList();
+    final nonEmpty = all.where((s) => s.isNotEmpty).toList();
     if (nonEmpty.isEmpty) {
       return 'يرجى إدخال مؤهل واحد على الأقل';
     }
@@ -366,9 +396,28 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
 
   List<String> _qualificationsForSubmit() {
     return _qualificationCtrls
-        .map((c) => c.text.trim())
+        .map((c) => ProfileFieldValidation.normalizeQualificationLine(c.text))
         .where((s) => s.isNotEmpty)
         .toList();
+  }
+
+  void _trimQualificationsInPlace() {
+    for (final c in _qualificationCtrls) {
+      final normalized = ProfileFieldValidation.normalizeQualificationLine(
+        c.text,
+      );
+      if (c.text != normalized) {
+        c.value = TextEditingValue(
+          text: normalized,
+          selection: TextSelection.collapsed(offset: normalized.length),
+        );
+      }
+    }
+  }
+
+  Future<void> _closeKeyboardBeforePopup() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    await Future.delayed(const Duration(milliseconds: 220));
   }
 
   InputDecoration _qualificationsInputDecoration() {
@@ -412,10 +461,7 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
         alignment: Alignment.centerRight,
         child: Text(
           '${ctrl.text.length}/$_qualMaxLength',
-          style: const TextStyle(
-            fontSize: 12,
-            color: BColors.darkGrey,
-          ),
+          style: const TextStyle(fontSize: 12, color: BColors.darkGrey),
         ),
       ),
     );
@@ -438,17 +484,17 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
                     focusNode: _qualificationFocusNodes[i],
                     style: _kProfileFieldValueStyle,
                     keyboardType: TextInputType.text,
-                    spellCheckConfiguration:
-                        SpellCheckConfiguration.disabled(),
-                    decoration: _qualificationsDecorationWithCounter(
-                      _qualificationCtrls[i],
-                    ).copyWith(
-                      hintText: 'مثال: بكالوريوس علم نفس',
-                      hintStyle: const TextStyle(
-                        color: BColors.darkGrey,
-                        fontSize: 13,
-                      ),
-                    ),
+                    spellCheckConfiguration: SpellCheckConfiguration.disabled(),
+                    decoration:
+                        _qualificationsDecorationWithCounter(
+                          _qualificationCtrls[i],
+                        ).copyWith(
+                          hintText: 'مثال: بكالوريوس علم نفس',
+                          hintStyle: const TextStyle(
+                            color: BColors.darkGrey,
+                            fontSize: 13,
+                          ),
+                        ),
                     textAlign: TextAlign.right,
                     textDirection: TextDirection.rtl,
                     maxLength: _qualMaxLength,
@@ -552,7 +598,9 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
         _specNoCtrl.text = p.scfhsNumber ?? '';
         _areaCtrl.text = p.areaOfKnowledge ?? '';
         final g = (p.gender ?? '').toLowerCase();
-        _gender = (g == 'female' || g == 'f' || g == 'أنثى') ? 'female' : 'male';
+        _gender = (g == 'female' || g == 'f' || g == 'أنثى')
+            ? 'female'
+            : 'male';
         _yearsOfExperience = p.yearsOfExperience;
         if (updateAvatar) {
           _photoUrl = _normalizePhotoUrl(p.profilePhotoURL);
@@ -583,6 +631,7 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
   }
 
   Future<void> _handleDeleteAccount() async {
+    await _closeKeyboardBeforePopup();
     final confirmed = await ConfirmationPopup.show(
       context,
       title: 'حذف الحساب',
@@ -598,7 +647,7 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
 
     try {
       await AuthService.instance.deleteAccountOnBackend();
-      if(!mounted) return;
+      if (!mounted) return;
       await AuthService.instance.signOut();
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
@@ -622,6 +671,7 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
   }
 
   Future<void> _confirmAndLogout() async {
+    await _closeKeyboardBeforePopup();
     final confirmed = await ConfirmationPopup.show(
       context,
       title: 'تسجيل الخروج',
@@ -658,15 +708,13 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
       return;
     }
     if (!_isAllowedProfileYearsOfExperience(_yearsOfExperience)) {
-      setState(
-        () => _saveError = 'يرجى اختيار سنوات الخبرة',
-      );
+      setState(() => _saveError = 'يرجى اختيار سنوات الخبرة');
       return;
     }
 
     await widget.onSave!(
       email: _emailCtrl.text.trim(),
-      name: '$_doctorNameHonorificPrefix${_nameCtrl.text.trim()}',
+      name: _doctorFullNameNormalized,
       iban: _fullIbanFromSuffix(_ibanCtrl.text),
       specNo: _specNoCtrl.text.trim(),
       experience: _yearsOfExperience?.toString() ?? '',
@@ -687,8 +735,8 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
       return;
     }
 
-    final nameBody = _nameCtrl.text.trim();
-    final name = '$_doctorNameHonorificPrefix$nameBody';
+    final nameBody = _doctorNameBodyNormalized;
+    final name = _doctorFullNameNormalized;
     final currentIban = _ibanReadOnlyDisplay().trim();
     final currentGender = _gender;
     final hasPersonalChanges =
@@ -730,7 +778,7 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
         throw Exception('تعذر مزامنة البيانات مع الخادم، حاول مرة أخرى');
       }
       widget.onProfileChanged?.call(
-        name: '$_doctorNameHonorificPrefix${_nameCtrl.text.trim()}',
+        name: _doctorFullNameNormalized,
         photoUrl: _photoUrl ?? '',
       );
     } catch (e) {
@@ -741,32 +789,33 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
     }
   }
 
-  Future<void> _saveProfessional({
+  Future<_ProfessionalSaveOutcome> _saveProfessional({
     required String originalQualsJoined,
     required int? originalYears,
   }) async {
     if (widget.onSave != null) {
       await _invokeOnSaveCallback();
-      return;
+      return _ProfessionalSaveOutcome.none;
     }
 
+    _trimQualificationsInPlace();
     setState(() {
       _qualificationsTouched = true;
       _qualificationsError = _validateQualificationsList();
       _saveError = null;
     });
-    if (_qualificationsError != null) return;
+    if (_qualificationsError != null) return _ProfessionalSaveOutcome.none;
 
     if (!_isAllowedProfileYearsOfExperience(_yearsOfExperience)) {
       setState(() => _saveError = 'يرجى اختيار سنوات الخبرة');
-      return;
+      return _ProfessionalSaveOutcome.none;
     }
 
     final currentQuals = _qualificationsForSubmit();
     final currentYears = _yearsOfExperience;
     final qualsChanged = currentQuals.join('\n') != originalQualsJoined;
     final yearsChanged = currentYears != originalYears;
-    if (!qualsChanged && !yearsChanged) return;
+    if (!qualsChanged && !yearsChanged) return _ProfessionalSaveOutcome.none;
 
     setState(() => _saving = true);
 
@@ -777,26 +826,39 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
       );
       final result = await _profileService.updateDoctor(dto);
       if (!result.success) {
+        final message = (result.message ?? '').trim();
+        final lower = message.toLowerCase();
+        final alreadyPendingQualifications =
+            qualsChanged &&
+            (lower.contains('pending') ||
+                lower.contains('already') ||
+                message.contains('قيد المراجعة'));
+        if (alreadyPendingQualifications) {
+          await _showQualificationsAlreadyPendingPopup();
+          return _ProfessionalSaveOutcome.qualificationsAlreadyPending;
+        }
         throw Exception(result.message ?? 'فشل تحديث الملف الشخصي');
       }
       await _loadProfile(silent: true);
       widget.onProfileChanged?.call(
-        name: '$_doctorNameHonorificPrefix${_nameCtrl.text.trim()}',
+        name: _doctorFullNameNormalized,
         photoUrl: _photoUrl ?? '',
       );
-      if (qualsChanged) {
-        await _showQualificationsReviewPopup();
-      }
+      return qualsChanged
+          ? _ProfessionalSaveOutcome.qualificationsRequestSent
+          : _ProfessionalSaveOutcome.none;
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) return _ProfessionalSaveOutcome.none;
       setState(() => _saveError = _userFriendlyError(e));
+      return _ProfessionalSaveOutcome.none;
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
 
-  Future<void> _showQualificationsReviewPopup() async {
+  Future<void> _showQualificationsAlreadyPendingPopup() async {
     if (!mounted) return;
+    await _closeKeyboardBeforePopup();
     await showDialog<void>(
       context: context,
       builder: (_) => Directionality(
@@ -807,12 +869,73 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
+          title: const Text(
+            'هناك طلب قيد المراجعة',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: BColors.textDarkestBlue,
+            ),
+          ),
+          content: const Text(
+            'لديك طلب للتعديل قيد المراجعة حالياً، ولا يمكن إرسال طلب جديد حتى تتم معالجة الطلب السابق.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 15,
+              color: BColors.textDarkestBlue,
+              height: 1.4,
+            ),
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: BColors.primary,
+                foregroundColor: BColors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text(
+                'حسناً',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showQualificationsReviewPopup() async {
+    if (!mounted) return;
+    await _closeKeyboardBeforePopup();
+    await showDialog<void>(
+      context: context,
+      builder: (_) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          backgroundColor: BColors.white,
+          actionsAlignment: MainAxisAlignment.center,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text(
+            'تم إرسال الطلب',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: BColors.textDarkestBlue,
+            ),
+          ),
           content: const Text(
             'تم إرسال طلب تعديل المؤهلات للمراجعة. سيتم إشعارك عند الموافقة وسيتم تحديث بياناتك تلقائيًا.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 15,
-              color: BColors.darkGrey,
+              color: BColors.textDarkestBlue,
               height: 1.4,
             ),
           ),
@@ -841,38 +964,72 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
     setState(() => _saveError = null);
     var pageGender = _gender;
     var personalEditing = false;
-    var baselineNameBody = _nameCtrl.text.trim();
+    var baselineNameBody = ProfileFieldValidation.normalizePersonName(
+      _nameCtrl.text,
+    );
     var baselineIbanSuffix = _ibanCtrl.text.trim();
     var baselineGender = _gender.trim().toLowerCase();
     var personalSaved = false;
+
+    final nameFocusNode = FocusNode();
+    final ibanFocusNode = FocusNode();
+    var nameTouched = false;
+    var ibanTouched = false;
+    void Function()? refreshPersonalPage;
+
+    void onNameFocusChange() {
+      if (!nameFocusNode.hasFocus && personalEditing) {
+        nameTouched = true;
+        refreshPersonalPage?.call();
+      }
+    }
+
+    void onIbanFocusChange() {
+      if (!ibanFocusNode.hasFocus && personalEditing) {
+        ibanTouched = true;
+        refreshPersonalPage?.call();
+      }
+    }
+
+    nameFocusNode.addListener(onNameFocusChange);
+    ibanFocusNode.addListener(onIbanFocusChange);
+
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (routeCtx) {
           return StatefulBuilder(
             builder: (context, setPage) {
-              final nameError = personalEditing
+              refreshPersonalPage = () => setPage(() {});
+              final nameValidationError = personalEditing
                   ? _validateDoctorNameLikeRegistration(
                       '$_doctorNameHonorificPrefix${_nameCtrl.text}',
                     )
                   : null;
-              final ibanError = personalEditing
+              final nameErrorForDisplay = personalEditing && nameTouched
+                  ? nameValidationError
+                  : null;
+              final ibanValidationError = personalEditing
                   ? _validateIbanSuffix(_ibanCtrl.text)
+                  : null;
+              final ibanErrorForDisplay = personalEditing && ibanTouched
+                  ? ibanValidationError
                   : null;
               final canSavePersonal =
                   personalEditing &&
                   !_saving &&
                   !_loadingProfile &&
-                  nameError == null &&
-                  ibanError == null &&
-                  (_nameCtrl.text.trim() != baselineNameBody ||
+                  nameValidationError == null &&
+                  ibanValidationError == null &&
+                  (_doctorNameBodyNormalized != baselineNameBody ||
                       _ibanCtrl.text.trim() != baselineIbanSuffix ||
                       pageGender.trim().toLowerCase() != baselineGender);
               bool hasUnsavedPersonalChanges() {
                 if (!personalEditing) return false;
-                return _nameCtrl.text.trim() != baselineNameBody ||
+                return _doctorNameBodyNormalized != baselineNameBody ||
                     _ibanCtrl.text.trim() != baselineIbanSuffix ||
                     pageGender.trim().toLowerCase() != baselineGender;
               }
+
               return Directionality(
                 textDirection: TextDirection.rtl,
                 child: WillPopScope(
@@ -888,308 +1045,332 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
                     });
                     pageGender = _gender;
                     personalEditing = false;
+                    nameTouched = false;
+                    ibanTouched = false;
                     setPage(() {});
                     return true;
                   },
                   child: Scaffold(
-                  backgroundColor: BColors.white,
-                  appBar: AppBar(
                     backgroundColor: BColors.white,
-                    elevation: 0,
-                    surfaceTintColor: Colors.transparent,
-                    leading: IconButton(
-                      icon: const Icon(
-                        Icons.arrow_back_ios_new_rounded,
-                        size: 20,
-                        color: BColors.textDarkestBlue,
-                      ),
-                      onPressed: () async {
-                        if (!hasUnsavedPersonalChanges()) {
-                          Navigator.of(routeCtx).pop();
-                          return;
-                        }
-                        final shouldDiscard =
-                            await _confirmDiscardUnsavedChanges();
-                        if (!shouldDiscard || !context.mounted) return;
-                        setState(() {
-                          _saveError = null;
-                          _nameCtrl.text = baselineNameBody;
-                          _ibanCtrl.text = baselineIbanSuffix;
-                          _gender = baselineGender;
-                        });
-                        pageGender = _gender;
-                        personalEditing = false;
-                        setPage(() {});
-                        Navigator.of(routeCtx).pop();
-                      },
-                    ),
-                    title: const Text(
-                      'المعلومات الشخصية',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: BColors.textDarkestBlue,
-                      ),
-                    ),
-                    centerTitle: true,
-                    actions: [
-                      Padding(
-                        padding: const EdgeInsetsDirectional.only(
-                          end: _kAppBarEditTrailingPadding,
+                    appBar: AppBar(
+                      backgroundColor: BColors.white,
+                      elevation: 0,
+                      surfaceTintColor: Colors.transparent,
+                      leading: IconButton(
+                        icon: const Icon(
+                          Icons.arrow_back_ios_new_rounded,
+                          size: 20,
+                          color: BColors.textDarkestBlue,
                         ),
-                        child: Center(
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              customBorder: const CircleBorder(),
-                              onTap: () {
-                                personalEditing = !personalEditing;
-                                setPage(() {});
-                              },
-                              child: _circularEditIcon(),
+                        onPressed: () async {
+                          if (!hasUnsavedPersonalChanges()) {
+                            Navigator.of(routeCtx).pop();
+                            return;
+                          }
+                          final shouldDiscard =
+                              await _confirmDiscardUnsavedChanges();
+                          if (!shouldDiscard || !context.mounted) return;
+                          setState(() {
+                            _saveError = null;
+                            _nameCtrl.text = baselineNameBody;
+                            _ibanCtrl.text = baselineIbanSuffix;
+                            _gender = baselineGender;
+                          });
+                          pageGender = _gender;
+                          personalEditing = false;
+                          nameTouched = false;
+                          ibanTouched = false;
+                          setPage(() {});
+                          Navigator.of(routeCtx).pop();
+                        },
+                      ),
+                      title: const Text(
+                        'المعلومات الشخصية',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: BColors.textDarkestBlue,
+                        ),
+                      ),
+                      centerTitle: true,
+                      actions: [
+                        Padding(
+                          padding: const EdgeInsetsDirectional.only(
+                            end: _kAppBarEditTrailingPadding,
+                          ),
+                          child: Center(
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                customBorder: const CircleBorder(),
+                                onTap: () {
+                                  nameTouched = false;
+                                  ibanTouched = false;
+                                  personalEditing = !personalEditing;
+                                  setPage(() {});
+                                },
+                                child: _circularEditIcon(),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    body: Stack(
+                      children: [
+                        SingleChildScrollView(
+                          padding: const EdgeInsets.fromLTRB(22, 8, 22, 32),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _label('البريد الإلكتروني'),
+                              _viewFieldGrey(_emailCtrl.text),
+                              _label('الاسم'),
+                              personalEditing
+                                  ? _editField(
+                                      _nameCtrl,
+                                      prefixText: _doctorNameHonorificPrefix,
+                                      focusNode: nameFocusNode,
+                                      onChanged: (_) => setPage(() {}),
+                                      inputFormatters: [
+                                        LengthLimitingTextInputFormatter(
+                                          ProfileFieldValidation
+                                              .caregiverOrDoctorNameMaxLength,
+                                        ),
+                                      ],
+                                    )
+                                  : _readOnlyPlainField(
+                                      _doctorFullNameNormalized,
+                                    ),
+                              if (personalEditing &&
+                                  nameErrorForDisplay != null) ...[
+                                const SizedBox(height: 6),
+                                Text(
+                                  nameErrorForDisplay,
+                                  textAlign: TextAlign.right,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: BColors.validationError,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                              _label('الجنس'),
+                              const SizedBox(height: 8),
+                              personalEditing
+                                  ? _genderEditable(
+                                      selected: pageGender,
+                                      onChanged: (v) {
+                                        pageGender = v;
+                                        setPage(() {});
+                                      },
+                                    )
+                                  : _genderReadOnly(selected: pageGender),
+                              _label('رقم الايبان'),
+                              personalEditing
+                                  ? _buildIbanEditField(
+                                      focusNode: ibanFocusNode,
+                                      onChanged: (_) => setPage(() {}),
+                                    )
+                                  : _readOnlyPlainField(_ibanReadOnlyDisplay()),
+                              if (personalEditing &&
+                                  ibanErrorForDisplay != null) ...[
+                                const SizedBox(height: 6),
+                                Text(
+                                  ibanErrorForDisplay,
+                                  textAlign: TextAlign.right,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: BColors.validationError,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                              if (_saveError != null) ...[
+                                const SizedBox(height: 12),
+                                Text(
+                                  _saveError!,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    color: BColors.validationError,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                              if (personalEditing) ...[
+                                const SizedBox(height: 36),
+                                Center(
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(
+                                      left: _kSaveButtonsLeftPadding,
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      textDirection: TextDirection.ltr,
+                                      children: [
+                                        SizedBox(
+                                          width: 168,
+                                          height: 46,
+                                          child: ElevatedButton(
+                                            onPressed: !canSavePersonal
+                                                ? null
+                                                : () async {
+                                                    setPage(() {});
+                                                    setState(
+                                                      () =>
+                                                          _gender = pageGender,
+                                                    );
+                                                    await _savePersonal(
+                                                      originalName:
+                                                          '$_doctorNameHonorificPrefix$baselineNameBody',
+                                                      originalIban:
+                                                          _fullIbanFromSuffix(
+                                                            baselineIbanSuffix,
+                                                          ),
+                                                      originalGender:
+                                                          baselineGender,
+                                                    );
+                                                    if (_saveError == null) {
+                                                      baselineNameBody =
+                                                          ProfileFieldValidation.normalizePersonName(
+                                                            _nameCtrl.text,
+                                                          );
+                                                      baselineIbanSuffix =
+                                                          _ibanCtrl.text.trim();
+                                                      baselineGender = _gender
+                                                          .trim()
+                                                          .toLowerCase();
+                                                      personalSaved = true;
+                                                      personalEditing = false;
+                                                      nameTouched = false;
+                                                      ibanTouched = false;
+                                                    }
+                                                    setPage(() {});
+                                                  },
+                                            style: ElevatedButton.styleFrom(
+                                              elevation: 0,
+                                              backgroundColor:
+                                                  BColors.secondary,
+                                              foregroundColor:
+                                                  BColors.textDarkestBlue,
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(16),
+                                              ),
+                                            ),
+                                            child: _saving
+                                                ? const SizedBox(
+                                                    width: 34,
+                                                    height: 24,
+                                                    child:
+                                                        BouhOvalLoadingIndicator(
+                                                          width: 30,
+                                                          height: 20,
+                                                          strokeWidth: 2.6,
+                                                        ),
+                                                  )
+                                                : const Text(
+                                                    'حفظ التعديلات',
+                                                    style: TextStyle(
+                                                      fontSize: 14,
+                                                      fontWeight:
+                                                          FontWeight.w800,
+                                                    ),
+                                                  ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        SizedBox(
+                                          width: 112,
+                                          height: 46,
+                                          child: OutlinedButton(
+                                            onPressed:
+                                                _saving || _loadingProfile
+                                                ? null
+                                                : () async {
+                                                    if (hasUnsavedPersonalChanges()) {
+                                                      final shouldDiscard =
+                                                          await _confirmDiscardUnsavedChanges();
+                                                      if (!shouldDiscard)
+                                                        return;
+                                                    }
+                                                    setState(() {
+                                                      _saveError = null;
+                                                      _nameCtrl.text =
+                                                          baselineNameBody;
+                                                      _ibanCtrl.text =
+                                                          baselineIbanSuffix;
+                                                      _gender = baselineGender;
+                                                    });
+                                                    pageGender = _gender;
+                                                    personalEditing = false;
+                                                    nameTouched = false;
+                                                    ibanTouched = false;
+                                                    setPage(() {});
+                                                  },
+                                            style: OutlinedButton.styleFrom(
+                                              foregroundColor:
+                                                  BColors.textDarkestBlue,
+                                              side: const BorderSide(
+                                                color: BColors.grey,
+                                              ),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(16),
+                                              ),
+                                            ),
+                                            child: const Text(
+                                              'إلغاء',
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w800,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        if (_isDeletingAccount) BouhLoadingOverlay(),
+                      ],
+                    ),
+                    bottomNavigationBar: SafeArea(
+                      minimum: const EdgeInsets.fromLTRB(22, 0, 22, 28),
+                      child: SizedBox(
+                        height: 46,
+                        child: ElevatedButton.icon(
+                          onPressed: _isDeletingAccount
+                              ? null
+                              : () => _handleDeleteAccount(),
+                          style: ElevatedButton.styleFrom(
+                            elevation: 0,
+                            backgroundColor: BColors.destructiveError,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          icon: const Icon(
+                            Icons.delete_outline_rounded,
+                            size: 18,
+                          ),
+                          label: const Text(
+                            'حذف الحساب',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
                             ),
                           ),
                         ),
                       ),
-                    ],
-                  ),
-                  body: Stack(
-                    children: [
-                      SingleChildScrollView(
-                        padding: const EdgeInsets.fromLTRB(22, 8, 22, 32),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            _label('البريد الإلكتروني'),
-                            _viewFieldGrey(_emailCtrl.text),
-                            _label('الاسم'),
-                            personalEditing
-                                ? _editField(
-                                    _nameCtrl,
-                                    prefixText: _doctorNameHonorificPrefix,
-                                    onChanged: (_) => setPage(() {}),
-                                  )
-                                : _readOnlyPlainField(
-                                    '$_doctorNameHonorificPrefix${_nameCtrl.text.trim()}',
-                                  ),
-                            if (personalEditing && nameError != null) ...[
-                              const SizedBox(height: 6),
-                              Text(
-                                nameError,
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  color: BColors.validationError,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                            _label('الجنس'),
-                            const SizedBox(height: 8),
-                            personalEditing
-                                ? _genderEditable(
-                                    selected: pageGender,
-                                    onChanged: (v) {
-                                      pageGender = v;
-                                      setPage(() {});
-                                    },
-                                  )
-                                : _genderReadOnly(selected: pageGender),
-                            _label('رقم الايبان'),
-                            personalEditing
-                                ? _buildIbanEditField(
-                                    onChanged: (_) => setPage(() {}),
-                                  )
-                                : _readOnlyPlainField(_ibanReadOnlyDisplay()),
-                            if (personalEditing && ibanError != null) ...[
-                              const SizedBox(height: 6),
-                              Text(
-                                ibanError,
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  color: BColors.validationError,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                            if (_saveError != null) ...[
-                              const SizedBox(height: 12),
-                              Text(
-                                _saveError!,
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  color: BColors.validationError,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                            if (personalEditing) ...[
-                              const SizedBox(height: 36),
-                              Center(
-                                child: Padding(
-                                  padding: const EdgeInsets.only(
-                                    left: _kSaveButtonsLeftPadding,
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    textDirection: TextDirection.ltr,
-                                    children: [
-                                      SizedBox(
-                                        width: 168,
-                                        height: 46,
-                                        child: ElevatedButton(
-                                          onPressed: !canSavePersonal
-                                              ? null
-                                              : () async {
-                                                  setPage(() {});
-                                                  setState(
-                                                    () =>
-                                                        _gender = pageGender,
-                                                  );
-                                                  await _savePersonal(
-                                                    originalName:
-                                                        '$_doctorNameHonorificPrefix$baselineNameBody',
-                                                    originalIban:
-                                                        _fullIbanFromSuffix(
-                                                          baselineIbanSuffix,
-                                                        ),
-                                                    originalGender:
-                                                        baselineGender,
-                                                  );
-                                                  if (_saveError == null) {
-                                                    baselineNameBody = _nameCtrl
-                                                        .text
-                                                        .trim();
-                                                    baselineIbanSuffix = _ibanCtrl
-                                                        .text
-                                                        .trim();
-                                                    baselineGender = _gender
-                                                        .trim()
-                                                        .toLowerCase();
-                                                    personalSaved = true;
-                                                    personalEditing = false;
-                                                  }
-                                                  setPage(() {});
-                                                },
-                                          style: ElevatedButton.styleFrom(
-                                            elevation: 0,
-                                            backgroundColor: BColors.secondary,
-                                            foregroundColor:
-                                                BColors.textDarkestBlue,
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(16),
-                                            ),
-                                          ),
-                                          child: _saving
-                                              ? const SizedBox(
-                                                  width: 34,
-                                                  height: 24,
-                                                  child:
-                                                      BouhOvalLoadingIndicator(
-                                                    width: 30,
-                                                    height: 20,
-                                                    strokeWidth: 2.6,
-                                                  ),
-                                                )
-                                              : const Text(
-                                                  'حفظ التعديلات',
-                                                  style: TextStyle(
-                                                    fontSize: 14,
-                                                    fontWeight: FontWeight.w800,
-                                                  ),
-                                                ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      SizedBox(
-                                        width: 112,
-                                        height: 46,
-                                        child: OutlinedButton(
-                                          onPressed: _saving || _loadingProfile
-                                              ? null
-                                              : () async {
-                                                  if (hasUnsavedPersonalChanges()) {
-                                                    final shouldDiscard =
-                                                        await _confirmDiscardUnsavedChanges();
-                                                    if (!shouldDiscard) return;
-                                                  }
-                                                  setState(() {
-                                                    _saveError = null;
-                                                    _nameCtrl.text =
-                                                        baselineNameBody;
-                                                    _ibanCtrl.text =
-                                                        baselineIbanSuffix;
-                                                    _gender = baselineGender;
-                                                  });
-                                                  pageGender = _gender;
-                                                  personalEditing = false;
-                                                  setPage(() {});
-                                                },
-                                          style: OutlinedButton.styleFrom(
-                                            foregroundColor:
-                                                BColors.textDarkestBlue,
-                                            side: const BorderSide(
-                                              color: BColors.grey,
-                                            ),
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(16),
-                                            ),
-                                          ),
-                                          child: const Text(
-                                            'إلغاء',
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w800,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      if (_isDeletingAccount) BouhLoadingOverlay(),
-                    ],
-                  ),
-                  bottomNavigationBar: SafeArea(
-                    minimum: const EdgeInsets.fromLTRB(22, 0, 22, 28),
-                    child: SizedBox(
-                      height: 46,
-                      child: ElevatedButton.icon(
-                        onPressed: _isDeletingAccount
-                            ? null
-                            : () => _handleDeleteAccount(),
-                        style: ElevatedButton.styleFrom(
-                          elevation: 0,
-                          backgroundColor: BColors.destructiveError,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        icon: const Icon(
-                          Icons.delete_outline_rounded,
-                          size: 18,
-                        ),
-                        label: const Text(
-                          'حذف الحساب',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
                     ),
                   ),
-                ),
                 ),
               );
             },
@@ -1197,6 +1378,11 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
         },
       ),
     );
+    nameFocusNode.removeListener(onNameFocusChange);
+    ibanFocusNode.removeListener(onIbanFocusChange);
+    nameFocusNode.dispose();
+    ibanFocusNode.dispose();
+
     if (!mounted) return;
     if (!personalSaved) {
       setState(() {
@@ -1223,8 +1409,9 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
         builder: (routeCtx) {
           return StatefulBuilder(
             builder: (context, setPage) {
-              final yearsDropdownValue =
-                  _experienceYearsToDropdownValue(_yearsOfExperience);
+              final yearsDropdownValue = _experienceYearsToDropdownValue(
+                _yearsOfExperience,
+              );
               final qualificationsError = professionalEditing
                   ? _validateQualificationsList()
                   : null;
@@ -1246,6 +1433,7 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
                 return _qualificationsForSubmit().join('\n') != baselineQuals ||
                     _yearsOfExperience != baselineYears;
               }
+
               return Directionality(
                 textDirection: TextDirection.rtl,
                 child: WillPopScope(
@@ -1263,333 +1451,343 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
                     return true;
                   },
                   child: Scaffold(
-                  backgroundColor: BColors.white,
-                  appBar: AppBar(
                     backgroundColor: BColors.white,
-                    elevation: 0,
-                    surfaceTintColor: Colors.transparent,
-                    leading: IconButton(
-                      icon: const Icon(
-                        Icons.arrow_back_ios_new_rounded,
-                        size: 20,
-                        color: BColors.textDarkestBlue,
-                      ),
-                      onPressed: () async {
-                        if (!hasUnsavedProfessionalChanges()) {
-                          Navigator.of(routeCtx).pop();
-                          return;
-                        }
-                        final shouldDiscard =
-                            await _confirmDiscardUnsavedChanges();
-                        if (!shouldDiscard || !context.mounted) return;
-                        setState(() {
-                          _replaceQualificationEditors(baselineQualsList);
-                          _yearsOfExperience = baselineYears;
-                          _saveError = null;
-                        });
-                        professionalEditing = false;
-                        setPage(() {});
-                        Navigator.of(routeCtx).pop();
-                      },
-                    ),
-                    title: const Text(
-                      'المعلومات المهنية',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: BColors.textDarkestBlue,
-                      ),
-                    ),
-                    centerTitle: true,
-                    actions: [
-                      Padding(
-                        padding: const EdgeInsetsDirectional.only(
-                          end: _kAppBarEditTrailingPadding,
+                    appBar: AppBar(
+                      backgroundColor: BColors.white,
+                      elevation: 0,
+                      surfaceTintColor: Colors.transparent,
+                      leading: IconButton(
+                        icon: const Icon(
+                          Icons.arrow_back_ios_new_rounded,
+                          size: 20,
+                          color: BColors.textDarkestBlue,
                         ),
-                        child: Center(
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              customBorder: const CircleBorder(),
-                              onTap: () async {
-                                if (professionalEditing) {
-                                  setState(() {
-                                    _replaceQualificationEditors(
-                                      baselineQualsList,
+                        onPressed: () async {
+                          if (!hasUnsavedProfessionalChanges()) {
+                            Navigator.of(routeCtx).pop();
+                            return;
+                          }
+                          final shouldDiscard =
+                              await _confirmDiscardUnsavedChanges();
+                          if (!shouldDiscard || !context.mounted) return;
+                          setState(() {
+                            _replaceQualificationEditors(baselineQualsList);
+                            _yearsOfExperience = baselineYears;
+                            _saveError = null;
+                          });
+                          professionalEditing = false;
+                          setPage(() {});
+                          Navigator.of(routeCtx).pop();
+                        },
+                      ),
+                      title: const Text(
+                        'المعلومات المهنية',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: BColors.textDarkestBlue,
+                        ),
+                      ),
+                      centerTitle: true,
+                      actions: [
+                        Padding(
+                          padding: const EdgeInsetsDirectional.only(
+                            end: _kAppBarEditTrailingPadding,
+                          ),
+                          child: Center(
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                customBorder: const CircleBorder(),
+                                onTap: () async {
+                                  if (professionalEditing) {
+                                    setState(() {
+                                      _replaceQualificationEditors(
+                                        baselineQualsList,
+                                      );
+                                      _yearsOfExperience = baselineYears;
+                                      _saveError = null;
+                                    });
+                                  } else {
+                                    await _refreshProfessionalDraftFromBackend();
+                                    baselineQualsList = List<String>.from(
+                                      _qualificationsForSubmit(),
                                     );
-                                    _yearsOfExperience = baselineYears;
-                                    _saveError = null;
-                                  });
-                                } else {
-                                  await _refreshProfessionalDraftFromBackend();
-                                  baselineQualsList = List<String>.from(
-                                    _qualificationsForSubmit(),
-                                  );
-                                  baselineQuals = baselineQualsList.join('\n');
-                                  baselineYears = _yearsOfExperience;
-                                }
-                                professionalEditing = !professionalEditing;
-                                setPage(() {});
-                              },
-                              child: _circularEditIcon(),
+                                    baselineQuals = baselineQualsList.join(
+                                      '\n',
+                                    );
+                                    baselineYears = _yearsOfExperience;
+                                  }
+                                  professionalEditing = !professionalEditing;
+                                  setPage(() {});
+                                },
+                                child: _circularEditIcon(),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                  body: Stack(
-                    children: [
-                      SingleChildScrollView(
-                        padding: const EdgeInsets.fromLTRB(22, 8, 22, 32),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: [
-                                      _label('سنوات الخبرة'),
-                                      professionalEditing
-                                          ? _editDropdownField(
-                                              routeCtx,
-                                              value: yearsDropdownValue,
-                                              items:
-                                                  _experienceYearDropdownLabels,
-                                              hintText: 'اختر عدد السنوات',
-                                              onChanged: (v) {
-                                                setState(
-                                                  () => _yearsOfExperience =
-                                                      _parseExperienceYearsLabel(
-                                                        v,
-                                                      ),
-                                                );
-                                                setPage(() {});
-                                              },
-                                            )
-                                          : _readOnlyPlainField(
-                                              _formatExperienceYearsReadOnly(
-                                                _yearsOfExperience,
+                      ],
+                    ),
+                    body: Stack(
+                      children: [
+                        SingleChildScrollView(
+                          padding: const EdgeInsets.fromLTRB(22, 8, 22, 32),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: [
+                                        _label('سنوات الخبرة'),
+                                        professionalEditing
+                                            ? _editDropdownField(
+                                                routeCtx,
+                                                value: yearsDropdownValue,
+                                                items:
+                                                    _experienceYearDropdownLabels,
+                                                hintText: 'اختر عدد السنوات',
+                                                onChanged: (v) {
+                                                  setState(
+                                                    () => _yearsOfExperience =
+                                                        _parseExperienceYearsLabel(
+                                                          v,
+                                                        ),
+                                                  );
+                                                  setPage(() {});
+                                                },
+                                              )
+                                            : _readOnlyPlainField(
+                                                _formatExperienceYearsReadOnly(
+                                                  _yearsOfExperience,
+                                                ),
                                               ),
-                                            ),
-                                    ],
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: [
+                                        _label('مجال المعرفة'),
+                                        _viewFieldGrey(_areaCtrl.text),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              _label('رقم التخصص'),
+                              _viewFieldGrey(_specNoCtrl.text),
+                              _label('المؤهلات'),
+                              professionalEditing
+                                  ? _buildQualificationsEditor(
+                                      onChanged: () => setPage(() {}),
+                                    )
+                                  : _viewQualificationsList(
+                                      _qualificationsForSubmit(),
+                                    ),
+                              const Padding(
+                                padding: EdgeInsets.only(top: 8),
+                                child: Align(
+                                  alignment: Alignment.centerRight,
+                                  child: Text(
+                                    '* تعديل المؤهلات يتطلب موافقة الإدارة، وسيتم إشعارك عند اعتماد الطلب.',
+                                    textAlign: TextAlign.right,
+                                    style: TextStyle(
+                                      fontSize: 12.5,
+                                      color: BColors.darkGrey,
+                                      fontWeight: FontWeight.w600,
+                                      height: 1.35,
+                                    ),
                                   ),
                                 ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: [
-                                      _label('مجال المعرفة'),
-                                      _viewFieldGrey(_areaCtrl.text),
-                                    ],
+                              ),
+                              if (professionalEditing &&
+                                  qualificationsError != null) ...[
+                                const SizedBox(height: 6),
+                                Text(
+                                  qualificationsError,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    color: BColors.validationError,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
                               ],
-                            ),
-                            _label('رقم التخصص'),
-                            _viewFieldGrey(_specNoCtrl.text),
-                            _label('المؤهلات'),
-                            professionalEditing
-                                ? _buildQualificationsEditor(
-                                    onChanged: () => setPage(() {}),
-                                  )
-                                : _viewQualificationsList(
-                                    _qualificationsForSubmit(),
-                                  ),
-                            const Padding(
-                              padding: EdgeInsets.only(top: 8),
-                              child: Align(
-                                alignment: Alignment.centerRight,
-                                child: Text(
-                                  '* تعديل المؤهلات يتطلب موافقة الإدارة، وسيتم إشعارك عند اعتماد الطلب.',
-                                  textAlign: TextAlign.right,
-                                  style: TextStyle(
-                                    fontSize: 12.5,
-                                    color: BColors.darkGrey,
+                              if (professionalEditing &&
+                                  yearsError != null) ...[
+                                const SizedBox(height: 6),
+                                Text(
+                                  yearsError,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    color: BColors.validationError,
                                     fontWeight: FontWeight.w600,
-                                    height: 1.35,
                                   ),
                                 ),
-                              ),
-                            ),
-                            if (professionalEditing &&
-                                qualificationsError != null) ...[
-                              const SizedBox(height: 6),
-                              Text(
-                                qualificationsError,
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  color: BColors.validationError,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                            if (professionalEditing && yearsError != null) ...[
-                              const SizedBox(height: 6),
-                              Text(
-                                yearsError,
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  color: BColors.validationError,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                            if (_saveError != null) ...[
-                              const SizedBox(height: 12),
-                              Text(
-                                _saveError!,
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  color: BColors.validationError,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                            if (professionalEditing) ...[
-                              const SizedBox(height: 36),
-                              Center(
-                                child: Padding(
-                                  padding: const EdgeInsets.only(
-                                    left: _kSaveButtonsLeftPadding,
+                              ],
+                              if (_saveError != null) ...[
+                                const SizedBox(height: 12),
+                                Text(
+                                  _saveError!,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    color: BColors.validationError,
+                                    fontWeight: FontWeight.w600,
                                   ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    textDirection: TextDirection.ltr,
-                                    children: [
-                                      SizedBox(
-                                        width: 168,
-                                        height: 46,
-                                        child: ElevatedButton(
-                                          onPressed: !canSaveProfessional
-                                              ? null
-                                              : () async {
-                                                      setPage(() {});
-                                                      await _saveProfessional(
-                                                        originalQualsJoined:
-                                                            baselineQuals,
-                                                        originalYears:
-                                                            baselineYears,
-                                                      );
-                                                      if (_saveError == null) {
-                                                        // Force a fresh backend read after submit so displayed
-                                                        // qualifications always reflect persisted DB state.
-                                                        await _loadProfile(
-                                                          silent: true,
+                                ),
+                              ],
+                              if (professionalEditing) ...[
+                                const SizedBox(height: 36),
+                                Center(
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(
+                                      left: _kSaveButtonsLeftPadding,
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      textDirection: TextDirection.ltr,
+                                      children: [
+                                        SizedBox(
+                                          width: 168,
+                                          height: 46,
+                                          child: ElevatedButton(
+                                            onPressed: !canSaveProfessional
+                                                ? null
+                                                : () async {
+                                                    setPage(() {});
+                                                    final saveOutcome =
+                                                        await _saveProfessional(
+                                                          originalQualsJoined:
+                                                              baselineQuals,
+                                                          originalYears:
+                                                              baselineYears,
                                                         );
-                                                        baselineQualsList =
-                                                            List<String>.from(
-                                                              _qualificationsForSubmit(),
-                                                            );
-                                                        baselineQuals =
-                                                            baselineQualsList
-                                                                .join('\n');
-                                                        baselineYears =
-                                                            _yearsOfExperience;
-                                                        professionalEditing =
-                                                            false;
-                                                      }
-                                                      setPage(() {});
-                                                    },
-                                          style: ElevatedButton.styleFrom(
-                                            elevation: 0,
-                                            backgroundColor:
-                                                BColors.secondary,
-                                            foregroundColor:
-                                                BColors.textDarkestBlue,
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(16),
-                                            ),
-                                          ),
-                                          child: _saving
-                                              ? const SizedBox(
-                                                  width: 34,
-                                                  height: 24,
-                                                  child:
-                                                      BouhOvalLoadingIndicator(
-                                                    width: 30,
-                                                    height: 20,
-                                                    strokeWidth: 2.6,
-                                                  ),
-                                                )
-                                              : const Text(
-                                                  'حفظ التعديلات',
-                                                  style: TextStyle(
-                                                    fontSize: 14,
-                                                    fontWeight: FontWeight.w800,
-                                                  ),
-                                                ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      SizedBox(
-                                        width: 112,
-                                        height: 46,
-                                        child: OutlinedButton(
-                                          onPressed:
-                                              _saving || _loadingProfile
-                                                  ? null
-                                                  : () async {
-                                                      if (hasUnsavedProfessionalChanges()) {
-                                                        final shouldDiscard =
-                                                            await _confirmDiscardUnsavedChanges();
-                                                        if (!shouldDiscard) return;
-                                                      }
-                                                      setState(
-                                                        () {
-                                                            _replaceQualificationEditors(
-                                                              baselineQualsList,
-                                                            );
-                                                            _yearsOfExperience =
-                                                                baselineYears;
-                                                            _saveError = null;
-                                                          },
+                                                    if (_saveError == null) {
+                                                      // Force a fresh backend read after submit so displayed
+                                                      // qualifications always reflect persisted DB state.
+                                                      await _loadProfile(
+                                                        silent: true,
                                                       );
+                                                      baselineQualsList =
+                                                          List<String>.from(
+                                                            _qualificationsForSubmit(),
+                                                          );
+                                                      baselineQuals =
+                                                          baselineQualsList
+                                                              .join('\n');
+                                                      baselineYears =
+                                                          _yearsOfExperience;
                                                       professionalEditing =
                                                           false;
                                                       setPage(() {});
-                                                    },
-                                          style: OutlinedButton.styleFrom(
-                                            foregroundColor:
-                                                BColors.textDarkestBlue,
-                                            side: const BorderSide(
-                                              color: BColors.grey,
+                                                      if (saveOutcome ==
+                                                          _ProfessionalSaveOutcome
+                                                              .qualificationsRequestSent) {
+                                                        await _showQualificationsReviewPopup();
+                                                      }
+                                                      return;
+                                                    }
+                                                    setPage(() {});
+                                                  },
+                                            style: ElevatedButton.styleFrom(
+                                              elevation: 0,
+                                              backgroundColor:
+                                                  BColors.secondary,
+                                              foregroundColor:
+                                                  BColors.textDarkestBlue,
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(16),
+                                              ),
                                             ),
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(16),
-                                            ),
+                                            child: _saving
+                                                ? const SizedBox(
+                                                    width: 34,
+                                                    height: 24,
+                                                    child:
+                                                        BouhOvalLoadingIndicator(
+                                                          width: 30,
+                                                          height: 20,
+                                                          strokeWidth: 2.6,
+                                                        ),
+                                                  )
+                                                : const Text(
+                                                    'حفظ التعديلات',
+                                                    style: TextStyle(
+                                                      fontSize: 14,
+                                                      fontWeight:
+                                                          FontWeight.w800,
+                                                    ),
+                                                  ),
                                           ),
-                                          child: const Text(
-                                            'إلغاء',
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w800,
+                                        ),
+                                        const SizedBox(width: 10),
+                                        SizedBox(
+                                          width: 112,
+                                          height: 46,
+                                          child: OutlinedButton(
+                                            onPressed:
+                                                _saving || _loadingProfile
+                                                ? null
+                                                : () async {
+                                                    if (hasUnsavedProfessionalChanges()) {
+                                                      final shouldDiscard =
+                                                          await _confirmDiscardUnsavedChanges();
+                                                      if (!shouldDiscard)
+                                                        return;
+                                                    }
+                                                    setState(() {
+                                                      _replaceQualificationEditors(
+                                                        baselineQualsList,
+                                                      );
+                                                      _yearsOfExperience =
+                                                          baselineYears;
+                                                      _saveError = null;
+                                                    });
+                                                    professionalEditing = false;
+                                                    setPage(() {});
+                                                  },
+                                            style: OutlinedButton.styleFrom(
+                                              foregroundColor:
+                                                  BColors.textDarkestBlue,
+                                              side: const BorderSide(
+                                                color: BColors.grey,
+                                              ),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(16),
+                                              ),
+                                            ),
+                                            child: const Text(
+                                              'إلغاء',
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w800,
+                                              ),
                                             ),
                                           ),
                                         ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
                                 ),
-                              ),
+                              ],
                             ],
-                          ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
                 ),
               );
             },
@@ -1628,10 +1826,12 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
     double bottomPaddingAdjustment = 0,
   }) {
     final iconColor = danger ? BColors.validationError : BColors.primary;
-    final titleColor =
-        danger ? BColors.validationError : BColors.textDarkestBlue;
-    final chevronColor =
-        danger ? BColors.validationError.withOpacity(0.65) : BColors.primary;
+    final titleColor = danger
+        ? BColors.validationError
+        : BColors.textDarkestBlue;
+    final chevronColor = danger
+        ? BColors.validationError.withOpacity(0.65)
+        : BColors.primary;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -1718,7 +1918,45 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
     return ref.fullPath;
   }
 
+  Future<bool> _ensureGalleryPermissionForPicker() async {
+    final photosStatus = await Permission.photos.status;
+    if (photosStatus.isGranted || photosStatus.isLimited) return true;
+    if (Platform.isAndroid) {
+      final storageStatus = await Permission.storage.status;
+      if (storageStatus.isGranted) return true;
+    }
+
+    final photosRequest = await Permission.photos.request();
+    if (photosRequest.isGranted || photosRequest.isLimited) return true;
+    if (Platform.isAndroid) {
+      final storageRequest = await Permission.storage.request();
+      if (storageRequest.isGranted) return true;
+    }
+
+    // Re-check after requests/settings round-trip to avoid stale reads.
+    final refreshedPhotos = await Permission.photos.status;
+    if (refreshedPhotos.isGranted || refreshedPhotos.isLimited) return true;
+    if (Platform.isAndroid) {
+      final refreshedStorage = await Permission.storage.status;
+      if (refreshedStorage.isGranted) return true;
+    }
+    return false;
+  }
+
   Future<void> _pickDoctorImage() async {
+    if (!await _ensureGalleryPermissionForPicker()) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: BColors.validationError,
+          content: Text(
+            _kGalleryPermissionDeniedMessage,
+            style: const TextStyle(color: Colors.white),
+          ),
+        ),
+      );
+      return;
+    }
     final XFile? picked = await _picker.pickImage(
       source: ImageSource.gallery,
       imageQuality: 90,
@@ -1746,7 +1984,7 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
       }
       await _loadProfile(silent: true);
       widget.onProfileChanged?.call(
-        name: '$_doctorNameHonorificPrefix${_nameCtrl.text.trim()}',
+        name: _doctorFullNameNormalized,
         photoUrl: _photoUrl ?? '',
       );
       if (!mounted) return;
@@ -1755,9 +1993,9 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
       if (!mounted) return;
       setState(() => _pickedImageFile = null);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_userFriendlyError(e))),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(_userFriendlyError(e))));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -1794,70 +2032,91 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
         _photoUrl = null;
       });
       widget.onProfileChanged?.call(
-        name: '$_doctorNameHonorificPrefix${_nameCtrl.text.trim()}',
+        name: _doctorFullNameNormalized,
         photoUrl: '',
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_userFriendlyError(e))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_userFriendlyError(e))));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
 
-  Widget _buildIbanEditField({ValueChanged<String>? onChanged}) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      textDirection: TextDirection.rtl,
+  Widget _buildIbanEditField({
+    FocusNode? focusNode,
+    ValueChanged<String>? onChanged,
+  }) {
+    final ibanMax = ProfileFieldValidation.ibanSuffixDigitCount;
+    final digitCount = _ibanCtrl.text.length;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Expanded(
-          child: Container(
-            height: 46,
-            alignment: Alignment.centerRight,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: BColors.grey),
-              color: BColors.white,
-            ),
-            child: TextField(
-              controller: _ibanCtrl,
-              onChanged: onChanged,
-              keyboardType: TextInputType.number,
-              textAlign: TextAlign.right,
-              textAlignVertical: TextAlignVertical.center,
-              spellCheckConfiguration: SpellCheckConfiguration.disabled(),
-              style: _kProfileFieldValueStyle,
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-                LengthLimitingTextInputFormatter(22),
-              ],
-              decoration: const InputDecoration(
-                border: InputBorder.none,
-                isDense: true,
-                contentPadding: EdgeInsets.zero,
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          textDirection: TextDirection.rtl,
+          children: [
+            Expanded(
+              child: Container(
+                height: 46,
+                alignment: Alignment.centerRight,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: BColors.grey),
+                  color: BColors.white,
+                ),
+                child: TextField(
+                  controller: _ibanCtrl,
+                  focusNode: focusNode,
+                  onChanged: onChanged,
+                  keyboardType: TextInputType.number,
+                  textAlign: TextAlign.right,
+                  textAlignVertical: TextAlignVertical.center,
+                  spellCheckConfiguration: SpellCheckConfiguration.disabled(),
+                  style: _kProfileFieldValueStyle,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(ibanMax),
+                  ],
+                  decoration: const InputDecoration(
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
               ),
             ),
-          ),
+            const SizedBox(width: 8),
+            Container(
+              height: 46,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: BColors.grey),
+                color: BColors.grey.withOpacity(0.2),
+              ),
+              child: const Text(
+                'SA',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: BColors.textDarkestBlue,
+                ),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 8),
-        Container(
-          height: 46,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: BColors.grey),
-            color: BColors.grey.withOpacity(0.2),
-          ),
-          child: const Text(
-            'SA',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: BColors.textDarkestBlue,
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              '$digitCount/$ibanMax',
+              style: const TextStyle(fontSize: 12, color: BColors.darkGrey),
             ),
           ),
         ),
@@ -1897,10 +2156,7 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
                 ? null
                 : Align(
                     alignment: Alignment.centerRight,
-                    child: Text(
-                      hintText,
-                      style: _kProfileFieldValueStyle,
-                    ),
+                    child: Text(hintText, style: _kProfileFieldValueStyle),
                   ),
             dropdownColor: BColors.white,
             style: _kProfileFieldValueStyle,
@@ -1912,10 +2168,7 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
                     value: e,
                     child: Align(
                       alignment: Alignment.centerRight,
-                      child: Text(
-                        e,
-                        style: _kProfileFieldValueStyle,
-                      ),
+                      child: Text(e, style: _kProfileFieldValueStyle),
                     ),
                   ),
                 )
@@ -2002,185 +2255,192 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
           children: [
             SafeArea(
               child: SingleChildScrollView(
-            clipBehavior: Clip.none,
-            padding: EdgeInsets.only(
-              bottom: widget.onTap != null
-                  ? DoctorBottomNav.barHeight - 50
-                  : 3,
-            ),
-            child: Column(
-              children: [
-                SizedBox(
-                  height: 218,
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      Positioned(
-                        top: -50,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        child: Image.asset(
-                          'assets/images/ProfileBackground.png',
-                          fit: BoxFit.cover,
-                          alignment: Alignment.topCenter,
-                        ),
-                      ),
-                      Positioned(
-                        top: 48,
-                        left: 0,
-                        right: 0,
-                        child: Center(
-                          child: GestureDetector(
-                            onTap: _loadingProfile ? () {} : _pickDoctorImage,
-                            child: Stack(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(4),
-                                  decoration: BoxDecoration(
-                                    color: BColors.white,
-                                    shape: BoxShape.circle,
-                                    boxShadow: [
-                                      BoxShadow(
-                                        blurRadius: 14,
-                                        color: Colors.black.withOpacity(0.18),
-                                      ),
-                                    ],
-                                  ),
-                                  child: CircleAvatar(
-                                    radius: 65,
-                                    backgroundColor: BColors.white,
-                                    child: _buildAvatarImage(),
-                                  ),
-                                ),
-                                Positioned(
-                                  bottom: 6,
-                                  right: 6,
-                                  child: _circularEditIcon(diameter: 34),
-                                ),
-                                if (_pickedImageFile != null ||
-                                    (_photoUrl != null && _photoUrl!.isNotEmpty))
-                                  Positioned(
-                                    bottom: 6,
-                                    left: 6,
-                                    child: Material(
-                                      color: Colors.transparent,
-                                      child: InkWell(
-                                        customBorder: const CircleBorder(),
-                                        onTap: _removeDoctorImage,
-                                        child: Container(
-                                          width: 34,
-                                          height: 34,
-                                          decoration: BoxDecoration(
-                                            color: BColors.softGrey,
-                                            shape: BoxShape.circle,
-                                            border: Border.all(
-                                              color: BColors.grey.withOpacity(0.45),
+                clipBehavior: Clip.none,
+                padding: EdgeInsets.only(
+                  bottom: widget.onTap != null
+                      ? DoctorBottomNav.barHeight - 50
+                      : 3,
+                ),
+                child: Column(
+                  children: [
+                    SizedBox(
+                      height: 218,
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Positioned(
+                            top: -50,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            child: Image.asset(
+                              'assets/images/ProfileBackground.png',
+                              fit: BoxFit.cover,
+                              alignment: Alignment.topCenter,
+                            ),
+                          ),
+                          Positioned(
+                            top: 48,
+                            left: 0,
+                            right: 0,
+                            child: Center(
+                              child: GestureDetector(
+                                onTap: _loadingProfile
+                                    ? () {}
+                                    : _pickDoctorImage,
+                                child: Stack(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: BoxDecoration(
+                                        color: BColors.white,
+                                        shape: BoxShape.circle,
+                                        boxShadow: [
+                                          BoxShadow(
+                                            blurRadius: 14,
+                                            color: Colors.black.withOpacity(
+                                              0.18,
                                             ),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                blurRadius: 6,
-                                                color: Colors.black.withOpacity(0.07),
-                                                offset: const Offset(0, 2),
-                                              ),
-                                            ],
                                           ),
-                                          alignment: Alignment.center,
-                                          child: const Icon(
-                                            Icons.delete_outline_rounded,
-                                            size: 18,
-                                            color: BColors.validationError,
+                                        ],
+                                      ),
+                                      child: CircleAvatar(
+                                        radius: 65,
+                                        backgroundColor: BColors.white,
+                                        child: _buildAvatarImage(),
+                                      ),
+                                    ),
+                                    Positioned(
+                                      bottom: 6,
+                                      right: 6,
+                                      child: _circularEditIcon(diameter: 34),
+                                    ),
+                                    if (_pickedImageFile != null ||
+                                        (_photoUrl != null &&
+                                            _photoUrl!.isNotEmpty))
+                                      Positioned(
+                                        bottom: 6,
+                                        left: 6,
+                                        child: Material(
+                                          color: Colors.transparent,
+                                          child: InkWell(
+                                            customBorder: const CircleBorder(),
+                                            onTap: _removeDoctorImage,
+                                            child: Container(
+                                              width: 34,
+                                              height: 34,
+                                              decoration: BoxDecoration(
+                                                color: BColors.softGrey,
+                                                shape: BoxShape.circle,
+                                                border: Border.all(
+                                                  color: BColors.grey
+                                                      .withOpacity(0.45),
+                                                ),
+                                                boxShadow: [
+                                                  BoxShadow(
+                                                    blurRadius: 6,
+                                                    color: Colors.black
+                                                        .withOpacity(0.07),
+                                                    offset: const Offset(0, 2),
+                                                  ),
+                                                ],
+                                              ),
+                                              alignment: Alignment.center,
+                                              child: const Icon(
+                                                Icons.delete_outline_rounded,
+                                                size: 18,
+                                                color: BColors.validationError,
+                                              ),
+                                            ),
                                           ),
                                         ),
                                       ),
-                                    ),
-                                  ),
-                              ],
+                                  ],
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 28),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 22),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (_loadError != null && !_loadingProfile) ...[
-                        Text(
-                          _loadError!,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: Colors.grey,
-                            fontWeight: FontWeight.normal,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Center(
-                          child: TextButton(
-                            onPressed: _loadProfile,
-                            child: const Text('إعادة المحاولة'),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                      ],
-                      _settingsCard(
-                        children: [
-                          _settingsMenuTile(
-                            icon: Icons.person_outline_rounded,
-                            title: 'المعلومات الشخصية',
-                            onTap: _loadingProfile
-                                ? () {}
-                                : () => _openPersonalInfoPage(),
-                          ),
-                          _settingsMenuTile(
-                            icon: Icons.work_outline_rounded,
-                            title: 'المعلومات المهنية',
-                            onTap: _loadingProfile
-                                ? () {}
-                                : () => _openProfessionalInfoPage(),
-                          ),
                         ],
                       ),
-                      const SizedBox(height: 34),
-                      _settingsCard(
+                    ),
+                    const SizedBox(height: 28),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 22),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          _settingsMenuTile(
-                            icon: Icons.logout_rounded,
-                            title: 'تسجيل الخروج',
-                            danger: true,
-                            showChevron: false,
-                            onTap: () => _confirmAndLogout(),
+                          if (_loadError != null && !_loadingProfile) ...[
+                            Text(
+                              _loadError!,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: Colors.grey,
+                                fontWeight: FontWeight.normal,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Center(
+                              child: TextButton(
+                                onPressed: _loadProfile,
+                                child: const Text('إعادة المحاولة'),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                          ],
+                          _settingsCard(
+                            children: [
+                              _settingsMenuTile(
+                                icon: Icons.person_outline_rounded,
+                                title: 'المعلومات الشخصية',
+                                onTap: _loadingProfile
+                                    ? () {}
+                                    : () => _openPersonalInfoPage(),
+                              ),
+                              _settingsMenuTile(
+                                icon: Icons.work_outline_rounded,
+                                title: 'المعلومات المهنية',
+                                onTap: _loadingProfile
+                                    ? () {}
+                                    : () => _openProfessionalInfoPage(),
+                              ),
+                            ],
                           ),
+                          const SizedBox(height: 34),
+                          _settingsCard(
+                            children: [
+                              _settingsMenuTile(
+                                icon: Icons.logout_rounded,
+                                title: 'تسجيل الخروج',
+                                danger: true,
+                                showChevron: false,
+                                onTap: () => _confirmAndLogout(),
+                              ),
+                            ],
+                          ),
+                          if (_deleteError != null) ...[
+                            const SizedBox(height: 12),
+                            Text(
+                              _deleteError!,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: BColors.validationError,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 32),
                         ],
                       ),
-                      if (_deleteError != null) ...[
-                        const SizedBox(height: 12),
-                        Text(
-                          _deleteError!,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: BColors.validationError,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 32),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
-          ),
-        ),
-          if (_isDeletingAccount || _loadingProfile || _saving)
-            BouhLoadingOverlay(),
-        ],
+            if (_isDeletingAccount || _loadingProfile || _saving)
+              BouhLoadingOverlay(),
+          ],
         ),
         bottomNavigationBar: widget.onTap != null
             ? Material(
@@ -2215,36 +2475,36 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
   );
 
   static Widget _viewFieldGrey(String value) => Container(
-        constraints: const BoxConstraints(minHeight: 46),
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: BColors.grey.withOpacity(0.85)),
-          color: const Color(0xFFF2F4F5),
-        ),
-        child: Text(
-          value.isEmpty ? '—' : value,
-          textAlign: TextAlign.right,
-          style: _kProfileFieldValueStyle.copyWith(color: BColors.darkGrey),
-        ),
-      );
+    constraints: const BoxConstraints(minHeight: 46),
+    alignment: Alignment.centerRight,
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: BColors.grey.withOpacity(0.85)),
+      color: const Color(0xFFF2F4F5),
+    ),
+    child: Text(
+      value.isEmpty ? '—' : value,
+      textAlign: TextAlign.right,
+      style: _kProfileFieldValueStyle.copyWith(color: BColors.darkGrey),
+    ),
+  );
 
   static Widget _readOnlyPlainField(String value) => Container(
-        height: 46,
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: BColors.grey),
-          color: BColors.white,
-        ),
-        child: Text(
-          value.trim().isEmpty ? '—' : value,
-          textAlign: TextAlign.right,
-          style: _kProfileFieldValueStyle,
-        ),
-      );
+    height: 46,
+    alignment: Alignment.centerRight,
+    padding: const EdgeInsets.symmetric(horizontal: 14),
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: BColors.grey),
+      color: BColors.white,
+    ),
+    child: Text(
+      value.trim().isEmpty ? '—' : value,
+      textAlign: TextAlign.right,
+      style: _kProfileFieldValueStyle,
+    ),
+  );
 
   static Widget _viewQualificationsList(List<String> items) {
     final sectionDecoration = BoxDecoration(
@@ -2321,7 +2581,9 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
   static Widget _editField(
     TextEditingController c, {
     String? prefixText,
+    FocusNode? focusNode,
     ValueChanged<String>? onChanged,
+    List<TextInputFormatter>? inputFormatters,
   }) => Container(
     height: 46,
     alignment: Alignment.centerRight,
@@ -2333,7 +2595,9 @@ class _DoctorProfileViewState extends State<DoctorProfileView> {
     ),
     child: TextField(
       controller: c,
+      focusNode: focusNode,
       onChanged: onChanged,
+      inputFormatters: inputFormatters,
       textAlign: TextAlign.right,
       textAlignVertical: TextAlignVertical.center,
       spellCheckConfiguration: SpellCheckConfiguration.disabled(),

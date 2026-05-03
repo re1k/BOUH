@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:bouh/theme/base_themes/colors.dart';
+import 'package:bouh/utils/profile_field_validation.dart';
 
 /// Reusable popup for the user to enter an email (e.g. for reset password).
 /// On submit, [onSubmit] is called with the trimmed email. Returns null on success,
@@ -55,57 +56,11 @@ class _EmailResetPopupState extends State<EmailResetPopup> {
   bool _loading = false;
   String? _errorMessage;
 
-  static String? _validateEmail(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return 'يرجى إدخال البريد الإلكتروني';
-    }
-    final trimmed = value.trim();
-    final emailRegex = RegExp(
-      r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
-    );
-    if (!emailRegex.hasMatch(trimmed)) {
-      return 'يرجى إدخال بريد إلكتروني صحيح';
-    }
-
-    const allowedDomains = <String>{
-      'gmail.com',
-      'outlook.com',
-      'hotmail.com',
-      'yahoo.com',
-      'icloud.com',
-      'live.com',
-    };
-
-    final parts = trimmed.split('@');
-    if (parts.length != 2) {
-      return 'يرجى إدخال بريد إلكتروني صحيح';
-    }
-    final domain = parts.last.toLowerCase();
-    final domainParts = domain.split('.');
-    if (domainParts.length < 2) {
-      return 'يرجى إدخال بريد إلكتروني صحيح';
-    }
-
-    // Validate top-level domain (e.g. reject gmail.vrgt, gmail.ff).
-    const allowedTlds = <String>{
-      'com',
-      'net',
-      'org',
-      'edu',
-      'gov',
-      'sa',
-    };
-    final tld = domainParts.last;
-    final tldRegex = RegExp(r'^[a-zA-Z]{2,}$');
-    if (!tldRegex.hasMatch(tld) || !allowedTlds.contains(tld)) {
-      return 'يرجى إدخال بريد إلكتروني صحيح';
-    }
-
-    if (!allowedDomains.contains(domain)) {
-      return 'يرجى استخدام بريد من مزوّد معتمد (مثل Gmail / Outlook)';
-    }
-
-    return null;
+  Future<void> _dismissWithDelay(bool result) async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    await Future.delayed(const Duration(milliseconds: 120));
+    if (!mounted) return;
+    Navigator.of(context).pop(result);
   }
 
   @override
@@ -133,7 +88,7 @@ class _EmailResetPopupState extends State<EmailResetPopup> {
     });
 
     if (result == null) {
-      Navigator.of(context).pop(true); // success
+      await _dismissWithDelay(true); // success
     }
     // else: keep dialog open, show _errorMessage so user can fix and resend
   }
@@ -158,6 +113,7 @@ class _EmailResetPopupState extends State<EmailResetPopup> {
           width: 360,
           child: Form(
             key: _formKey,
+            autovalidateMode: AutovalidateMode.onUserInteraction,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -166,6 +122,12 @@ class _EmailResetPopupState extends State<EmailResetPopup> {
                   controller: _emailCtrl,
                   keyboardType: TextInputType.emailAddress,
                   textAlign: TextAlign.right,
+                  onChanged: (_) {
+                    if (_errorMessage != null) {
+                      setState(() => _errorMessage = null);
+                    }
+                    _formKey.currentState?.validate();
+                  },
                   decoration: InputDecoration(
                     hintText: widget.hint,
                     prefixIcon: const Icon(
@@ -196,9 +158,9 @@ class _EmailResetPopupState extends State<EmailResetPopup> {
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
                     ),
-                  errorMaxLines: 2,
+                    errorMaxLines: 2,
                   ),
-                  validator: _validateEmail,
+                  validator: ProfileFieldValidation.accountEmail,
                 ),
                 if (_errorMessage != null) ...[
                   const SizedBox(height: 10),
@@ -220,7 +182,7 @@ class _EmailResetPopupState extends State<EmailResetPopup> {
         ),
         actions: [
           TextButton(
-            onPressed: _loading ? null : () => Navigator.of(context).pop(false),
+            onPressed: _loading ? null : () => _dismissWithDelay(false),
             child: Text(
               widget.cancelText,
               style: const TextStyle(

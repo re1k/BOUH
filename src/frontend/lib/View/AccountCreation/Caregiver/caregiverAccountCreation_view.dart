@@ -1,7 +1,7 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:bouh/theme/base_themes/colors.dart';
+import 'package:bouh/utils/profile_field_validation.dart';
 import 'package:bouh/dto/caregiverSignupData.dart';
 import 'package:bouh/View/AccountCreation/Caregiver/AddChildern_view.dart';
 import 'package:bouh/widgets/password_strength_widget.dart';
@@ -61,8 +61,10 @@ class _CaregiverSignupViewState extends State<CaregiverSignupView> {
   bool _passwordTouched = false;
   bool _confirmPasswordTouched = false;
   bool _nameTouched = false;
-  bool _showPassword = false;
-  bool _showConfirmPassword = false;
+
+  /// When true, password is hidden. Icons: visibility_off = masked, visibility = plain text.
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
 
   @override
   void initState() {
@@ -106,71 +108,32 @@ class _CaregiverSignupViewState extends State<CaregiverSignupView> {
     }
   }
 
-  /// Enables the "Next" button when all fields are filled (validation still runs on submit).
-  bool get _isFormComplete =>
-      _emailCtrl.text.trim().isNotEmpty &&
-      _passwordCtrl.text.isNotEmpty &&
-      _confirmPasswordCtrl.text.isNotEmpty &&
-      _nameCtrl.text.trim().isNotEmpty;
+  Future<void> _popAccountCreation() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    await SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
+    await Future<void>.delayed(const Duration(milliseconds: 180));
+    if (mounted) Navigator.of(context).pop();
+  }
+
+  /// Enables "Next" only when values satisfy the same rules as submit ([_handleNext]).
+  bool get _isFormComplete {
+    if (ProfileFieldValidation.accountEmail(_emailCtrl.text) != null) {
+      return false;
+    }
+    if (validateStrongPassword(_passwordCtrl.text) != null) return false;
+    if (_validateConfirmPassword(_confirmPasswordCtrl.text) != null) {
+      return false;
+    }
+    if (ProfileFieldValidation.caregiverDisplayName(_nameCtrl.text) != null) {
+      return false;
+    }
+    return true;
+  }
 
   // -------------------------------------------------------------------------
-  // Pure validators (format, length, match, Arabic name). Used only when the
+  // Pure validators (format, length, match, name). Used only when the
   // corresponding _*Touched flag is true (after user leaves field or on Next).
   // -------------------------------------------------------------------------
-
-  /// Validates email format (basic pattern) and allowed provider domains.
-  static String? _validateEmail(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return 'يرجى إدخال البريد الإلكتروني';
-    }
-    final trimmed = value.trim();
-    final emailRegex = RegExp(
-      r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
-    );
-    if (!emailRegex.hasMatch(trimmed)) {
-      return 'يرجى إدخال بريد إلكتروني صحيح';
-    }
-    // Provider/domain enforcement: accept only a known set of email providers.
-    // Adjust this list if your product allows additional domains.
-    const allowedDomains = <String>{
-      'gmail.com',
-      'outlook.com',
-      'hotmail.com',
-      'yahoo.com',
-      'icloud.com',
-      'live.com',
-    };
-
-    final parts = trimmed.split('@');
-    if (parts.length != 2) {
-      return 'يرجى إدخال بريد إلكتروني صحيح';
-    }
-    final domain = parts.last.toLowerCase();
-    final domainParts = domain.split('.');
-    if (domainParts.length < 2) {
-      return 'يرجى إدخال بريد إلكتروني صحيح';
-    }
-
-    // Validate top-level domain to avoid fake endings like ".vrgt.ff".
-    const allowedTlds = <String>{
-      'com',
-      'net',
-      'org',
-      'edu',
-      'gov',
-      'sa',
-    };
-    final tld = domainParts.last;
-    final tldRegex = RegExp(r'^[a-zA-Z]{2,}$');
-    if (!tldRegex.hasMatch(tld) || !allowedTlds.contains(tld)) {
-      return 'يرجى إدخال بريد إلكتروني صحيح';
-    }
-
-    if (!allowedDomains.contains(domain)) {
-      return 'يرجى استخدام بريد من مزوّد معتمد (مثل Gmail / Outlook)';
-    }
-    return null;
-  }
 
   /// Validates password length and strength (uppercase, lowercase, digit, special char).
   String? _validatePassword(String? value) => validateStrongPassword(value);
@@ -186,20 +149,9 @@ class _CaregiverSignupViewState extends State<CaregiverSignupView> {
     return null;
   }
 
-  /// Validates caregiver name: not empty, letters (Arabic or English) and spaces only.
-  static String? _validateName(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return 'يرجى إدخال اسم مقدم الرعاية';
-    }
-    // Arabic + English letters and spaces.
-    final nameRegex = RegExp(
-      r'^[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FFa-zA-Z\s]+$',
-    );
-    if (!nameRegex.hasMatch(value.trim())) {
-      return 'يرجى إدخال الاسم  ';
-    }
-    return null;
-  }
+  /// Validates caregiver name: letters only (ar/en), max length — see [ProfileFieldValidation].
+  static String? _validateName(String? value) =>
+      ProfileFieldValidation.caregiverDisplayName(value);
 
   @override
   void dispose() {
@@ -233,7 +185,9 @@ class _CaregiverSignupViewState extends State<CaregiverSignupView> {
 
     final email = _emailCtrl.text.trim();
     final password = _passwordCtrl.text;
-    final caregiverName = _nameCtrl.text.trim();
+    final caregiverName = ProfileFieldValidation.normalizePersonName(
+      _nameCtrl.text,
+    );
 
     // Optional hook for custom submit (e.g. analytics) before navigating.
     if (widget.onSubmitCredentials != null) {
@@ -267,227 +221,237 @@ class _CaregiverSignupViewState extends State<CaregiverSignupView> {
 
   @override
   Widget build(BuildContext context) {
+    final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: BColors.white,
+        resizeToAvoidBottomInset: true,
         body: SafeArea(
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              /// Scrollable container to support small screens and keyboard overlap.
-              SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(22, 30, 22, 240),
-                  child: Form(
-                    key: _formKey,
-                    // Disabled: we validate only when a field loses focus (single field) or on Next (all fields).
-                    // Avoids all fields going red as soon as the user taps the first one.
-                    autovalidateMode: AutovalidateMode.disabled,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        /// Header area (branding + guidance text).
-                        Padding(
-                          padding: const EdgeInsets.only(top: 6),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.arrow_back_ios_new_rounded,
-                                  size: 20,
+          child: GestureDetector(
+            onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+            behavior: HitTestBehavior.translucent,
+
+            /// Scrollable container to support small screens and keyboard overlap.
+            child: SingleChildScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(22, 30, 22, keyboardInset + 32),
+                child: Form(
+                  key: _formKey,
+                  // Disabled: we validate only when a field loses focus (single field) or on Next (all fields).
+                  // Avoids all fields going red as soon as the user taps the first one.
+                  autovalidateMode: AutovalidateMode.disabled,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      /// Header area (branding + guidance text).
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            IconButton(
+                              icon: const Icon(
+                                Icons.arrow_back_ios_new_rounded,
+                                size: 20,
+                                color: BColors.textDarkestBlue,
+                              ),
+                              onPressed: _popAccountCreation,
+                            ),
+                            const SizedBox(width: 6),
+                            const Expanded(
+                              child: Text(
+                                'دقائق ويكتمل إنشاء الحساب',
+                                textAlign: TextAlign.right,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
                                   color: BColors.textDarkestBlue,
                                 ),
-                                onPressed: () => Navigator.pop(context),
                               ),
-                              const SizedBox(width: 6),
-                              const Expanded(
-                                child: Text(
-                                  'دقائق ويكتمل إنشاء الحساب',
-                                  textAlign: TextAlign.right,
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: BColors.textDarkestBlue,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 35),
-                              Image.asset(
-                                'assets/images/login_header.png',
-                                width: 60,
-                                fit: BoxFit.contain,
-                              ),
-                            ],
+                            ),
+                            const SizedBox(width: 35),
+                            Image.asset(
+                              'assets/images/login_header.png',
+                              width: 60,
+                              fit: BoxFit.contain,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+
+                      _LabeledField(
+                        label: 'اسم مقدم الرعاية *',
+                        placeholder: 'سارة احمد',
+                        keyboardType: TextInputType.name,
+                        obscure: false,
+                        controller: _nameCtrl,
+                        focusNode: _nameFocusNode,
+                        fieldKey: _nameFieldKey,
+                        validator: (v) =>
+                            _nameTouched ? _validateName(v) : null,
+                        textInputAction: TextInputAction.next,
+                        inputFormatters: [
+                          LengthLimitingTextInputFormatter(
+                            ProfileFieldValidation
+                                .caregiverOrDoctorNameMaxLength,
+                          ),
+                        ],
+                        onChanged: (_) {
+                          if (_nameTouched) {
+                            _nameFieldKey.currentState?.validate();
+                          }
+                          if (_confirmPasswordCtrl.text.isNotEmpty) {
+                            _confirmPasswordTouched = true;
+                          }
+                          if (_passwordTouched) {
+                            _passwordFieldKey.currentState?.validate();
+                          }
+                          if (_confirmPasswordTouched) {
+                            _confirmPasswordFieldKey.currentState?.validate();
+                          }
+                          setState(() {});
+                        },
+                      ),
+                      const SizedBox(height: 14),
+
+                      /// Email: error only after user leaves this field empty/invalid (or on Next).
+                      _LabeledField(
+                        label: 'البريد الإلكتروني * ',
+                        placeholder: 'example@gmail.com',
+                        keyboardType: TextInputType.emailAddress,
+                        obscure: false,
+                        controller: _emailCtrl,
+                        focusNode: _emailFocusNode,
+                        fieldKey: _emailFieldKey,
+                        validator: (v) => _emailTouched
+                            ? ProfileFieldValidation.accountEmail(v)
+                            : null,
+                        textInputAction: TextInputAction.next,
+                        onChanged: (_) {
+                          if (_emailTouched) {
+                            _emailFieldKey.currentState?.validate();
+                          }
+                          if (_confirmPasswordCtrl.text.isNotEmpty) {
+                            _confirmPasswordTouched = true;
+                          }
+                          if (_confirmPasswordTouched) {
+                            _confirmPasswordFieldKey.currentState?.validate();
+                          }
+                          setState(() {});
+                        },
+                      ),
+                      const SizedBox(height: 14),
+
+                      /// Password: error only after user leaves this field (or on Next).
+                      _LabeledField(
+                        label: 'كلمة المرور *',
+                        placeholder: '••••••••',
+                        keyboardType: TextInputType.text,
+                        obscure: _obscurePassword,
+                        suffixIcon: IconButton(
+                          onPressed: () => setState(
+                            () => _obscurePassword = !_obscurePassword,
+                          ),
+                          icon: Icon(
+                            _obscurePassword
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                            color: BColors.darkGrey,
                           ),
                         ),
-                        const SizedBox(height: 28),
+                        controller: _passwordCtrl,
+                        focusNode: _passwordFocusNode,
+                        fieldKey: _passwordFieldKey,
+                        validator: (v) =>
+                            _passwordTouched ? _validatePassword(v) : null,
+                        textInputAction: TextInputAction.next,
+                        onChanged: (_) {
+                          if (_passwordTouched) {
+                            _passwordFieldKey.currentState?.validate();
+                          }
+                          if (_confirmPasswordTouched) {
+                            _confirmPasswordFieldKey.currentState?.validate();
+                          }
+                          setState(() {});
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      PasswordStrengthWidget(password: _passwordCtrl.text),
+                      const SizedBox(height: 14),
 
-                        /// Name: first field in the form.
-                        _LabeledField(
-                          label: 'اسم مقدم الرعاية *',
-                          placeholder: 'سارة احمد',
-                          keyboardType: TextInputType.name,
-                          obscure: false,
-                          controller: _nameCtrl,
-                          focusNode: _nameFocusNode,
-                          fieldKey: _nameFieldKey,
-                          validator: (v) =>
-                              _nameTouched ? _validateName(v) : null,
-                          textInputAction: TextInputAction.next,
-                          onChanged: (_) {
-                            if (_confirmPasswordCtrl.text.isNotEmpty) {
-                              _confirmPasswordTouched = true;
-                            }
-                            if (_passwordTouched) {
-                              _passwordFieldKey.currentState?.validate();
-                            }
-                            if (_confirmPasswordTouched) {
-                              _confirmPasswordFieldKey.currentState?.validate();
-                            }
-                            setState(() {});
-                          },
-                        ),
-                        const SizedBox(height: 14),
-
-                        /// Email: error only after user leaves this field empty/invalid (or on Next).
-                        _LabeledField(
-                          label: 'البريد الإلكتروني * ',
-                          placeholder: 'example@gmail.com',
-                          keyboardType: TextInputType.emailAddress,
-                          obscure: false,
-                          controller: _emailCtrl,
-                          focusNode: _emailFocusNode,
-                          fieldKey: _emailFieldKey,
-                          validator: (v) =>
-                              _emailTouched ? _validateEmail(v) : null,
-                          textInputAction: TextInputAction.next,
-                          onChanged: (_) {
-                            if (_confirmPasswordCtrl.text.isNotEmpty) {
-                              _confirmPasswordTouched = true;
-                            }
-                            if (_confirmPasswordTouched) {
-                              _confirmPasswordFieldKey.currentState?.validate();
-                            }
-                            setState(() {});
-                          },
-                        ),
-                        const SizedBox(height: 14),
-
-                        /// Password: error only after user leaves this field (or on Next).
-                        _LabeledField(
-                          label: 'كلمة المرور *',
-                          placeholder: '••••••••',
-                          keyboardType: TextInputType.text,
-                          obscure: !_showPassword,
-                          suffixIcon: IconButton(
-                            onPressed: () =>
-                                setState(() => _showPassword = !_showPassword),
-                            icon: Icon(
-                              _showPassword
-                                  ? Icons.visibility_off
-                                  : Icons.visibility,
-                              color: BColors.darkGrey,
-                            ),
+                      /// Confirm password: error only after user leaves this field (or on Next).
+                      _LabeledField(
+                        label: 'تأكيد كلمة المرور *',
+                        placeholder: '••••••••',
+                        keyboardType: TextInputType.text,
+                        obscure: _obscureConfirmPassword,
+                        suffixIcon: IconButton(
+                          onPressed: () => setState(
+                            () => _obscureConfirmPassword =
+                                !_obscureConfirmPassword,
                           ),
-                          controller: _passwordCtrl,
-                          focusNode: _passwordFocusNode,
-                          fieldKey: _passwordFieldKey,
-                          validator: (v) =>
-                              _passwordTouched ? _validatePassword(v) : null,
-                          textInputAction: TextInputAction.next,
-                          onChanged: (_) => setState(() {}),
-                        ),
-                        const SizedBox(height: 8),
-                        PasswordStrengthWidget(password: _passwordCtrl.text),
-                        const SizedBox(height: 14),
-
-                        /// Confirm password: error only after user leaves this field (or on Next).
-                        _LabeledField(
-                          label: 'تأكيد كلمة المرور *',
-                          placeholder: '••••••••',
-                          keyboardType: TextInputType.text,
-                          obscure: !_showConfirmPassword,
-                          suffixIcon: IconButton(
-                            onPressed: () => setState(
-                              () => _showConfirmPassword =
-                                  !_showConfirmPassword,
-                            ),
-                            icon: Icon(
-                              _showConfirmPassword
-                                  ? Icons.visibility_off
-                                  : Icons.visibility,
-                              color: BColors.darkGrey,
-                            ),
+                          icon: Icon(
+                            _obscureConfirmPassword
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                            color: BColors.darkGrey,
                           ),
-                          controller: _confirmPasswordCtrl,
-                          focusNode: _confirmPasswordFocusNode,
-                          fieldKey: _confirmPasswordFieldKey,
-                          validator: (v) => _confirmPasswordTouched
-                              ? _validateConfirmPassword(v)
+                        ),
+                        controller: _confirmPasswordCtrl,
+                        focusNode: _confirmPasswordFocusNode,
+                        fieldKey: _confirmPasswordFieldKey,
+                        validator: (v) => _confirmPasswordTouched
+                            ? _validateConfirmPassword(v)
+                            : null,
+                        textInputAction: TextInputAction.next,
+                        onChanged: (_) {
+                          if (_confirmPasswordTouched) {
+                            _confirmPasswordFieldKey.currentState?.validate();
+                          }
+                          setState(() {});
+                        },
+                      ),
+                      const SizedBox(height: 14),
+
+                      const SizedBox(height: 30),
+
+                      /// Next button — disabled until email, password rules, confirm match, and name are valid.
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton(
+                          onPressed: _isFormComplete
+                              ? () => _handleNext(context)
                               : null,
-                          textInputAction: TextInputAction.next,
-                          onChanged: (_) => setState(() {}),
-                        ),
-                        const SizedBox(height: 14),
-
-                        const SizedBox(height: 30),
-
-                        /// Next button.
-                        /// Disabled until all fields are filled.
-                        SizedBox(
-                          width: double.infinity,
-                          height: 50,
-                          child: ElevatedButton(
-                            onPressed: _isFormComplete
-                                ? () => _handleNext(context)
-                                : null,
-                            style: ElevatedButton.styleFrom(
-                              elevation: 0,
-                              backgroundColor: BColors.secondary,
-                              foregroundColor: BColors.textDarkestBlue,
-                              disabledBackgroundColor: BColors.secondary
-                                  .withOpacity(0.4),
-                              disabledForegroundColor: BColors.textDarkestBlue
-                                  .withOpacity(0.5),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
-                              ),
+                          style: ElevatedButton.styleFrom(
+                            elevation: 0,
+                            backgroundColor: BColors.secondary,
+                            foregroundColor: BColors.textDarkestBlue,
+                            disabledBackgroundColor: BColors.secondary
+                                .withOpacity(0.4),
+                            disabledForegroundColor: BColors.textDarkestBlue
+                                .withOpacity(0.5),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20),
                             ),
-                            child: const Text(
-                              'التالي',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w800,
-                              ),
+                          ),
+                          child: const Text(
+                            'التالي',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
                             ),
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-
-              /// Decorative bottom wave (visual only).
-              if (MediaQuery.of(context).viewInsets.bottom == 0)
-                Positioned(
-                  left: -400,
-                  bottom: -290,
-                  child: Transform.rotate(
-                    alignment: Alignment.bottomLeft,
-                    angle: 11 * math.pi / 180,
-                    child: SizedBox(
-                      height: 520,
-                      child: Image.asset(
-                        'assets/images/wave_login.jpg',
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
+            ),
           ),
         ),
       ),
@@ -521,6 +485,7 @@ class _LabeledField extends StatelessWidget {
   /// Keeps button state in sync with typing without changing UI.
   final ValueChanged<String> onChanged;
   final Widget? suffixIcon;
+  final List<TextInputFormatter>? inputFormatters;
 
   const _LabeledField({
     required this.label,
@@ -534,6 +499,7 @@ class _LabeledField extends StatelessWidget {
     this.validator,
     this.textInputAction,
     this.suffixIcon,
+    this.inputFormatters,
   });
 
   @override
@@ -555,13 +521,11 @@ class _LabeledField extends StatelessWidget {
           validator: validator,
           textInputAction: textInputAction,
           onChanged: onChanged,
+          inputFormatters: inputFormatters,
           decoration: InputDecoration(
             suffixIcon: suffixIcon,
             hintText: placeholder,
-            hintStyle: const TextStyle(
-              color: BColors.darkGrey,
-              fontSize: 13,
-            ),
+            hintStyle: const TextStyle(color: BColors.darkGrey, fontSize: 13),
             filled: true,
             fillColor: BColors.white,
             contentPadding: const EdgeInsets.symmetric(
