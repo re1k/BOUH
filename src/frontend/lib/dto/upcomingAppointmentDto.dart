@@ -18,6 +18,8 @@ class UpcomingAppointmentDto {
   final bool? isRated; //True if already rated by this caregiver.
   final String? meetingLink;
   final String? paymentIntentId;
+  final String? childId;
+  final String? caregiverId;
 
   UpcomingAppointmentDto({
     required this.appointmentId,
@@ -34,6 +36,8 @@ class UpcomingAppointmentDto {
     this.isRated,
     this.meetingLink,
     this.paymentIntentId,
+    this.childId,
+    this.caregiverId,
   });
 
   /// Parse one list element from backend JSON (raw response is List<Map>).
@@ -53,6 +57,8 @@ class UpcomingAppointmentDto {
       isRated: (json['rated'] ?? json['isRated']) as bool?,
       meetingLink: json['meetingLink'] as String?,
       paymentIntentId: json['paymentIntentId'] as String?,
+      childId: json['childId'] as String?,
+      caregiverId: json['caregiverId'] as String?,
     );
   }
 }

@@ -39,4 +39,27 @@ class ScheduleService {
     final data = jsonDecode(response.body) as Map<String, dynamic>;
     return ScheduleDto.fromJson(data);
   }
+
+  static Future<Map<String, bool>> getDoctorMonthAvailability({
+    required String doctorId,
+    required int year,
+    required int month,
+  }) async {
+    final url = _url(
+      '/api/caregiver/doctors/$doctorId/schedule/month-availability?year=$year&month=$month',
+    );
+
+    final response = await http.get(url, headers: _authHeaders());
+
+    print("Month availability status code: ${response.statusCode}");
+    print("RAW month availability response: ${response.body}");
+
+    if (response.statusCode != 200) {
+      throw Exception("Failed to load month availability: ${response.body}");
+    }
+
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+
+    return data.map((key, value) => MapEntry(key, value == true));
+  }
 }

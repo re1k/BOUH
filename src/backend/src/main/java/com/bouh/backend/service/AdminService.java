@@ -1,11 +1,14 @@
 package com.bouh.backend.service;
 
 import com.bouh.backend.model.Dto.accountManagment.accountResponseDto;
+import com.bouh.backend.model.Dto.appointmentDto;
 import com.bouh.backend.model.Dto.caregiverDto;
 import com.bouh.backend.model.Dto.doctorDto;
+import com.bouh.backend.model.repository.AppointmentRepo;
 import com.bouh.backend.model.repository.adminRepo;
 import com.bouh.backend.model.repository.caregiverRepo;
 import com.bouh.backend.model.repository.doctorRepo;
+import com.bouh.backend.service.payment.RefundService;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.UserRecord;
 import lombok.extern.slf4j.Slf4j;
@@ -14,6 +17,7 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.List;
 import java.util.Map;
 
 @Slf4j
@@ -25,16 +29,22 @@ public class AdminService {
     private final EmailService emailService;
     private final adminRepo adminRepository;
     private final RestTemplate restTemplate;
+    private final RefundService refundService;
+    private final AppointmentRepo appointmentRepo;
 
     @Value("${firebase.web.api-key}")
     private String firebaseWebApiKey;
 
-    public AdminService(doctorRepo doctorRepo, caregiverRepo caregiverRepo, EmailService emailService, adminRepo adminRepo, RestTemplate restTemplate) {
+    public AdminService(doctorRepo doctorRepo, caregiverRepo caregiverRepo, EmailService emailService,
+                        adminRepo adminRepo, RestTemplate restTemplate,
+                        RefundService refundService, AppointmentRepo appointmentRepo) {
         this.doctorRepository = doctorRepo;
         this.caregiverRepository = caregiverRepo;
         this.emailService = emailService;
         this.adminRepository = adminRepo;
         this.restTemplate = restTemplate;
+        this.refundService = refundService;
+        this.appointmentRepo = appointmentRepo;
     }
 
     public void forgotPassword(String email) {
@@ -58,20 +68,42 @@ public class AdminService {
             return new accountResponseDto(false, "NOT_FOUND", "الطبيب غير موجود");
         }
 
-        String email = doctor.getEmail();
-        String name = doctor.getName();
-        String result = doctorRepository.deleteDoctor(uid);
+        String doctorEmail = doctor.getEmail();
+        String doctorName = doctor.getName();
 
-        switch (result) {
-            case "deleted":
-                emailService.sendAccountDeletionEmail(email, name);
-                return new accountResponseDto(true, "ACCOUNT_DELETED", "تم حذف الحساب");
-            case "upcoming-appointment-found":
-                return new accountResponseDto(false, "HAS_UPCOMING_APPOINTMENTS",
-                        "لا يمكن حذف الحساب لوجود مواعيد قادمة");
-            default:
-                return new accountResponseDto(false, "UNKNOWN_ERROR", "حدث خطأ غير متوقع");
+        // Refund all upcoming appointments and notify caregivers by email
+        try {
+            List<appointmentDto> upcoming = appointmentRepo.findUpcomingByDoctorId(uid);
+            for (appointmentDto appt : upcoming) {
+                try {
+                    if (appt.getPaymentIntentId() != null && !appt.getPaymentIntentId().isBlank()) {
+                        refundService.refundByAdmin(appt.getPaymentIntentId());
+                    }
+                    if (appt.getCaregiverId() != null && !appt.getCaregiverId().isBlank()) {
+                        caregiverDto caregiver = caregiverRepository.findByUid(appt.getCaregiverId());
+                        if (caregiver != null && caregiver.getEmail() != null) {
+                            emailService.sendDoctorDeletedRefundEmail(
+                                    caregiver.getEmail(), caregiver.getName(), doctorName);
+                        }
+                    }
+                    appointmentRepo.deleteByIdAtomically(appt.getAppointmentId());
+                } catch (Exception e) {
+                    log.error("Failed to process appointment id={} for doctor uid={}: {}",
+                            appt.getAppointmentId(), uid, e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            log.error("Failed to fetch upcoming appointments for doctor uid={}: {}", uid, e.getMessage());
         }
+
+        // Soft-delete the doctor
+        doctorRepository.deleteDoctorAsync(uid, doctor);
+
+        if (doctorEmail != null) {
+            emailService.sendAccountDeletionEmail(doctorEmail, doctorName);
+        }
+
+        return new accountResponseDto(true, "ACCOUNT_DELETED", "تم حذف الحساب");
     }
 
     public accountResponseDto deleteCaregiver(String uid) {

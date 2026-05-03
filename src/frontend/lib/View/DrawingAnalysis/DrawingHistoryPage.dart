@@ -286,7 +286,9 @@ class _DrawingHistoryPageState extends State<DrawingHistoryPage> {
           child: Container(
             width: _menuWidth,
             height: 48,
-            color: entry.key.isEven ? BColors.secondry : BColors.white,
+            color: _selectedChild?.id == entry.value.id
+                ? BColors.white
+                : BColors.secondry,
             padding: const EdgeInsets.symmetric(horizontal: 24),
             alignment: Alignment.centerRight,
             child: Text(

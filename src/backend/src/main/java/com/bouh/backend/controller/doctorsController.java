@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api")
@@ -43,7 +44,16 @@ public ResponseEntity<DoctorDetailsDto> getDoctorDetails(@PathVariable String do
     ) throws Exception {
         return ResponseEntity.ok(doctorsService.getDoctorScheduleByDate(doctorId, date));
     }
-
+@GetMapping(value = "/caregiver/doctors/{doctorId}/schedule/month-availability", produces = "application/json")
+public ResponseEntity<Map<String, Boolean>> getDoctorMonthAvailability(
+        @PathVariable String doctorId,
+        @RequestParam int year,
+        @RequestParam int month
+) throws Exception {
+    return ResponseEntity.ok(
+            doctorsService.getDoctorMonthAvailability(doctorId, year, month)
+    );
+}
     // doctor bar info
     @GetMapping("/doctors/{doctorId}/barInfo")
     public ResponseEntity<DoctorBarInfoDto> getDoctorBarInfo(

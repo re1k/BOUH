@@ -104,6 +104,28 @@ public class EmailService {
         }
     }
 
+    public void sendDoctorDeletedRefundEmail(String toEmail, String caregiverName, String doctorName) {
+        try {
+            MimeMessage mimeMessage = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, false, "UTF-8");
+            helper.setFrom(fromEmail, "Bouh بوح");
+            helper.setTo(toEmail);
+            helper.setSubject("تم إلغاء موعدك القادم واسترداد مبلغ الدفع");
+            helper.setText(
+                    "<div dir='rtl' style='text-align: right; font-family: Arial, sans-serif;'>" +
+                            "<p>مرحبًا " + caregiverName + "،</p>" +
+                            "<p>نود إعلامك بأنه تم حذف حساب الطبيب <strong>" + doctorName + "</strong> من قبل المسؤول.</p>" +
+                            "<p>نتيجةً لذلك، تم إلغاء موعدك القادم مع الطبيب واسترداد مبلغ الدفع إلى حسابك.</p>" +
+                            "<p>نعتذر عن أي إزعاج، ويمكنك حجز موعد مع طبيب آخر من خلال التطبيق.</p>" +
+                            "<p>فريق بوح</p>" +
+                            "</div>",
+                    true);
+            mailSender.send(mimeMessage);
+        } catch (Exception e) {
+            log.error("Failed to send doctor-deleted refund email to {}: {}", toEmail, e.getMessage());
+        }
+    }
+
     public void sendQualificationRejectedEmail(String toEmail, String name) {
         try {
             MimeMessage mimeMessage = mailSender.createMimeMessage();
