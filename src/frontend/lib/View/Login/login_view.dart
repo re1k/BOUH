@@ -2,6 +2,7 @@ import 'dart:io' show SocketException;
 import 'dart:math' as math;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:bouh/theme/base_themes/colors.dart';
 import 'package:bouh/View/WelcomePage/welcomePage_view.dart';
 import 'package:bouh/View/HomePage/doctorNavbar.dart';
@@ -246,18 +247,21 @@ class _LoginViewState extends State<LoginView> {
       context,
       onSubmit: (email) =>
           AuthService.instance.sendPasswordResetEmail(email: email),
-    ).then((submitted) {
-      if (submitted && mounted) {
-        ConfirmationPopup.show(
-          context,
-          title: 'تحقق من بريدك الإلكتروني',
-          message:
-              'إذا كان البريد الإلكتروني مسجلاً، فستصلك رسالة تحتوي على رابط لإعادة تعيين كلمة المرور. يرجى التحقق من صندوق الوارد أو البريد غير الهام.',
-          confirmText: 'حسناً',
-          singleButton: true,
-          useDarkMessageText: true,
-        );
-      }
+    ).then((submitted) async {
+      if (!submitted || !mounted) return;
+      FocusManager.instance.primaryFocus?.unfocus();
+      await SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
+      await Future<void>.delayed(const Duration(milliseconds: 180));
+      if (!mounted) return;
+      ConfirmationPopup.show(
+        context,
+        title: 'تحقق من بريدك الإلكتروني',
+        message:
+            'إذا كان البريد الإلكتروني مسجلاً، فستصلك رسالة تحتوي على رابط لإعادة تعيين كلمة المرور. يرجى التحقق من صندوق الوارد أو البريد غير الهام.',
+        confirmText: 'حسناً',
+        singleButton: true,
+        useDarkMessageText: true,
+      );
     });
   }
 

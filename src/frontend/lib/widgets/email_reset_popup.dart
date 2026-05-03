@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:bouh/theme/base_themes/colors.dart';
 import 'package:bouh/utils/profile_field_validation.dart';
 
@@ -58,7 +59,8 @@ class _EmailResetPopupState extends State<EmailResetPopup> {
 
   Future<void> _dismissWithDelay(bool result) async {
     FocusManager.instance.primaryFocus?.unfocus();
-    await Future.delayed(const Duration(milliseconds: 120));
+    await SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
+    await Future<void>.delayed(const Duration(milliseconds: 180));
     if (!mounted) return;
     Navigator.of(context).pop(result);
   }
