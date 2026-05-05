@@ -261,7 +261,7 @@ class AnalysisResultsPage extends StatelessWidget {
             //Doctor image: network image if [imageUrl] provided, else placeholder icon
             Container(
               width: 70,
-              height: 75,
+              height: 70,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: imageUrl == null ? BColors.softGrey : null,
@@ -274,7 +274,12 @@ class AnalysisResultsPage extends StatelessWidget {
                 border: Border.all(color: BColors.primary, width: 3),
               ),
               child: imageUrl == null
-                  ? const Icon(Icons.person, size: 40, color: BColors.darkGrey)
+                  ? ClipOval(
+                      child: Image.asset(
+                        'assets/images/default_ProfileImage.png',
+                        fit: BoxFit.cover,
+                      ),
+                    )
                   : null,
             ),
             const SizedBox(height: 16),

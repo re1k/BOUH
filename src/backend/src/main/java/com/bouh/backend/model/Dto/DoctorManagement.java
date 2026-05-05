@@ -20,5 +20,6 @@ public class DoctorManagement {
     private String iban;
     private String scfhsNumber;
     private String profilePhotoURL;
+    private double averageRating;
 
 }

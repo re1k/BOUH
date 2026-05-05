@@ -11,6 +11,7 @@ class DoctorModel {
   final String? requestId;
   final List<String> oldQualifications;
   final List<String> newQualifications;
+  final double averageRating;
 
   const DoctorModel({
     required this.uid,
@@ -25,6 +26,7 @@ class DoctorModel {
     this.requestId,
     this.oldQualifications = const [],
     this.newQualifications = const [],
+    required this.averageRating,
   });
 
   factory DoctorModel.fromJson(Map<String, dynamic> json) {
@@ -41,6 +43,7 @@ class DoctorModel {
       requestId: json['requestId'],
       oldQualifications: List<String>.from(json['oldQualifications'] ?? []),
       newQualifications: List<String>.from(json['newQualifications'] ?? []),
+      averageRating: (json['averageRating'] ?? 0.0).toDouble(),
     );
   }
 

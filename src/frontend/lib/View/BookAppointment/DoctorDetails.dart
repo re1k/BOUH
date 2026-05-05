@@ -1,9 +1,10 @@
 import 'package:bouh/widgets/confirmation_popup.dart';
+import 'package:bouh/widgets/loading_overlay.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:bouh/theme/base_themes/colors.dart';
 import 'package:bouh/dto/doctorSummaryDto.dart';
 import 'package:bouh/dto/doctorDto.dart';
-import 'package:bouh/services/doctorsService.dart';
 import 'package:bouh/View/BookAppointment/BookAppointment.dart';
 
 class DoctorDetailsView extends StatefulWidget {
@@ -18,16 +19,17 @@ class DoctorDetailsView extends StatefulWidget {
 class _DoctorDetailsViewState extends State<DoctorDetailsView> {
   int tabIndex = 0;
   bool hasBookingChanges = false;
-  Future<DoctorDto>? _doctorDetailsFuture;
-
+  Stream<DoctorDto>? _doctorDetailsStream;
   @override
   void initState() {
     super.initState();
     print("doctorId in details view = ${widget.doctor.doctorId}");
     if (widget.doctor.doctorId != null && widget.doctor.doctorId!.isNotEmpty) {
-      _doctorDetailsFuture = DoctorsService.getDoctorDetails(
-        widget.doctor.doctorId!,
-      );
+      _doctorDetailsStream = FirebaseFirestore.instance
+          .collection('doctors')
+          .doc(widget.doctor.doctorId!)
+          .snapshots()
+          .map((doc) => DoctorDto.fromJson(doc.data()!..['doctorId'] = doc.id));
     }
   }
 
@@ -39,16 +41,22 @@ class _DoctorDetailsViewState extends State<DoctorDetailsView> {
         backgroundColor: Colors.white,
         body: Stack(
           children: [
-            FutureBuilder<DoctorDto>(
-              future: _doctorDetailsFuture,
+            StreamBuilder<DoctorDto>(
+              stream: _doctorDetailsStream,
               builder: (context, snapshot) {
-                final doctorName = widget.doctor.name;
-                final doctorMajor = widget.doctor.areaOfKnowledge;
-                final rating = snapshot.data?.averageRating ?? 0.0;
-                final profilePhotoUrl = widget.doctor.profilePhotoURL;
+                if (snapshot.connectionState == ConnectionState.waiting ||
+                    !snapshot.hasData) {
+                  return const BouhLoadingOverlay(showBarrier: false, size: 46);
+                }
 
-                final years = snapshot.data?.yearsOfExperience ?? 0;
-                final qualifications = snapshot.data?.qualifications ?? [];
+                final doctor = snapshot.data!;
+
+                final doctorName = doctor.name;
+                final doctorMajor = doctor.areaOfKnowledge;
+                final rating = doctor.averageRating ?? 0.0;
+                final profilePhotoUrl = doctor.profilePhotoURL;
+                final years = doctor.yearsOfExperience;
+                final qualifications = doctor.qualifications;
 
                 return SingleChildScrollView(
                   padding: EdgeInsets.zero,

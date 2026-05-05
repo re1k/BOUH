@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:bouh/config/slot_config.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:bouh/theme/base_themes/colors.dart';
 import 'package:bouh/View/DoctorAppointment/AvailableScheduleScreen.dart';
@@ -40,6 +41,11 @@ class _PrevAppointmentsScreenState extends State<PrevAppointmentsScreen> {
   >?
   _subscription;
   Timer? _ticker;
+  final Map<String, StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>>
+  _caregiverListeners = {};
+
+  final Map<String, StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>>
+  _childListeners = {};
 
   static const double _cardGap = 16;
 
@@ -64,7 +70,15 @@ class _PrevAppointmentsScreenState extends State<PrevAppointmentsScreen> {
   void _subscribeToStream(String? doctorId) {
     _subscription?.cancel();
     _ticker?.cancel();
+    for (final sub in _caregiverListeners.values) {
+      sub.cancel();
+    }
+    _caregiverListeners.clear();
 
+    for (final sub in _childListeners.values) {
+      sub.cancel();
+    }
+    _childListeners.clear();
     if (doctorId == null || doctorId.isEmpty) {
       setState(() {
         _list = [];
@@ -94,6 +108,8 @@ class _PrevAppointmentsScreenState extends State<PrevAppointmentsScreen> {
               _error = null;
             });
             _startTicker();
+            _updateCaregiverListeners(_list);
+            _updateChildListeners(_list);
           },
           onError: (e) {
             if (!mounted) return;
@@ -144,6 +160,8 @@ class _PrevAppointmentsScreenState extends State<PrevAppointmentsScreen> {
             if (tb == null) return -1;
             return tb.compareTo(ta);
           });
+          _updateCaregiverListeners(_list);
+          _updateChildListeners(_list);
         }
       });
       if (_upcomingCache.isEmpty) _ticker?.cancel();
@@ -154,6 +172,15 @@ class _PrevAppointmentsScreenState extends State<PrevAppointmentsScreen> {
   void dispose() {
     _subscription?.cancel();
     _ticker?.cancel();
+    for (final sub in _caregiverListeners.values) {
+      sub.cancel();
+    }
+    _caregiverListeners.clear();
+
+    for (final sub in _childListeners.values) {
+      sub.cancel();
+    }
+    _childListeners.clear();
     super.dispose();
   }
 
@@ -309,6 +336,92 @@ class _PrevAppointmentsScreenState extends State<PrevAppointmentsScreen> {
 
     if (e.isEmpty) return '$s $suffix';
     return '$s - $e $suffix';
+  }
+
+  void _updateCaregiverListeners(List<UpcomingAppointmentDto> list) {
+    final currentIds = list
+        .map((d) => d.caregiverId)
+        .whereType<String>()
+        .where((id) => id.isNotEmpty)
+        .toSet();
+
+    _caregiverListeners.keys
+        .where((id) => !currentIds.contains(id))
+        .toList()
+        .forEach((id) => _caregiverListeners.remove(id)?.cancel());
+
+    for (final caregiverId in currentIds) {
+      if (_caregiverListeners.containsKey(caregiverId)) continue;
+
+      _caregiverListeners[caregiverId] = FirebaseFirestore.instance
+          .collection('caregivers')
+          .doc(caregiverId)
+          .snapshots()
+          .skip(1)
+          .listen((_) => _refetchOnCaregiverOrChildChange());
+    }
+  }
+
+  void _updateChildListeners(List<UpcomingAppointmentDto> list) {
+    final currentKeys = list
+        .where(
+          (d) =>
+              d.caregiverId != null &&
+              d.caregiverId!.isNotEmpty &&
+              d.childId != null &&
+              d.childId!.isNotEmpty,
+        )
+        .map((d) => '${d.caregiverId}_${d.childId}')
+        .toSet();
+
+    _childListeners.keys
+        .where((key) => !currentKeys.contains(key))
+        .toList()
+        .forEach((key) => _childListeners.remove(key)?.cancel());
+
+    for (final dto in list) {
+      final caregiverId = dto.caregiverId;
+      final childId = dto.childId;
+
+      if (caregiverId == null ||
+          caregiverId.isEmpty ||
+          childId == null ||
+          childId.isEmpty) {
+        continue;
+      }
+
+      final key = '${caregiverId}_$childId';
+      if (_childListeners.containsKey(key)) continue;
+
+      _childListeners[key] = FirebaseFirestore.instance
+          .collection('caregivers')
+          .doc(caregiverId)
+          .collection('children')
+          .doc(childId)
+          .snapshots()
+          .skip(1)
+          .listen((_) => _refetchOnCaregiverOrChildChange());
+    }
+  }
+
+  Future<void> _refetchOnCaregiverOrChildChange() async {
+    final doctorId = AuthSession.instance.userId;
+    if (doctorId == null || doctorId.isEmpty || !mounted) return;
+
+    try {
+      final data = await _appointmentsService
+          .getFullPreviousWithUpcomingForDoctor(doctorId);
+
+      if (!mounted) return;
+
+      setState(() {
+        _list = data.$1;
+        _upcomingCache = data.$2;
+      });
+
+      _updateCaregiverListeners(_list);
+      _updateChildListeners(_list);
+    } catch (_) {}
   }
 }
 

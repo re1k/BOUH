@@ -318,7 +318,7 @@ class _QualificationRequestsViewState extends State<QualificationRequestsView> {
                               ),
                               columnSpacing: 32,
                               dataRowMinHeight: 90,
-                              dataRowMaxHeight: 120,
+                              dataRowMaxHeight: double.infinity,
                               columns: const [
                                 DataColumn(label: Text('الطبيب')),
                                 DataColumn(label: Text('المؤهلات الحالية')),
@@ -340,8 +340,10 @@ class _QualificationRequestsViewState extends State<QualificationRequestsView> {
                                       ),
                                     ),
                                     DataCell(
-                                      SizedBox(
-                                        width: 180,
+                                      ConstrainedBox(
+                                        constraints: const BoxConstraints(
+                                          maxWidth: 350,
+                                        ),
                                         child: _QualificationsList(
                                           items: doc.oldQualifications,
                                           color: BColors.darkerGrey,
@@ -349,8 +351,10 @@ class _QualificationRequestsViewState extends State<QualificationRequestsView> {
                                       ),
                                     ),
                                     DataCell(
-                                      SizedBox(
-                                        width: 180,
+                                      ConstrainedBox(
+                                        constraints: const BoxConstraints(
+                                          maxWidth: 350,
+                                        ),
                                         child: _QualificationsList(
                                           items: doc.newQualifications,
                                           color: BColors.darkerGrey,

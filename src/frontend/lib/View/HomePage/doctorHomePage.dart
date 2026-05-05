@@ -290,6 +290,8 @@ class DoctorHomePageState extends State<DoctorHomePage>
               ],
             ),
             if (_loading) const BouhLoadingOverlay(showBarrier: false),
+            if (_refundLoading)
+              const Positioned.fill(child: BouhLoadingOverlay()),
           ],
         ),
         bottomNavigationBar: widget.onTap != null
@@ -375,10 +377,12 @@ class DoctorHomePageState extends State<DoctorHomePage>
       onActionTap = _refundLoading
           ? null
           : () async {
-              final refundSucceeded = await _refundAppointment(dto);
-              if (!refundSucceeded) return;
+              setState(() => _refundLoading = true);
 
               try {
+                final refundSucceeded = await _refundAppointment(dto);
+                if (!refundSucceeded) return;
+
                 await _appointmentsService.cancelAppointment(
                   appointmentId: dto.appointmentId,
                 );
@@ -438,6 +442,8 @@ class DoctorHomePageState extends State<DoctorHomePage>
                 ScaffoldMessenger.of(
                   context,
                 ).showSnackBar(SnackBar(content: Text("فشل إلغاء الموعد: $e")));
+              } finally {
+                if (mounted) setState(() => _refundLoading = false);
               }
             };
     }
@@ -520,8 +526,6 @@ class DoctorHomePageState extends State<DoctorHomePage>
     );
     if (confirm != true) return false;
 
-    setState(() => _refundLoading = true);
-
     try {
       await _refundService.refund(paymentIntentId: pi);
       return true;
@@ -561,8 +565,6 @@ class DoctorHomePageState extends State<DoctorHomePage>
       );
 
       return false;
-    } finally {
-      if (mounted) setState(() => _refundLoading = false);
     }
   }
 

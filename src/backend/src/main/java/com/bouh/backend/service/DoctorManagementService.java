@@ -43,9 +43,10 @@ public class DoctorManagementService {
     }
 
     public void rejectDoctor(String uid) throws ExecutionException, InterruptedException {
-        doctorManagementRepository.updateRegistrationStatus(uid, "REJECTED");
-
         String[] emailAndName = doctorManagementRepository.getDoctorEmailAndName(uid);
+
+        doctorManagementRepository.deleteDoctor(uid);
+
         if (emailAndName != null) {
             emailService.sendRegistrationRejectedEmail(emailAndName[0], emailAndName[1]);
         }

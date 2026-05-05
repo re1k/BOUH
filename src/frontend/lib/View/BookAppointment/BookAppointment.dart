@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:bouh/View/BookAppointment/ApointmentDetails.dart';
 import 'package:bouh/widgets/loading_overlay.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:bouh/theme/base_themes/colors.dart';
 import 'package:table_calendar/table_calendar.dart';
@@ -10,7 +13,6 @@ import 'package:bouh/dto/scheduleDto.dart';
 import 'package:bouh/dto/childDto.dart';
 import 'package:bouh/authentication/AuthSession.dart';
 import 'package:bouh/config/slot_config.dart';
-import 'package:bouh/widgets/confirmation_popup.dart';
 
 class BookingView extends StatefulWidget {
   final String doctorId;
@@ -33,6 +35,10 @@ class _BookingViewState extends State<BookingView> {
 
   List<ChildDto> children = [];
   String? selectedChildId;
+  StreamSubscription? _scheduleSub;
+  StreamSubscription? _availabilitySub;
+  StreamSubscription? _doctorSub;
+  StreamSubscription? _appointmentsSub;
 
   DateTime d(int y, int m, int d) => DateTime(y, m, d);
 
@@ -60,6 +66,7 @@ class _BookingViewState extends State<BookingView> {
     _loadScheduleForSelectedDay();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadMonthAvailability(focusedDay);
+      _listenScheduleChanges();
     });
   }
 
@@ -308,8 +315,16 @@ class _BookingViewState extends State<BookingView> {
 
   Widget _buildDay(DateTime day, bool selected) {
     final date = _iso(day);
-    final hasAvailable = availableDays[date] ?? false;
+    bool hasAvailable = availableDays[date] ?? false;
 
+    final now = DateTime.now();
+    final isToday =
+        day.year == now.year && day.month == now.month && day.day == now.day;
+
+    // because if it's past 9pm, we consider the rest of the day unavailable for booking
+    if (isToday && now.hour >= 21) {
+      hasAvailable = false;
+    }
     return Center(
       child: Container(
         width: 36,
@@ -700,5 +715,31 @@ class _BookingViewState extends State<BookingView> {
         ),
       ],
     );
+  }
+
+  void _listenScheduleChanges() {
+    _scheduleSub?.cancel();
+
+    _scheduleSub = FirebaseFirestore.instance
+        .collection('doctors')
+        .doc(widget.doctorId)
+        .collection('schedule')
+        .doc('current')
+        .collection('TimeSlots')
+        .snapshots()
+        .listen((_) async {
+          if (!mounted) return;
+
+          await _loadScheduleForSelectedDay();
+          if (!mounted) return;
+
+          await _loadMonthAvailability(focusedDay);
+        });
+  }
+
+  @override
+  void dispose() {
+    _scheduleSub?.cancel();
+    super.dispose();
   }
 }

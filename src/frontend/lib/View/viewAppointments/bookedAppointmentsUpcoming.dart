@@ -396,6 +396,8 @@ class _BookedAppointmentsUpcomingState
               ),
             ),
             if (_loading) const BouhLoadingOverlay(showBarrier: false),
+            if (_refundLoading)
+              const Positioned.fill(child: BouhLoadingOverlay()),
           ],
         ),
         bottomNavigationBar: Material(
@@ -612,14 +614,15 @@ class _BookedAppointmentsUpcomingState
     } else if (canCancel) {
       actionLabel = 'الغاء';
       actionColor = _cancelRed;
-
       onActionTap = _refundLoading
           ? null
           : () async {
-              final refundSucceeded = await _refundAppointment(dto);
-              if (!refundSucceeded) return;
+              setState(() => _refundLoading = true);
 
               try {
+                final refundSucceeded = await _refundAppointment(dto);
+                if (!refundSucceeded) return;
+
                 await _appointmentsService.cancelAppointment(
                   appointmentId: dto.appointmentId,
                 );
@@ -679,6 +682,8 @@ class _BookedAppointmentsUpcomingState
                 ScaffoldMessenger.of(
                   context,
                 ).showSnackBar(SnackBar(content: Text("فشل إلغاء الموعد: $e")));
+              } finally {
+                if (mounted) setState(() => _refundLoading = false);
               }
             };
     } else {
@@ -782,8 +787,6 @@ class _BookedAppointmentsUpcomingState
     );
     if (confirm != true) return false;
 
-    setState(() => _refundLoading = true);
-
     try {
       await _refundService.refund(paymentIntentId: pi);
       return true;
@@ -823,8 +826,6 @@ class _BookedAppointmentsUpcomingState
       );
 
       return false;
-    } finally {
-      if (mounted) setState(() => _refundLoading = false);
     }
   }
 

@@ -48,6 +48,8 @@ class CaregiverHomepageState extends State<CaregiverHomepage>
   Timer? _ticker;
   final Map<String, StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>>
   _childListeners = {};
+  final Map<String, StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>>
+  _doctorListeners = {};
   @override
   void initState() {
     super.initState();
@@ -64,6 +66,10 @@ class CaregiverHomepageState extends State<CaregiverHomepage>
       sub.cancel();
     }
     _childListeners.clear();
+    for (final sub in _doctorListeners.values) {
+      sub.cancel();
+    }
+    _doctorListeners.clear();
     super.dispose();
   }
 
@@ -98,6 +104,10 @@ class CaregiverHomepageState extends State<CaregiverHomepage>
       sub.cancel();
     }
     _childListeners.clear();
+    for (final sub in _doctorListeners.values) {
+      sub.cancel();
+    }
+    _doctorListeners.clear();
     if (caregiverId == null || caregiverId.isEmpty) {
       setState(() {
         _list = [];
@@ -140,6 +150,8 @@ class CaregiverHomepageState extends State<CaregiverHomepage>
     _ticker?.cancel();
     if (_list.isEmpty) return;
     _updateChildListeners(_list);
+    _updateDoctorListeners(_list);
+
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) {
         _ticker?.cancel();
@@ -259,10 +271,12 @@ class CaregiverHomepageState extends State<CaregiverHomepage>
       onActionTap = _refundLoading
           ? null
           : () async {
-              final refundSucceeded = await _refundAppointment(dto);
-              if (!refundSucceeded) return;
+              setState(() => _refundLoading = true);
 
               try {
+                final refundSucceeded = await _refundAppointment(dto);
+                if (!refundSucceeded) return;
+
                 await _appointmentsService.cancelAppointment(
                   appointmentId: dto.appointmentId,
                 );
@@ -322,6 +336,8 @@ class CaregiverHomepageState extends State<CaregiverHomepage>
                 ScaffoldMessenger.of(
                   context,
                 ).showSnackBar(SnackBar(content: Text("فشل إلغاء الموعد: $e")));
+              } finally {
+                if (mounted) setState(() => _refundLoading = false);
               }
             };
     }
@@ -358,8 +374,6 @@ class CaregiverHomepageState extends State<CaregiverHomepage>
       isDestructive: true,
     );
     if (confirm != true) return false;
-
-    setState(() => _refundLoading = true);
 
     try {
       await _refundService.refund(paymentIntentId: pi);
@@ -400,8 +414,6 @@ class CaregiverHomepageState extends State<CaregiverHomepage>
       );
 
       return false;
-    } finally {
-      if (mounted) setState(() => _refundLoading = false);
     }
   }
 
@@ -424,6 +436,8 @@ class CaregiverHomepageState extends State<CaregiverHomepage>
               child: _buildHeader(context, topPadding),
             ),
             _buildContent(context, topPadding),
+            if (_refundLoading)
+              const Positioned.fill(child: BouhLoadingOverlay()),
           ],
         ),
         bottomNavigationBar: Material(
@@ -654,6 +668,10 @@ class CaregiverHomepageState extends State<CaregiverHomepage>
       sub.cancel();
     }
     _childListeners.clear();
+    for (final sub in _doctorListeners.values) {
+      sub.cancel();
+    }
+    _doctorListeners.clear();
   }
 
   void _updateChildListeners(List<UpcomingAppointmentDto> list) {
@@ -697,6 +715,46 @@ class CaregiverHomepageState extends State<CaregiverHomepage>
 
       setState(() => _list = _removeExpired(list));
       _updateChildListeners(_list);
+    } catch (_) {}
+  }
+
+  void _updateDoctorListeners(List<UpcomingAppointmentDto> list) {
+    final currentIds = list
+        .map((d) => d.doctorId)
+        .whereType<String>()
+        .where((id) => id.isNotEmpty)
+        .toSet();
+
+    _doctorListeners.keys
+        .where((id) => !currentIds.contains(id))
+        .toList()
+        .forEach((id) => _doctorListeners.remove(id)?.cancel());
+
+    for (final doctorId in currentIds) {
+      if (_doctorListeners.containsKey(doctorId)) continue;
+
+      _doctorListeners[doctorId] = FirebaseFirestore.instance
+          .collection('doctors')
+          .doc(doctorId)
+          .snapshots()
+          .skip(1)
+          .listen((_) => _refetchOnDoctorChange());
+    }
+  }
+
+  Future<void> _refetchOnDoctorChange() async {
+    final caregiverId = AuthSession.instance.userId;
+    if (caregiverId == null || caregiverId.isEmpty || !mounted) return;
+
+    try {
+      final list = await _appointmentsService.getUpcomingAppointments(
+        caregiverId,
+      );
+      if (!mounted) return;
+
+      setState(() => _list = _removeExpired(list));
+      _updateChildListeners(_list);
+      _updateDoctorListeners(_list);
     } catch (_) {}
   }
 }

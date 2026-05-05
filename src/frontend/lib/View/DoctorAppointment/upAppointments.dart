@@ -221,6 +221,8 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
               ),
             ),
             if (_loading) const BouhLoadingOverlay(showBarrier: false),
+            if (_refundLoading)
+              const Positioned.fill(child: BouhLoadingOverlay()),
           ],
         ),
         bottomNavigationBar: widget.onTap != null
@@ -309,10 +311,12 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
       onActionTap = _refundLoading
           ? null
           : () async {
-              final refundSucceeded = await _refundAppointment(dto);
-              if (!refundSucceeded) return;
+              setState(() => _refundLoading = true);
 
               try {
+                final refundSucceeded = await _refundAppointment(dto);
+                if (!refundSucceeded) return;
+
                 await _appointmentsService.cancelAppointment(
                   appointmentId: dto.appointmentId,
                 );
@@ -372,6 +376,8 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                 ScaffoldMessenger.of(
                   context,
                 ).showSnackBar(SnackBar(content: Text("فشل إلغاء الموعد: $e")));
+              } finally {
+                if (mounted) setState(() => _refundLoading = false);
               }
             };
     }
@@ -444,8 +450,6 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
     );
     if (confirm != true) return false;
 
-    setState(() => _refundLoading = true);
-
     try {
       await _refundService.refund(paymentIntentId: pi);
       return true;
@@ -485,8 +489,6 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
       );
 
       return false;
-    } finally {
-      if (mounted) setState(() => _refundLoading = false);
     }
   }
 

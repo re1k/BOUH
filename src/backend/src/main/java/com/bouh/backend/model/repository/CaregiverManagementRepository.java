@@ -22,6 +22,7 @@ public class CaregiverManagementRepository {
 
         var snapshot = firestore
                 .collection("caregivers")
+                .whereEqualTo("isActivated", true)
                 .get()
                 .get();
 

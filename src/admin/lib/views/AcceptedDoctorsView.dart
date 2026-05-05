@@ -242,6 +242,21 @@ class _AcceptedDoctorsViewState extends State<AcceptedDoctorsView> {
                             const SizedBox(height: 8),
                             Text('رقم التخصص: ${doc.scfhsNumber}'),
                             const SizedBox(height: 12),
+                            const SizedBox(height: 8),
+                            Row(
+                              // ← ADD
+                              children: [
+                                const Icon(
+                                  Icons.star,
+                                  color: Colors.amber,
+                                  size: 16,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'التقييم: ${doc.averageRating.toStringAsFixed(1)}',
+                                ),
+                              ],
+                            ),
                             Wrap(
                               spacing: 8,
                               runSpacing: 8,
@@ -295,10 +310,13 @@ class _AcceptedDoctorsViewState extends State<AcceptedDoctorsView> {
                           dataRowMaxHeight: double.infinity,
                           columns: const [
                             DataColumn(label: Text('الطبيب')),
+                            DataColumn(label: Text('التقييم')),
+
                             DataColumn(label: Text('مجال المعرفة')),
                             DataColumn(label: Text('المؤهلات')),
                             DataColumn(label: Text('سنوات الخبرة')),
                             DataColumn(label: Text('رقم التخصص')),
+
                             DataColumn(label: Text('الإجراء')),
                           ],
                           rows: _doctors.map((doc) {
@@ -316,6 +334,22 @@ class _AcceptedDoctorsViewState extends State<AcceptedDoctorsView> {
                                   ),
                                 ),
                                 DataCell(
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(
+                                        Icons.star,
+                                        color: Colors.amber,
+                                        size: 16,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        doc.averageRating.toStringAsFixed(1),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                DataCell(
                                   SizedBox(
                                     width: 120,
                                     child: Text(
@@ -325,17 +359,21 @@ class _AcceptedDoctorsViewState extends State<AcceptedDoctorsView> {
                                     ),
                                   ),
                                 ),
-                                // ─── CHANGED ───
                                 DataCell(
-                                  SizedBox(
-                                    width: 300,
-                                    child: _QualificationsList(
-                                      items: doc.qualifications,
-                                      color: BColors.darkerGrey,
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 14),
+                                    child: ConstrainedBox(
+                                      constraints: const BoxConstraints(
+                                        maxWidth: 350,
+                                      ),
+                                      child: _QualificationsList(
+                                        items: doc.qualifications,
+                                        color: BColors.darkerGrey,
+                                      ),
                                     ),
                                   ),
                                 ),
-                                // ───────────────
+
                                 DataCell(
                                   SizedBox(
                                     width: 80,

@@ -168,11 +168,21 @@ public class DrawingRepo {
 
                 List<String> doctorIds = new ArrayList<>();
                 List<?> rawDoctors = (List<?>) doc.get("doctors");
+
                 if (rawDoctors != null) {
-                    for (Object raw : rawDoctors) {
-                        if (raw instanceof String id) {
-                            doctorIds.add(id);
-                        }
+                    List<String> allIds = rawDoctors.stream()
+                        .filter(raw -> raw instanceof String)
+                        .map(raw -> (String) raw)
+                        .toList();
+
+                    if (!allIds.isEmpty()) {
+                        firestore.collection("doctors")
+                            .whereIn(FieldPath.documentId(), allIds)
+                            .whereEqualTo("isActivated", true)
+                            .get()
+                            .get()
+                            .getDocuments()
+                            .forEach(d -> doctorIds.add(d.getId()));
                     }
                 }
                 dto.setDoctorIds(doctorIds);

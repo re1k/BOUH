@@ -3,12 +3,14 @@ import '../theme/colors.dart';
 import 'PendingRequestsView.dart';
 import 'AcceptedDoctorsView.dart';
 import 'CaregiversView.dart';
-import 'QualificationRequestsView.dart'; // ← NEW
+import 'QualificationRequestsView.dart';
 import 'package:bouh_admin/services/auth_service.dart';
 import 'package:bouh_admin/views/login_page.dart';
 import 'responsive.dart';
 import 'package:bouh_admin/services/DoctorService.dart';
 import 'package:bouh_admin/views/Widgets/ConfirmActionDialog.dart';
+import 'dart:async';
+import 'package:bouh_admin/model/DoctorModel.dart';
 
 class AdminDashboardView extends StatefulWidget {
   const AdminDashboardView({super.key});
@@ -20,20 +22,37 @@ class AdminDashboardView extends StatefulWidget {
 class _AdminDashboardViewState extends State<AdminDashboardView> {
   int _selectedIndex = 0;
   int _pendingCount = 0;
-  int _qualificationCount = 0; // ← NEW
+  int _qualificationCount = 0;
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
-    _loadQualificationCount();
+    _loadCounts();
+
+    _refreshTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (mounted) _loadCounts();
+    });
   }
 
-  Future<void> _loadQualificationCount() async {
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadCounts() async {
     try {
-      final requests = await DoctorService.instance
-          .getPendingQualificationRequests(context);
+      final results = await Future.wait([
+        DoctorService.instance.getPendingDoctors(context),
+        DoctorService.instance.getPendingQualificationRequests(context),
+      ]);
+
       if (mounted) {
-        setState(() => _qualificationCount = requests.length);
+        setState(() {
+          _pendingCount = (results[0] as List<DoctorModel>).length;
+          _qualificationCount = (results[1] as List<DoctorModel>).length;
+        });
       }
     } catch (_) {}
   }

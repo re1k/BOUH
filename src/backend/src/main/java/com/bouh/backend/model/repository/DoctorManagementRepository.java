@@ -7,6 +7,9 @@ import com.google.cloud.firestore.QueryDocumentSnapshot;
 import org.springframework.stereotype.Repository;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.QuerySnapshot;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseAuthException;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
@@ -70,7 +73,6 @@ public class DoctorManagementRepository {
     }
 
     public DoctorStatsDTO getDoctorStats() throws ExecutionException, InterruptedException {
-        // Fire all 3 queries at the same time
         ApiFuture<QuerySnapshot> pendingFuture = firestore
                 .collection("doctors")
                 .whereEqualTo("registrationStatus", "PENDING")
@@ -82,17 +84,25 @@ public class DoctorManagementRepository {
                 .whereEqualTo("isActivated", true)
                 .get();
 
-        ApiFuture<QuerySnapshot> rejectedFuture = firestore
-                .collection("doctors")
-                .whereEqualTo("registrationStatus", "REJECTED")
-                .get();
-
-        // Now wait for all 3 together
         long pending = pendingFuture.get().size();
         long accepted = acceptedFuture.get().size();
-        long rejected = rejectedFuture.get().size();
 
-        return new DoctorStatsDTO(pending, accepted, rejected);
+        return new DoctorStatsDTO(pending, accepted);
+    }
+
+    public void deleteDoctor(String uid) throws ExecutionException, InterruptedException {
+        // Delete from Firebase Authentication
+        try {
+            FirebaseAuth.getInstance().deleteUser(uid);
+        } catch (FirebaseAuthException e) {
+            throw new RuntimeException("Failed to delete user from Firebase Auth", e);
+        }
+
+        // Delete from Firestore
+        firestore.collection("doctors")
+                .document(uid)
+                .delete()
+                .get();
     }
 
     public String[] getDoctorEmailAndName(String uid) throws ExecutionException, InterruptedException {
@@ -127,6 +137,9 @@ public class DoctorManagementRepository {
 
         List<String> qualifications = (List<String>) doc.get("qualifications");
         doctor.setQualifications(qualifications != null ? qualifications : new ArrayList<>());
+
+        Double rating = doc.getDouble("averageRating");
+        doctor.setAverageRating(rating != null ? rating : 0.0);
 
         return doctor;
     }

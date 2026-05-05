@@ -28,6 +28,7 @@ class _PendingRequestsViewState extends State<PendingRequestsView> {
   String? _errorMessage;
   final Set<String> _processingUids = {};
   Timer? _refreshTimer;
+  int _qualificationCount = 0;
 
   @override
   void initState() {
@@ -61,12 +62,14 @@ class _PendingRequestsViewState extends State<PendingRequestsView> {
       final results = await Future.wait([
         DoctorService.instance.getPendingDoctors(context),
         DoctorService.instance.getStats(context),
+        DoctorService.instance.getPendingQualificationRequests(context),
       ]);
 
       if (mounted) {
         setState(() {
           _doctors = results[0] as List<DoctorModel>;
           _stats = results[1] as DoctorStatsModel?;
+          _qualificationCount = (results[2] as List<DoctorModel>).length;
           _isLoading = false;
         });
         widget.onCountLoaded?.call(_doctors.length);
@@ -191,7 +194,7 @@ class _PendingRequestsViewState extends State<PendingRequestsView> {
       iconBg: const Color(0xFFFFF1EA),
       iconColor: BColors.accent,
       label: 'طلبات معلقة',
-      value: _stats?.pending ?? 0,
+      value: (_stats?.pending ?? 0) + _qualificationCount,
     );
 
     final stat2 = _StatCard(
@@ -202,37 +205,19 @@ class _PendingRequestsViewState extends State<PendingRequestsView> {
       value: _stats?.accepted ?? 0,
     );
 
-    final stat3 = _StatCard(
-      icon: Icons.cancel_outlined,
-      iconBg: const Color(0xFFFCEBEB),
-      iconColor: BColors.validationError,
-      label: 'طلبات مرفوضة',
-      value: _stats?.rejected ?? 0,
-    );
-
     return SingleChildScrollView(
       padding: EdgeInsets.all(isMobile ? 16 : 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (isSmallLayout)
-            Column(
-              children: [
-                stat1,
-                const SizedBox(height: 16),
-                stat2,
-                const SizedBox(height: 16),
-                stat3,
-              ],
-            )
+            Column(children: [stat1, const SizedBox(height: 16), stat2])
           else
             Row(
               children: [
                 Expanded(child: stat1),
                 const SizedBox(width: 16),
                 Expanded(child: stat2),
-                const SizedBox(width: 16),
-                Expanded(child: stat3),
               ],
             ),
           const SizedBox(height: 28),
@@ -450,10 +435,11 @@ class _PendingRequestsViewState extends State<PendingRequestsView> {
                                         ),
                                       ),
                                     ),
-                                    // ─── CHANGED: bullet list instead of plain text ───
                                     DataCell(
-                                      SizedBox(
-                                        width: 200,
+                                      ConstrainedBox(
+                                        constraints: const BoxConstraints(
+                                          maxWidth: 350,
+                                        ),
                                         child: _QualificationsList(
                                           items: doc.qualifications,
                                           color: BColors.darkerGrey,

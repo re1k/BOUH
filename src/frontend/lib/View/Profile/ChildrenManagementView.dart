@@ -1,6 +1,5 @@
 import 'package:bouh/authentication/AuthSession.dart';
 import 'package:bouh/widgets/loading_overlay.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:bouh/theme/base_themes/colors.dart';
@@ -24,6 +23,26 @@ class _ChildrenManagementViewState extends State<ChildrenManagementView> {
   // Max children limit
   static const int _maxChildren = 5;
   bool get _reachedMaxChildren => children.length >= _maxChildren;
+  String _normalizeChildName(String value) {
+    return value.trim().replaceAll(RegExp(r'\s+'), ' ');
+  }
+
+  bool _hasDuplicateChild({
+    required String name,
+    required String dateOfBirth,
+    String? excludedChildId,
+  }) {
+    final normalizedName = _normalizeChildName(name);
+
+    return children.any((child) {
+      if (excludedChildId != null && child.childId == excludedChildId) {
+        return false;
+      }
+
+      return _normalizeChildName(child.name) == normalizedName &&
+          child.dateOfBirth == dateOfBirth;
+    });
+  }
 
   @override
   void initState() {
@@ -44,6 +63,12 @@ class _ChildrenManagementViewState extends State<ChildrenManagementView> {
   }
 
   Future<void> _confirmDeleteChild(ChildDto child) async {
+    if (children.length <= 1) {
+      _showSnack(
+        "لا يمكن حذف الطفل الوحيد في الحساب. يجب أن يحتوي الحساب على طفل واحد على الأقل.",
+      );
+      return;
+    }
     final bool? ok = await showDialog<bool>(
       context: context,
       builder: (ctx) {
@@ -88,7 +113,7 @@ class _ChildrenManagementViewState extends State<ChildrenManagementView> {
         caregiverId: caregiverId,
         childId: child.childId,
       );
-      _showSnack("تم حذف الطفل");
+      _showSnack("تم حذف الطفل", isSuccess: true);
       await _loadChildren();
     } catch (e) {
       _showSnack("لم يتم الحذف: ${_cleanError(e.toString())}");
@@ -103,7 +128,13 @@ class _ChildrenManagementViewState extends State<ChildrenManagementView> {
     );
 
     if (result == null) return;
-
+    if (_hasDuplicateChild(
+      name: result.name,
+      dateOfBirth: result.dateOfBirth,
+    )) {
+      _showSnack("يوجد طفل مسجل بنفس الاسم وتاريخ الميلاد.");
+      return;
+    }
     try {
       await _service.addChild(
         caregiverId: caregiverId,
@@ -111,7 +142,7 @@ class _ChildrenManagementViewState extends State<ChildrenManagementView> {
         dateOfBirth: result.dateOfBirth,
         gender: result.gender,
       );
-      _showSnack("تمت إضافة الطفل");
+      _showSnack("تمت إضافة الطفل", isSuccess: true);
       await _loadChildren();
     } catch (e) {
       final msg = e.toString();
@@ -136,7 +167,14 @@ class _ChildrenManagementViewState extends State<ChildrenManagementView> {
     );
 
     if (result == null) return;
-
+    if (_hasDuplicateChild(
+      name: result.name,
+      dateOfBirth: result.dateOfBirth,
+      excludedChildId: child.childId,
+    )) {
+      _showSnack("يوجد طفل مسجل بنفس الاسم وتاريخ الميلاد.");
+      return;
+    }
     try {
       await _service.updateChild(
         caregiverId: caregiverId,
@@ -146,7 +184,7 @@ class _ChildrenManagementViewState extends State<ChildrenManagementView> {
         gender: result.gender,
       );
 
-      _showSnack("تم تحديث بيانات الطفل بنجاح");
+      _showSnack("تم تحديث بيانات الطفل بنجاح", isSuccess: true);
       await _loadChildren();
     } catch (e) {
       print('UPDATE ERROR: $e');
@@ -155,12 +193,27 @@ class _ChildrenManagementViewState extends State<ChildrenManagementView> {
   }
 
   String _cleanError(String msg) {
-    return msg.replaceAll("Exception:", "").trim();
+    return msg
+        .replaceAll("Exception:", "")
+        .replaceAll("Exception", "")
+        .replaceAll(RegExp(r'^[A-Za-z\s:._-]+'), '')
+        .trim();
   }
 
-  void _showSnack(String text) {
+  void _showSnack(String text, {bool isSuccess = false}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: isSuccess ? BColors.primary : BColors.validationError,
+        content: Text(
+          text,
+          textDirection: TextDirection.rtl,
+          textAlign: TextAlign.right,
+          style: const TextStyle(color: Colors.white),
+        ),
+      ),
+    );
   }
 
   @override
@@ -177,16 +230,6 @@ class _ChildrenManagementViewState extends State<ChildrenManagementView> {
                   await _openAddChildDialog();
                 },
 
-          // If we want to restore the warning message later:
-          // onPressed: isLoading
-          //     ? null
-          //     : () async {
-          //         if (_reachedMaxChildren) {
-          //           _showSnack("لقد تجاوزت العدد المسموح ($_maxChildren أطفال)");
-          //           return;
-          //         }
-          //         await _openAddChildDialog();
-          //       },
           backgroundColor: _reachedMaxChildren ? Colors.grey : BColors.accent,
           shape: const CircleBorder(),
           elevation: 6,
@@ -607,6 +650,21 @@ class _AddChildDialogState extends State<_AddChildDialog> {
     if (mounted) setState(() {});
   }
 
+  Widget _requiredLabel(String text) {
+    return RichText(
+      text: TextSpan(
+        style: const TextStyle(fontSize: 13, color: BColors.darkGrey),
+        children: [
+          TextSpan(text: '$text '),
+          const TextSpan(
+            text: '*',
+            style: TextStyle(color: BColors.validationError),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   void dispose() {
     nameCtrl.removeListener(_refresh);
@@ -701,7 +759,8 @@ class _AddChildDialogState extends State<_AddChildDialog> {
         : "male";
     final currentGender = isFemale ? "female" : "male";
 
-    return nameCtrl.text.trim() != (widget.initialName ?? "").trim() ||
+    return _normalizeChildName(nameCtrl.text) !=
+            _normalizeChildName(widget.initialName ?? "") ||
         currentDob != originalDob ||
         currentGender != originalGender;
   }
@@ -723,7 +782,7 @@ class _AddChildDialogState extends State<_AddChildDialog> {
                     RegExp(r"[a-zA-Z\u0600-\u06FF\s]"),
                   ),
                 ],
-                decoration: const InputDecoration(labelText: "اسم الطفل"),
+                decoration: InputDecoration(label: _requiredLabel("اسم الطفل")),
               ),
               const SizedBox(height: 12),
               Row(
@@ -736,7 +795,9 @@ class _AddChildDialogState extends State<_AddChildDialog> {
                         FilteringTextInputFormatter.digitsOnly,
                         LengthLimitingTextInputFormatter(4),
                       ],
-                      decoration: const InputDecoration(labelText: "السنة"),
+                      decoration: InputDecoration(
+                        label: _requiredLabel("السنة"),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -748,7 +809,9 @@ class _AddChildDialogState extends State<_AddChildDialog> {
                         FilteringTextInputFormatter.digitsOnly,
                         LengthLimitingTextInputFormatter(2),
                       ],
-                      decoration: const InputDecoration(labelText: "الشهر"),
+                      decoration: InputDecoration(
+                        label: _requiredLabel("الشهر"),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -760,7 +823,9 @@ class _AddChildDialogState extends State<_AddChildDialog> {
                         FilteringTextInputFormatter.digitsOnly,
                         LengthLimitingTextInputFormatter(2),
                       ],
-                      decoration: const InputDecoration(labelText: "اليوم"),
+                      decoration: InputDecoration(
+                        label: _requiredLabel("اليوم"),
+                      ),
                     ),
                   ),
                 ],
@@ -857,7 +922,7 @@ class _AddChildDialogState extends State<_AddChildDialog> {
                     Navigator.pop(
                       context,
                       _AddChildResult(
-                        name: nameCtrl.text.trim(),
+                        name: _normalizeChildName(nameCtrl.text),
                         dateOfBirth: dob,
                         gender: isFemale ? "female" : "male",
                       ),
@@ -868,5 +933,9 @@ class _AddChildDialogState extends State<_AddChildDialog> {
         ],
       ),
     );
+  }
+
+  String _normalizeChildName(String value) {
+    return value.trim().replaceAll(RegExp(r'\s+'), ' ');
   }
 }

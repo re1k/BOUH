@@ -12,5 +12,5 @@ import lombok.Setter;
 public class DoctorStatsDTO {
     private long pending;
     private long accepted;
-    private long rejected;
+
 }
