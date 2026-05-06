@@ -174,7 +174,7 @@ class SuggestedDoctorCard extends StatelessWidget {
         width: _avatarSize,
         height: _avatarSize,
         child: Image.asset(
-          'assets/Images/default_ProfileImage.png',
+          'assets/images/default_ProfileImage.png',
           fit: BoxFit.cover,
         ),
       ),
