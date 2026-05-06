@@ -165,17 +165,37 @@ class AnalysisResultsPage extends StatelessWidget {
     return FutureBuilder<List<DoctorDto>>(
       future: Future.wait(
         doctorIds.map((id) async {
-          final doctor = await DoctorsService.getDoctorDetails(id);
-          doctor.profilePhotoURL = await _resolveImageUrl(
-            doctor.profilePhotoURL,
-          );
-          return doctor;
+          try {
+            final doctor = await DoctorsService.getDoctorDetails(id);
+            doctor.profilePhotoURL = await _resolveImageUrl(
+              doctor.profilePhotoURL,
+            );
+            return doctor;
+          } catch (_) {
+            return null;
+          }
         }),
-      ),
+      ).then((list) => list.whereType<DoctorDto>().toList()),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: BouhOvalLoadingIndicator());
         }
+        if (snapshot.hasError) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'تعذر تحميل الأطباء المقترحين، يرجى المحاولة مرة أخرى',
+                  textDirection: TextDirection.rtl,
+                  style: TextStyle(color: BColors.white),
+                ),
+                backgroundColor: BColors.validationError,
+              ),
+            );
+          });
+          return const SizedBox();
+        }
+
         if (!snapshot.hasData || snapshot.data!.isEmpty) {
           return const SizedBox();
         }

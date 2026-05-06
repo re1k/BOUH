@@ -132,6 +132,18 @@ class _AvailableScheduleScreenState extends State<AvailableScheduleScreen> {
         isLoading = false;
         loadError = e.toString();
       });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'تعذر تحميل الجدول الزمني، يرجى المحاولة مرة أخرى',
+              textDirection: TextDirection.rtl,
+              style: TextStyle(color: BColors.white),
+            ),
+            backgroundColor: BColors.validationError,
+          ),
+        );
+      }
     }
   }
 
@@ -768,7 +780,7 @@ class _AvailableScheduleScreenState extends State<AvailableScheduleScreen> {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
-                          "فشل الحفظ",
+                          'تعذر حفظ التغييرات، يرجى التحقق من الاتصال بالإنترنت والمحاولة مرة أخرى',
                           textDirection: TextDirection.rtl,
 
                           style: TextStyle(color: BColors.white),

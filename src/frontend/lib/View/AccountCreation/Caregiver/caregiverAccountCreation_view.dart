@@ -58,9 +58,12 @@ class _CaregiverSignupViewState extends State<CaregiverSignupView> {
   /// "Touched" per field: error shows only after user has left that field (or on submit).
   /// Prevents all fields going red when the user taps the first field.
   bool _emailTouched = false;
-  bool _passwordTouched = false;
   bool _confirmPasswordTouched = false;
-  bool _nameTouched = false;
+
+  /// Live validation for non-email fields only after the user starts typing in that field.
+  bool _nameStartedTyping = false;
+  bool _passwordStartedTyping = false;
+  bool _confirmPasswordStartedTyping = false;
 
   /// When true, email validator runs even if the email field still has focus (full-form submit).
   bool _runningFormValidation = false;
@@ -91,7 +94,6 @@ class _CaregiverSignupViewState extends State<CaregiverSignupView> {
 
   void _onPasswordFocusChange() {
     if (!_passwordFocusNode.hasFocus) {
-      _passwordTouched = true;
       _passwordFieldKey.currentState?.validate();
       if (mounted) setState(() {});
     }
@@ -107,7 +109,6 @@ class _CaregiverSignupViewState extends State<CaregiverSignupView> {
 
   void _onNameFocusChange() {
     if (!_nameFocusNode.hasFocus) {
-      _nameTouched = true;
       ProfileFieldValidation.syncTextControllerToNormalizedPersonName(_nameCtrl);
       _nameFieldKey.currentState?.validate();
       if (mounted) setState(() {});
@@ -182,9 +183,10 @@ class _CaregiverSignupViewState extends State<CaregiverSignupView> {
     // Mark every field as touched so all errors show on submit (not only the one that was left empty).
     setState(() {
       _emailTouched = true;
-      _passwordTouched = true;
       _confirmPasswordTouched = true;
-      _nameTouched = true;
+      _nameStartedTyping = true;
+      _passwordStartedTyping = true;
+      _confirmPasswordStartedTyping = true;
     });
     // Run all validators; if any fail, stay on this screen.
     _runningFormValidation = true;
@@ -249,8 +251,6 @@ class _CaregiverSignupViewState extends State<CaregiverSignupView> {
                 padding: EdgeInsets.fromLTRB(22, 30, 22, keyboardInset + 32),
                 child: Form(
                   key: _formKey,
-                  // Disabled: we validate only when a field loses focus (single field) or on Next (all fields).
-                  // Avoids all fields going red as soon as the user taps the first one.
                   autovalidateMode: AutovalidateMode.disabled,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.center,
@@ -301,7 +301,7 @@ class _CaregiverSignupViewState extends State<CaregiverSignupView> {
                         focusNode: _nameFocusNode,
                         fieldKey: _nameFieldKey,
                         validator: (v) =>
-                            _nameTouched ? _validateName(v) : null,
+                            _nameStartedTyping ? _validateName(v) : null,
                         textInputAction: TextInputAction.next,
                         inputFormatters: [
                           LengthLimitingTextInputFormatter(
@@ -310,19 +310,19 @@ class _CaregiverSignupViewState extends State<CaregiverSignupView> {
                           ),
                         ],
                         onChanged: (_) {
-                          if (_nameTouched) {
-                            _nameFieldKey.currentState?.validate();
-                          }
-                          if (_confirmPasswordCtrl.text.isNotEmpty) {
-                            _confirmPasswordTouched = true;
-                          }
-                          if (_passwordTouched) {
+                          setState(() {
+                            _nameStartedTyping = true;
+                            if (_confirmPasswordCtrl.text.isNotEmpty) {
+                              _confirmPasswordTouched = true;
+                            }
+                          });
+                          _nameFieldKey.currentState?.validate();
+                          if (_passwordStartedTyping) {
                             _passwordFieldKey.currentState?.validate();
                           }
-                          if (_confirmPasswordTouched) {
+                          if (_confirmPasswordStartedTyping) {
                             _confirmPasswordFieldKey.currentState?.validate();
                           }
-                          setState(() {});
                         },
                       ),
                       const SizedBox(height: 14),
@@ -376,17 +376,16 @@ class _CaregiverSignupViewState extends State<CaregiverSignupView> {
                         controller: _passwordCtrl,
                         focusNode: _passwordFocusNode,
                         fieldKey: _passwordFieldKey,
-                        validator: (v) =>
-                            _passwordTouched ? _validatePassword(v) : null,
+                        validator: (v) => _passwordStartedTyping
+                            ? _validatePassword(v)
+                            : null,
                         textInputAction: TextInputAction.next,
                         onChanged: (_) {
-                          if (_passwordTouched) {
-                            _passwordFieldKey.currentState?.validate();
-                          }
-                          if (_confirmPasswordTouched) {
+                          setState(() => _passwordStartedTyping = true);
+                          _passwordFieldKey.currentState?.validate();
+                          if (_confirmPasswordStartedTyping) {
                             _confirmPasswordFieldKey.currentState?.validate();
                           }
-                          setState(() {});
                         },
                       ),
                       const SizedBox(height: 8),
@@ -414,15 +413,13 @@ class _CaregiverSignupViewState extends State<CaregiverSignupView> {
                         controller: _confirmPasswordCtrl,
                         focusNode: _confirmPasswordFocusNode,
                         fieldKey: _confirmPasswordFieldKey,
-                        validator: (v) => _confirmPasswordTouched
+                        validator: (v) => _confirmPasswordStartedTyping
                             ? _validateConfirmPassword(v)
                             : null,
                         textInputAction: TextInputAction.next,
                         onChanged: (_) {
-                          if (_confirmPasswordTouched) {
-                            _confirmPasswordFieldKey.currentState?.validate();
-                          }
-                          setState(() {});
+                          setState(() => _confirmPasswordStartedTyping = true);
+                          _confirmPasswordFieldKey.currentState?.validate();
                         },
                       ),
                       const SizedBox(height: 14),

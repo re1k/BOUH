@@ -56,6 +56,18 @@ class _RequestAnalysisPageState extends State<RequestAnalysisPage> {
       });
     } catch (e) {
       setState(() => _loadingChildren = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'تعذر تحميل قائمة الأطفال، يرجى المحاولة مرة أخرى',
+              textDirection: TextDirection.rtl,
+              style: TextStyle(color: BColors.white),
+            ),
+            backgroundColor: BColors.validationError,
+          ),
+        );
+      }
     }
   }
 

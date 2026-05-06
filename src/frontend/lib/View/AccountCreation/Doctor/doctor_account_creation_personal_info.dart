@@ -43,9 +43,11 @@ class _DoctorAccountCreationStep1State
   final FocusNode _nameFocusNode = FocusNode();
 
   bool _emailTouched = false;
-  bool _passwordTouched = false;
-  bool _confirmTouched = false;
-  bool _nameTouched = false;
+
+  /// Live validation for non-email fields only after the user starts typing in that field.
+  bool _nameStartedTyping = false;
+  bool _passwordStartedTyping = false;
+  bool _confirmStartedTyping = false;
 
   /// When true, email validator runs even if the email field still has focus (full-form submit).
   bool _runningFormValidation = false;
@@ -107,7 +109,6 @@ class _DoctorAccountCreationStep1State
 
   void _onPasswordFocusChange() {
     if (!_passwordFocusNode.hasFocus) {
-      _passwordTouched = true;
       _passwordFieldKey.currentState?.validate();
       if (mounted) setState(() {});
     }
@@ -115,7 +116,6 @@ class _DoctorAccountCreationStep1State
 
   void _onConfirmFocusChange() {
     if (!_confirmFocusNode.hasFocus) {
-      _confirmTouched = true;
       _confirmPasswordFieldKey.currentState?.validate();
       if (mounted) setState(() {});
     }
@@ -123,7 +123,6 @@ class _DoctorAccountCreationStep1State
 
   void _onNameFocusChange() {
     if (!_nameFocusNode.hasFocus) {
-      _nameTouched = true;
       ProfileFieldValidation.syncTextControllerToExactText(
         _nameCtrl,
         _normalizedSignupFullName(),
@@ -279,7 +278,6 @@ class _DoctorAccountCreationStep1State
     });
   }
 
-  /// Same circular action style as [ChildrenManagementView] child cards.
   Widget _circleProfileImageAction({
     required IconData icon,
     required Color iconColor,
@@ -344,9 +342,9 @@ class _DoctorAccountCreationStep1State
     if (!_isFormComplete) return;
     setState(() {
       _emailTouched = true;
-      _passwordTouched = true;
-      _confirmTouched = true;
-      _nameTouched = true;
+      _nameStartedTyping = true;
+      _passwordStartedTyping = true;
+      _confirmStartedTyping = true;
     });
     _runningFormValidation = true;
     final formOk = _formKey.currentState?.validate() ?? false;
@@ -445,7 +443,7 @@ class _DoctorAccountCreationStep1State
                   padding: const EdgeInsets.fromLTRB(22, 30, 22, 30),
                   child: Form(
                     key: _formKey,
-                    autovalidateMode: AutovalidateMode.onUserInteraction,
+                    autovalidateMode: AutovalidateMode.disabled,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
@@ -502,12 +500,10 @@ class _DoctorAccountCreationStep1State
                           focusNode: _nameFocusNode,
                           fieldKey: _nameFieldKey,
                           validator: (v) =>
-                              _nameTouched ? _validateName(v) : null,
+                              _nameStartedTyping ? _validateName(v) : null,
                           onChanged: (_) {
-                            if (_nameTouched) {
-                              _nameFieldKey.currentState?.validate();
-                            }
-                            setState(() {});
+                            setState(() => _nameStartedTyping = true);
+                            _nameFieldKey.currentState?.validate();
                           },
                           inputFormatters: [
                             _DoctorNamePrefixFormatter(prefix: _namePrefix),
@@ -563,19 +559,15 @@ class _DoctorAccountCreationStep1State
                           ),
                           focusNode: _passwordFocusNode,
                           fieldKey: _passwordFieldKey,
-                          validator: (v) =>
-                              _passwordTouched ? _validatePassword(v) : null,
+                          validator: (v) => _passwordStartedTyping
+                              ? _validatePassword(v)
+                              : null,
                           onChanged: (_) {
-                            if (_confirmCtrl.text.isNotEmpty) {
-                              _confirmTouched = true;
-                            }
-                            if (_passwordTouched) {
-                              _passwordFieldKey.currentState?.validate();
-                            }
-                            if (_confirmTouched) {
+                            setState(() => _passwordStartedTyping = true);
+                            _passwordFieldKey.currentState?.validate();
+                            if (_confirmStartedTyping) {
                               _confirmPasswordFieldKey.currentState?.validate();
                             }
-                            setState(() {});
                           },
                         ),
                         const SizedBox(height: 8),
@@ -604,14 +596,12 @@ class _DoctorAccountCreationStep1State
                           ),
                           focusNode: _confirmFocusNode,
                           fieldKey: _confirmPasswordFieldKey,
-                          validator: (v) => _confirmTouched
+                          validator: (v) => _confirmStartedTyping
                               ? _validateConfirmPassword(v)
                               : null,
                           onChanged: (_) {
-                            if (_confirmTouched) {
-                              _confirmPasswordFieldKey.currentState?.validate();
-                            }
-                            setState(() {});
+                            setState(() => _confirmStartedTyping = true);
+                            _confirmPasswordFieldKey.currentState?.validate();
                           },
                         ),
                         const SizedBox(height: 14),

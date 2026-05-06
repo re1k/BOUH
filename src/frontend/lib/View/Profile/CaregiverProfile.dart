@@ -1,4 +1,6 @@
-import 'dart:convert';
+import 'dart:async';
+import 'dart:io';
+
 import 'package:bouh/theme/base_themes/colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,11 +9,13 @@ import 'package:bouh/View/Profile/ChildrenManagementView.dart';
 import 'package:bouh/View/caregiverHomepage/widgets/caregiverBottomNav.dart';
 import 'package:bouh/authentication/AuthService.dart';
 import 'package:bouh/authentication/AuthSession.dart';
-import 'package:bouh/config/api_config.dart';
 import 'package:bouh/View/Login/login_view.dart';
 import 'package:bouh/widgets/confirmation_popup.dart';
 import 'package:bouh/widgets/loading_overlay.dart';
 import 'package:bouh/widgets/profile_field_validation.dart';
+import 'package:bouh/dto/upcomingAppointmentDto.dart';
+import 'package:bouh/services/appointmentsService.dart';
+import 'package:bouh/services/profileService.dart';
 
 class CaregiverAccountView extends StatefulWidget {
   const CaregiverAccountView({
@@ -36,6 +40,18 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
   static const double _kControlRadius = 10;
   static const String _profileLoadFallbackErrorMessage =
       'حدث خطأ في استرجاع البيانات، تأكد من اتصالك بالشبكة وحاول مرة اخرى';
+  static const String _deleteNetworkErrorMessage =
+      'لا يوجد اتصال بالإنترنت أو تعذر الوصول إلى الخادم. تحقق من الشبكة وحاول مرة أخرى.';
+  static const String _upcomingCheckFailedMessage =
+      'تعذر التحقق من المواعيد القادمة. حاول مرة أخرى.';
+  static const String _deleteAccountBaseMessage =
+      'هل أنت متأكد أنك تريد حذف الحساب؟ لا يمكن التراجع عن هذا.';
+  static const String _deleteAccountWithUpcoming =
+      'لديك مواعيد قادمة. '
+      'يمكنك إلغاؤها أولًا لاسترداد المبلغ، '
+      'أو المتابعة بالحذف وسيتم إلغاؤها دون استرداد.';
+  final ProfileService _profileService = ProfileService();
+  final AppointmentsService _appointmentsService = AppointmentsService();
   final TextEditingController _nameCtrl = TextEditingController();
   String _name = '';
   String _email = '';
@@ -45,9 +61,37 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
   String? _profileError;
   String? _nameError;
   bool _isDeletingAccount = false;
+  bool _isDeletePreflightBusy = false;
+  void Function()? _refreshCaregiverPersonalPage;
+  Timer? _deleteErrorTimer;
+  static const Duration _deleteErrorAutoDismiss = Duration(seconds: 5);
   bool get _hasNameChanged =>
       ProfileFieldValidation.normalizePersonName(_nameCtrl.text) !=
       ProfileFieldValidation.normalizePersonName(_name);
+
+  void _cancelDeleteErrorTimer() {
+    _deleteErrorTimer?.cancel();
+    _deleteErrorTimer = null;
+  }
+
+  void _clearDeleteError() {
+    _cancelDeleteErrorTimer();
+    if (!mounted) return;
+    if (_deleteError != null) {
+      setState(() => _deleteError = null);
+    }
+  }
+
+  void _showTransientDeleteError(String message) {
+    _cancelDeleteErrorTimer();
+    if (!mounted) return;
+    setState(() => _deleteError = message);
+    _deleteErrorTimer = Timer(_deleteErrorAutoDismiss, () {
+      if (!mounted) return;
+      setState(() => _deleteError = null);
+      _deleteErrorTimer = null;
+    });
+  }
 
   @override
   void initState() {
@@ -56,7 +100,16 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
   }
 
   @override
+  void didUpdateWidget(covariant CaregiverAccountView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.currentIndex == 3 && oldWidget.currentIndex != 3) {
+      _clearDeleteError();
+    }
+  }
+
+  @override
   void dispose() {
+    _cancelDeleteErrorTimer();
     _nameCtrl.dispose();
     super.dispose();
   }
@@ -151,7 +204,8 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
                 ),
               ],
             ),
-            if (_isDeletingAccount || _loadingProfile) BouhLoadingOverlay(),
+            if (_loadingProfile) BouhLoadingOverlay(),
+            if (_isDeletingAccount) BouhFullScreenLoadingOverlay(),
           ],
         ),
         bottomNavigationBar: widget.onTap != null
@@ -174,7 +228,7 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
   Future<void> _handleLogout(BuildContext context) async {
     final confirmed = await ConfirmationPopup.show(
       context,
-      title: 'تسجيل الخروج',
+      title: 'تأكيد تسجيل الخروج',
       message: 'هل أنت متأكد أنك تريد تسجيل الخروج؟',
       confirmText: 'تسجيل الخروج',
       cancelText: 'إلغاء',
@@ -190,55 +244,126 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
     );
   }
 
-  Future<void> _handleDeleteAccount(BuildContext context) async {
-    final confirmed = await ConfirmationPopup.show(
-      context,
-      title: 'حذف الحساب',
-      message: 'هل أنت متأكد أنك تريد حذف الحساب؟ لا يمكن التراجع عن هذا.',
-      confirmText: 'حذف الحساب',
-      cancelText: 'إلغاء',
-      isDestructive: true,
-    );
-    if (!confirmed) return;
+  bool _isNetworkFailure(Object e) {
+    return e is SocketException ||
+        e is TimeoutException ||
+        e is http.ClientException;
+  }
 
-    setState(() => _deleteError = null);
+  String _messageForUpcomingFetchFailure(Object e) {
+    if (_isNetworkFailure(e)) return _deleteNetworkErrorMessage;
+    return _upcomingCheckFailedMessage;
+  }
+
+  String _messageForDeleteFailure(Object e) {
+    if (_isNetworkFailure(e)) return _deleteNetworkErrorMessage;
+    return 'تعذر حذف الحساب. حاول مرة أخرى.';
+  }
+
+  Future<void> _handleDeleteAccount(BuildContext context) async {
+    _clearDeleteError();
+
+    final uid = AuthSession.instance.userId;
+    if (uid == null || uid.isEmpty) {
+      _showTransientDeleteError('تعذر حذف الحساب. حاول مرة أخرى.');
+      return;
+    }
+
+    setState(() => _isDeletePreflightBusy = true);
+    _refreshCaregiverPersonalPage?.call();
+
+    late final List<UpcomingAppointmentDto> activeUpcoming;
+    try {
+      final raw = await _appointmentsService.getUpcomingAppointments(uid);
+      activeUpcoming = AppointmentsService.filterUpcomingNotEnded(raw);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isDeletePreflightBusy = false);
+      _refreshCaregiverPersonalPage?.call();
+      _showTransientDeleteError(_messageForUpcomingFetchFailure(e));
+      return;
+    }
+
+    if (!mounted || !context.mounted) return;
+
+    final hasUpcoming = activeUpcoming.isNotEmpty;
+    final message =
+        hasUpcoming ? _deleteAccountWithUpcoming : _deleteAccountBaseMessage;
+
+    var confirmed = false;
+    try {
+      confirmed = await ConfirmationPopup.show(
+        context,
+        title: 'تأكيد حذف الحساب',
+        message: message,
+        confirmText: 'حذف الحساب',
+        cancelText: 'إلغاء',
+        isDestructive: true,
+        useDarkMessageText: hasUpcoming,
+        onDialogVisible: () {
+          if (!mounted) return;
+          setState(() => _isDeletePreflightBusy = false);
+          _refreshCaregiverPersonalPage?.call();
+        },
+      );
+    } finally {
+      if (mounted && _isDeletePreflightBusy) {
+        setState(() => _isDeletePreflightBusy = false);
+        _refreshCaregiverPersonalPage?.call();
+      }
+    }
+    if (!confirmed || !mounted || !context.mounted) return;
 
     setState(() => _isDeletingAccount = true);
+    _refreshCaregiverPersonalPage?.call();
 
     try {
       await AuthService.instance.deleteAccountOnBackend();
-      if (!mounted) return;
+      if (!mounted || !context.mounted) return;
       await AuthService.instance.signOut();
-      if (!mounted) return;
+      if (!mounted || !context.mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const LoginView()),
         (route) => false,
       );
+    } on AccountDeleteBlockedException {
+      if (!mounted || !context.mounted) return;
+      setState(() => _isDeletingAccount = false);
+      _refreshCaregiverPersonalPage?.call();
+      await ConfirmationPopup.show(
+        context,
+        title: 'لا يمكن حذف الحساب',
+        message: 'تعذر إكمال الحذف حالياً. حاول لاحقاً .',
+        confirmText: 'حسناً',
+        singleButton: true,
+        useDarkMessageText: true,
+      );
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _isDeletingAccount = false;
-        _deleteError = 'تعذر حذف الحساب. حاول مرة أخرى.';
-      });
+      setState(() => _isDeletingAccount = false);
+      _refreshCaregiverPersonalPage?.call();
+      _showTransientDeleteError(_messageForDeleteFailure(e));
     }
   }
 
   Future<void> _openPersonalInfoPage(BuildContext context) async {
+    _clearDeleteError();
     setState(() {
       _nameError = null;
       _nameCtrl.text = _name;
     });
     final nameFocusNode = FocusNode();
-    var nameTouched = false;
+    var nameStartedTyping = false;
     void Function()? refreshPersonalPage;
     final editingNameRef = <bool>[false];
     void onNameFocusChange() {
       if (!nameFocusNode.hasFocus && editingNameRef[0]) {
-        nameTouched = true;
         ProfileFieldValidation.syncTextControllerToNormalizedPersonName(_nameCtrl);
-        setState(() {
-          _nameError = _validateName(_nameCtrl.text);
-        });
+        if (nameStartedTyping) {
+          setState(() {
+            _nameError = _validateName(_nameCtrl.text);
+          });
+        }
         refreshPersonalPage?.call();
       }
     }
@@ -263,6 +388,7 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
         builder: (_) => StatefulBuilder(
           builder: (context, setPage) {
             refreshPersonalPage = () => setPage(() {});
+            _refreshCaregiverPersonalPage = () => setPage(() {});
             return Directionality(
               textDirection: TextDirection.rtl,
               child: WillPopScope(
@@ -371,13 +497,12 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
                                             hintText: '—',
                                           ),
                                           onChanged: (_) {
-                                            if (nameTouched) {
-                                              setState(() {
-                                                _nameError = _validateName(
-                                                  _nameCtrl.text,
-                                                );
-                                              });
-                                            }
+                                            nameStartedTyping = true;
+                                            setState(() {
+                                              _nameError = _validateName(
+                                                _nameCtrl.text,
+                                              );
+                                            });
                                             setPage(() {});
                                           },
                                         ),
@@ -399,12 +524,11 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
                                             onPressed: !_hasNameChanged
                                                 ? null
                                                 : () async {
-                                                    nameTouched = true;
                                                     await _saveNameInline();
                                                     if (!mounted) return;
                                                     if (_nameError == null) {
                                                       editingNameRef[0] = false;
-                                                      nameTouched = false;
+                                                      nameStartedTyping = false;
                                                     }
                                                     setPage(() {});
                                                   },
@@ -425,7 +549,7 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
                                                 _nameCtrl.text = _name;
                                               });
                                               editingNameRef[0] = false;
-                                              nameTouched = false;
+                                              nameStartedTyping = false;
                                               setPage(() {});
                                             },
                                             icon: const Icon(
@@ -437,7 +561,7 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
                                       ] else
                                         _editIcon(
                                           onTap: () {
-                                            nameTouched = false;
+                                            nameStartedTyping = false;
                                             editingNameRef[0] = true;
                                             setState(() {
                                               _nameError = null;
@@ -450,7 +574,9 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
                                   ),
                                 ),
                               ),
-                              if (_nameError != null) ...[
+                              if (editingNameRef[0] &&
+                                  nameStartedTyping &&
+                                  _nameError != null) ...[
                                 const SizedBox(height: 8),
                                 Text(
                                   _nameError!,
@@ -462,23 +588,11 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
                                   ),
                                 ),
                               ],
-                              if (_deleteError != null) ...[
-                                const SizedBox(height: 8),
-                                Text(
-                                  _deleteError!,
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    color: BColors.validationError,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
                             ],
                           ),
                         ),
                       ),
-                      if (_isDeletingAccount) BouhLoadingOverlay(),
+                      if (_isDeletingAccount) BouhFullScreenLoadingOverlay(),
                     ],
                   ),
                   bottomNavigationBar: SafeArea(
@@ -486,7 +600,7 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
                     child: SizedBox(
                       height: 46,
                       child: ElevatedButton.icon(
-                        onPressed: _isDeletingAccount
+                        onPressed: (_isDeletePreflightBusy || _isDeletingAccount)
                             ? null
                             : () => _handleDeleteAccount(context),
                         style: ElevatedButton.styleFrom(
@@ -497,7 +611,16 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                        icon: const Icon(Icons.delete_outline_rounded),
+                        icon: (_isDeletePreflightBusy || _isDeletingAccount)
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(Icons.delete_outline_rounded),
                         label: const Text(
                           'حذف الحساب',
                           style: TextStyle(
@@ -518,6 +641,7 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
 
     nameFocusNode.removeListener(onNameFocusChange);
     nameFocusNode.dispose();
+    _refreshCaregiverPersonalPage = null;
 
     if (!mounted) return;
     setState(() {
@@ -526,53 +650,17 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
     });
   }
 
-  Uri _url(String path) => Uri.parse('${ApiConfig.baseUrl}$path');
-
-  Map<String, String> _authHeaders({bool json = false}) {
-    final token = AuthSession.instance.idToken;
-    if (token == null || token.isEmpty) {
-      throw StateError('No JWT (idToken). User not logged in.');
-    }
-    return {
-      if (json) 'Content-Type': 'application/json',
-      'Authorization': 'Bearer $token',
-    };
-  }
-
-  Future<Map<String, dynamic>> _fetchProfileMap() async {
-    var res = await http.get(
-      _url('/api/accounts/profile'),
-      headers: _authHeaders(json: true),
-    );
-
-    if (res.statusCode == 401) {
-      await AuthService.instance.refreshSession();
-      res = await http.get(
-        _url('/api/accounts/profile'),
-        headers: _authHeaders(json: true),
-      );
-    }
-
-    if (res.statusCode == 401 || res.statusCode == 403) {
-      throw Exception('UNAUTHORIZED');
-    }
-    if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw Exception(
-        res.body.isNotEmpty ? res.body : 'Failed to load caregiver profile',
-      );
-    }
-    return jsonDecode(res.body) as Map<String, dynamic>;
-  }
-
   Future<void> _loadCaregiverProfile() async {
     setState(() {
       _loadingProfile = true;
       _profileError = null;
     });
     try {
-      final map = await _fetchProfileMap();
+      final map = await _profileService.fetchCaregiverProfile();
       if (!mounted) return;
+      _cancelDeleteErrorTimer();
       setState(() {
+        _deleteError = null;
         _email = map['email']?.toString() ?? '';
         _name = map['name']?.toString() ?? '';
         _nameCtrl.text = _name;
@@ -613,24 +701,7 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
       _nameError = null;
     });
     try {
-      var res = await http.patch(
-        _url('/api/accounts/caregiver/update'),
-        headers: _authHeaders(json: true),
-        body: jsonEncode({'name': candidate}),
-      );
-
-      if (res.statusCode == 401) {
-        await AuthService.instance.refreshSession();
-        res = await http.patch(
-          _url('/api/accounts/caregiver/update'),
-          headers: _authHeaders(json: true),
-          body: jsonEncode({'name': candidate}),
-        );
-      }
-
-      if (res.statusCode < 200 || res.statusCode >= 300) {
-        throw Exception('Failed to update caregiver name');
-      }
+      await _profileService.updateCaregiverName(candidate);
 
       if (!mounted) return;
       setState(() {

@@ -1,7 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -88,12 +89,14 @@ class _DoctorProfileViewState extends State<DoctorProfileView>
 
   String? _deleteError;
   bool _isDeletingAccount = false;
+  bool _isDeletePreflightBusy = false;
   Timer? _deleteErrorTimer;
 
   bool _loadingProfile = true;
   bool _saving = false;
   String? _loadError;
   String? _saveError;
+  void Function()? _refreshPersonalDeleteOverlay;
 
   String? _photoUrl;
   int? _yearsOfExperience;
@@ -107,7 +110,7 @@ class _DoctorProfileViewState extends State<DoctorProfileView>
   final List<TextEditingController> _qualificationCtrls = [];
   final List<FocusNode> _qualificationFocusNodes = [];
   String? _qualificationsError;
-  bool _qualificationsTouched = false;
+  bool _qualificationsUserTyped = false;
 
   late String _gender;
 
@@ -131,13 +134,17 @@ class _DoctorProfileViewState extends State<DoctorProfileView>
   static const double _kSaveButtonsLeftPadding = 15;
   static const double _kAppBarEditTrailingPadding = 15;
 
-  static final RegExp _qualificationsTextRegex = RegExp(
-    r'^[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF0-9\s\.,]+$',
-  );
-
   static const String _doctorNameHonorificPrefix = 'د. ';
   static const String _kGalleryPermissionDeniedMessage =
-      'لم يتم السماح بالوصول إلى الصور/الوسائط. يرجى تفعيل إذن الصور (وليس الكاميرا) من إعدادات التطبيق ثم المحاولة مرة أخرى.';
+      'لم يتم السماح بالوصول إلى الصور. يرجى تفعيل إذن الوصول للصور من الاعدادات ثم المحاولة مرة أخرى.';
+
+  /// Shown when the API is unreachable, times out, or returns non-user-facing errors.
+  static const String _kProfileNetworkOrServerMessage =
+      'لا يوجد اتصال بالإنترنت أو تعذر الوصول إلى الخادم. تحقق من الشبكة وحاول لاحقاً.';
+
+  /// Message already thrown by [ProfileService] on socket/timeout — keep as-is.
+  static const String _kProfileServiceNetworkWrapped =
+      'حدث خطأ، تأكد أنك متصل بالشبكة وحاول مرة أخرى';
 
   static String _nameWithoutHonorificPrefix(String? value) {
     final trimmed = (value ?? '').trim();
@@ -203,14 +210,107 @@ class _DoctorProfileViewState extends State<DoctorProfileView>
   }
 
   String _userFriendlyError(Object error) {
-    final raw = error.toString().trim();
-    const prefixes = <String>['Exception:', 'StateError:', 'FormatException:'];
-    for (final prefix in prefixes) {
-      if (raw.startsWith(prefix)) {
-        return raw.substring(prefix.length).trim();
+    if (error is SocketException || error is TimeoutException) {
+      return _kProfileNetworkOrServerMessage;
+    }
+    if (error is http.ClientException) {
+      return _kProfileNetworkOrServerMessage;
+    }
+    if (error is FirebaseException) {
+      const netCodes = <String>{
+        'unavailable',
+        'deadline-exceeded',
+        'network-request-failed',
+      };
+      if (netCodes.contains(error.code)) {
+        return _kProfileNetworkOrServerMessage;
       }
     }
-    return raw;
+    if (error is FirebaseAuthException &&
+        error.code == 'network-request-failed') {
+      return _kProfileNetworkOrServerMessage;
+    }
+
+    final raw = error.toString().trim();
+    var inner = raw;
+    const prefixes = <String>['Exception:', 'StateError:', 'FormatException:'];
+    for (final prefix in prefixes) {
+      if (inner.startsWith(prefix)) {
+        inner = inner.substring(prefix.length).trim();
+        break;
+      }
+    }
+
+    if (inner == 'UNAUTHORIZED') {
+      return 'انتهت الجلسة. يرجى تسجيل الدخول مرة أخرى.';
+    }
+    if (inner == 'NOT_DOCTOR_PROFILE') {
+      return 'تعذر تحميل بيانات ملف الطبيب.';
+    }
+    if (inner.contains('No JWT') || inner.contains('User not logged in')) {
+      return 'انتهت الجلسة. يرجى تسجيل الدخول مرة أخرى.';
+    }
+
+    if (inner == _kProfileServiceNetworkWrapped ||
+        inner.startsWith(_kProfileServiceNetworkWrapped)) {
+      return _kProfileServiceNetworkWrapped;
+    }
+
+    if (inner.startsWith('{')) {
+      try {
+        final decoded = jsonDecode(inner);
+        if (decoded is Map<String, dynamic>) {
+          final m = decoded['message'];
+          if (m is String && _looksLikeUserFacingProfileMessage(m)) {
+            return m.trim();
+          }
+        }
+      } catch (_) {}
+      return _kProfileNetworkOrServerMessage;
+    }
+
+    if (_shouldReplaceWithFriendlyProfileError(inner)) {
+      return _kProfileNetworkOrServerMessage;
+    }
+
+    return inner;
+  }
+
+  static bool _looksLikeUserFacingProfileMessage(String s) {
+    final t = s.trim();
+    if (t.isEmpty || t.length > 200) return false;
+    if (RegExp(r'[\u0600-\u06FF]').hasMatch(t)) return true;
+    final lower = t.toLowerCase();
+    const genericServerEnglish = <String>{
+      'internal server error',
+      'bad gateway',
+      'service unavailable',
+      'gateway timeout',
+      'bad request',
+      'an error occurred',
+    };
+    if (genericServerEnglish.any(lower.contains)) return false;
+    return t.length < 90 && !t.contains('<') && !t.contains('{');
+  }
+
+  static bool _shouldReplaceWithFriendlyProfileError(String inner) {
+    if (inner.isEmpty) return true;
+    final lower = inner.toLowerCase();
+    if (inner.length > 220) return true;
+    if (lower.contains('<!doctype') || lower.contains('<html')) return true;
+    if (lower.contains('failed to load profile') ||
+        lower.contains('failed to update profile')) {
+      return true;
+    }
+    if (RegExp(r'\b50[0-9]\b').hasMatch(inner)) return true;
+    if (lower.contains('socketexception')) return true;
+    if (lower.contains('clientexception')) return true;
+    if (lower.contains('connection refused')) return true;
+    if (lower.contains('failed host lookup')) return true;
+    if (lower.contains('connection timed out')) return true;
+    if (lower.contains('handshakeexception')) return true;
+    if (lower.contains('network-request-failed')) return true;
+    return false;
   }
 
   String? _validateDoctorNameLikeRegistration(String value) {
@@ -333,8 +433,9 @@ class _DoctorProfileViewState extends State<DoctorProfileView>
             selection: TextSelection.collapsed(offset: normalized.length),
           );
         }
-        _qualificationsTouched = true;
-        _qualificationsError = _validateQualificationsList();
+        if (_qualificationsUserTyped) {
+          _qualificationsError = _validateQualificationsList();
+        }
         if (mounted) setState(() {});
       }
     });
@@ -345,7 +446,7 @@ class _DoctorProfileViewState extends State<DoctorProfileView>
   void _replaceQualificationEditors(List<String> qualifications) {
     _disposeQualificationEditors();
     _qualificationsError = null;
-    _qualificationsTouched = false;
+    _qualificationsUserTyped = false;
     final trimmed = qualifications
         .map(ProfileFieldValidation.normalizeQualificationLine)
         .where((e) => e.isNotEmpty)
@@ -363,7 +464,9 @@ class _DoctorProfileViewState extends State<DoctorProfileView>
     if (_qualificationCtrls.length >= _maxQualifications) return;
     setState(() {
       _appendQualificationEditor('');
-      _qualificationsError = _validateQualificationsList();
+      if (_qualificationsUserTyped) {
+        _qualificationsError = _validateQualificationsList();
+      }
     });
   }
 
@@ -374,7 +477,9 @@ class _DoctorProfileViewState extends State<DoctorProfileView>
       _qualificationFocusNodes[index].dispose();
       _qualificationCtrls.removeAt(index);
       _qualificationFocusNodes.removeAt(index);
-      _qualificationsError = _validateQualificationsList();
+      if (_qualificationsUserTyped) {
+        _qualificationsError = _validateQualificationsList();
+      }
     });
   }
 
@@ -387,8 +492,9 @@ class _DoctorProfileViewState extends State<DoctorProfileView>
       return 'يرجى إدخال مؤهل واحد على الأقل';
     }
     for (final s in nonEmpty) {
-      if (!_qualificationsTextRegex.hasMatch(s)) {
-        return 'يرجى إدخال المؤهلات باللغة العربية';
+      final lineError = ProfileFieldValidation.qualificationLine(s);
+      if (lineError != null) {
+        return lineError;
       }
     }
     return null;
@@ -502,9 +608,8 @@ class _DoctorProfileViewState extends State<DoctorProfileView>
                       LengthLimitingTextInputFormatter(_qualMaxLength),
                     ],
                     onChanged: (_) {
-                      if (_qualificationsTouched) {
-                        _qualificationsError = _validateQualificationsList();
-                      }
+                      _qualificationsUserTyped = true;
+                      _qualificationsError = _validateQualificationsList();
                       setState(() {});
                       onChanged?.call();
                     },
@@ -559,7 +664,7 @@ class _DoctorProfileViewState extends State<DoctorProfileView>
               ),
             ),
           ),
-        if (_qualificationsError != null) ...[
+        if (_qualificationsUserTyped && _qualificationsError != null) ...[
           const SizedBox(height: 4),
           Align(
             alignment: Alignment.centerRight,
@@ -631,19 +736,38 @@ class _DoctorProfileViewState extends State<DoctorProfileView>
   }
 
   Future<void> _handleDeleteAccount() async {
+    setState(() => _isDeletePreflightBusy = true);
+    _refreshPersonalDeleteOverlay?.call();
     await _closeKeyboardBeforePopup();
-    final confirmed = await ConfirmationPopup.show(
-      context,
-      title: 'حذف الحساب',
-      message: 'هل أنت متأكد أنك تريد حذف الحساب؟ لا يمكن التراجع عن هذا.',
-      confirmText: 'حذف الحساب',
-      cancelText: 'إلغاء',
-      isDestructive: true,
-    );
+    if (!mounted) return;
+    var confirmed = false;
+    try {
+      confirmed = await ConfirmationPopup.show(
+        context,
+        title: 'تأكيد حذف الحساب',
+        message: 'هل أنت متأكد أنك تريد حذف الحساب؟ لا يمكن التراجع عن هذا.',
+        confirmText: 'حذف الحساب',
+        cancelText: 'إلغاء',
+        isDestructive: true,
+        onDialogVisible: () {
+          if (!mounted) return;
+          setState(() => _isDeletePreflightBusy = false);
+          _refreshPersonalDeleteOverlay?.call();
+        },
+      );
+    } finally {
+      if (mounted && _isDeletePreflightBusy) {
+        setState(() => _isDeletePreflightBusy = false);
+        _refreshPersonalDeleteOverlay?.call();
+      }
+    }
     if (!confirmed) return;
 
     setState(() => _deleteError = null);
     setState(() => _isDeletingAccount = true);
+    _refreshPersonalDeleteOverlay?.call();
+    // Ensure overlay renders before starting the backend delete request.
+    await Future.delayed(const Duration(milliseconds: 80));
 
     try {
       await AuthService.instance.deleteAccountOnBackend();
@@ -654,14 +778,29 @@ class _DoctorProfileViewState extends State<DoctorProfileView>
         MaterialPageRoute(builder: (_) => const LoginView()),
         (route) => false,
       );
+    } on AccountDeleteBlockedException {
+      if (!mounted) return;
+      setState(() => _isDeletingAccount = false);
+      _refreshPersonalDeleteOverlay?.call();
+      await _closeKeyboardBeforePopup();
+      if (!mounted) return;
+      await ConfirmationPopup.show(
+        context,
+        title: 'تعذّر حذف الحساب',
+        message: 'لا يمكن حذف الحساب لوجود مواعيد قادمة. بإمكانك إلغاء المواعيد أولًا ثم المحاولة مرة أخرى.',
+        confirmText: 'حسناً',
+        singleButton: true,
+        useDarkMessageText: true,
+      );
     } catch (e) {
       if (!mounted) return;
       _deleteErrorTimer?.cancel();
+      final message = e is String ? e : e.toString();
       setState(() {
         _isDeletingAccount = false;
-        _deleteError = e as String;
+        _deleteError = message;
       });
-      // Auto-dismiss error so it does not persist.
+      _refreshPersonalDeleteOverlay?.call();
       // Auto-dismiss error so it does not persist.
       _deleteErrorTimer = Timer(const Duration(seconds: 4), () {
         if (mounted) setState(() => _deleteError = null);
@@ -692,7 +831,7 @@ class _DoctorProfileViewState extends State<DoctorProfileView>
   Future<void> _invokeOnSaveCallback() async {
     if (widget.onSave == null) return;
     setState(() {
-      _qualificationsTouched = true;
+      _qualificationsUserTyped = true;
       _qualificationsError = _validateQualificationsList();
     });
     if (_qualificationsError != null) return;
@@ -802,7 +941,7 @@ class _DoctorProfileViewState extends State<DoctorProfileView>
 
     _trimQualificationsInPlace();
     setState(() {
-      _qualificationsTouched = true;
+      _qualificationsUserTyped = true;
       _qualificationsError = _validateQualificationsList();
       _saveError = null;
     });
@@ -973,15 +1112,16 @@ class _DoctorProfileViewState extends State<DoctorProfileView>
     var baselineGender = _gender.trim().toLowerCase();
     var personalSaved = false;
 
+    var nameStartedTyping = false;
+    var ibanStartedTyping = false;
+
     final nameFocusNode = FocusNode();
     final ibanFocusNode = FocusNode();
-    var nameTouched = false;
-    var ibanTouched = false;
     void Function()? refreshPersonalPage;
+    _refreshPersonalDeleteOverlay = null;
 
     void onNameFocusChange() {
       if (!nameFocusNode.hasFocus && personalEditing) {
-        nameTouched = true;
         ProfileFieldValidation.syncTextControllerToNormalizedPersonName(_nameCtrl);
         refreshPersonalPage?.call();
       }
@@ -989,7 +1129,6 @@ class _DoctorProfileViewState extends State<DoctorProfileView>
 
     void onIbanFocusChange() {
       if (!ibanFocusNode.hasFocus && personalEditing) {
-        ibanTouched = true;
         refreshPersonalPage?.call();
       }
     }
@@ -1003,20 +1142,23 @@ class _DoctorProfileViewState extends State<DoctorProfileView>
           return StatefulBuilder(
             builder: (context, setPage) {
               refreshPersonalPage = () => setPage(() {});
+              _refreshPersonalDeleteOverlay = () => setPage(() {});
               final nameValidationError = personalEditing
                   ? _validateDoctorNameLikeRegistration(
                       '$_doctorNameHonorificPrefix${_nameCtrl.text}',
                     )
                   : null;
-              final nameErrorForDisplay = personalEditing && nameTouched
-                  ? nameValidationError
-                  : null;
+              final nameErrorForDisplay =
+                  personalEditing && nameStartedTyping
+                      ? nameValidationError
+                      : null;
               final ibanValidationError = personalEditing
                   ? _validateIbanSuffix(_ibanCtrl.text)
                   : null;
-              final ibanErrorForDisplay = personalEditing && ibanTouched
-                  ? ibanValidationError
-                  : null;
+              final ibanErrorForDisplay =
+                  personalEditing && ibanStartedTyping
+                      ? ibanValidationError
+                      : null;
               final canSavePersonal =
                   personalEditing &&
                   !_saving &&
@@ -1048,14 +1190,16 @@ class _DoctorProfileViewState extends State<DoctorProfileView>
                     });
                     pageGender = _gender;
                     personalEditing = false;
-                    nameTouched = false;
-                    ibanTouched = false;
+                    nameStartedTyping = false;
+                    ibanStartedTyping = false;
                     setPage(() {});
                     return true;
                   },
-                  child: Scaffold(
-                    backgroundColor: BColors.white,
-                    appBar: AppBar(
+                  child: Stack(
+                    children: [
+                      Scaffold(
+                        backgroundColor: BColors.white,
+                        appBar: AppBar(
                       backgroundColor: BColors.white,
                       elevation: 0,
                       surfaceTintColor: Colors.transparent,
@@ -1081,8 +1225,8 @@ class _DoctorProfileViewState extends State<DoctorProfileView>
                           });
                           pageGender = _gender;
                           personalEditing = false;
-                          nameTouched = false;
-                          ibanTouched = false;
+                          nameStartedTyping = false;
+                          ibanStartedTyping = false;
                           setPage(() {});
                           Navigator.of(routeCtx).pop();
                         },
@@ -1106,10 +1250,31 @@ class _DoctorProfileViewState extends State<DoctorProfileView>
                               color: Colors.transparent,
                               child: InkWell(
                                 customBorder: const CircleBorder(),
-                                onTap: () {
-                                  nameTouched = false;
-                                  ibanTouched = false;
-                                  personalEditing = !personalEditing;
+                                onTap: () async {
+                                  if (personalEditing) {
+                                    if (hasUnsavedPersonalChanges()) {
+                                      final shouldDiscard =
+                                          await _confirmDiscardUnsavedChanges();
+                                      if (!shouldDiscard || !context.mounted) {
+                                        return;
+                                      }
+                                      setState(() {
+                                        _saveError = null;
+                                        _nameCtrl.text = baselineNameBody;
+                                        _ibanCtrl.text = baselineIbanSuffix;
+                                        _gender = baselineGender;
+                                      });
+                                      pageGender = _gender;
+                                    }
+                                    personalEditing = false;
+                                    nameStartedTyping = false;
+                                    ibanStartedTyping = false;
+                                    setPage(() {});
+                                    return;
+                                  }
+                                  personalEditing = true;
+                                  nameStartedTyping = false;
+                                  ibanStartedTyping = false;
                                   setPage(() {});
                                 },
                                 child: _circularEditIcon(),
@@ -1119,9 +1284,9 @@ class _DoctorProfileViewState extends State<DoctorProfileView>
                         ),
                       ],
                     ),
-                    body: Stack(
-                      children: [
-                        SingleChildScrollView(
+                        body: Stack(
+                          children: [
+                            SingleChildScrollView(
                           padding: const EdgeInsets.fromLTRB(22, 8, 22, 32),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1134,7 +1299,10 @@ class _DoctorProfileViewState extends State<DoctorProfileView>
                                       _nameCtrl,
                                       prefixText: _doctorNameHonorificPrefix,
                                       focusNode: nameFocusNode,
-                                      onChanged: (_) => setPage(() {}),
+                                      onChanged: (_) {
+                                        nameStartedTyping = true;
+                                        setPage(() {});
+                                      },
                                       inputFormatters: [
                                         LengthLimitingTextInputFormatter(
                                           ProfileFieldValidation
@@ -1173,22 +1341,13 @@ class _DoctorProfileViewState extends State<DoctorProfileView>
                               personalEditing
                                   ? _buildIbanEditField(
                                       focusNode: ibanFocusNode,
-                                      onChanged: (_) => setPage(() {}),
+                                      hasError: ibanErrorForDisplay != null,
+                                      onChanged: (_) {
+                                        ibanStartedTyping = true;
+                                        setPage(() {});
+                                      },
                                     )
                                   : _readOnlyPlainField(_ibanReadOnlyDisplay()),
-                              if (personalEditing &&
-                                  ibanErrorForDisplay != null) ...[
-                                const SizedBox(height: 6),
-                                Text(
-                                  ibanErrorForDisplay,
-                                  textAlign: TextAlign.right,
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: BColors.validationError,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ],
                               if (_saveError != null) ...[
                                 const SizedBox(height: 12),
                                 Text(
@@ -1246,8 +1405,8 @@ class _DoctorProfileViewState extends State<DoctorProfileView>
                                                           .toLowerCase();
                                                       personalSaved = true;
                                                       personalEditing = false;
-                                                      nameTouched = false;
-                                                      ibanTouched = false;
+                                                      nameStartedTyping = false;
+                                                      ibanStartedTyping = false;
                                                     }
                                                     setPage(() {});
                                                   },
@@ -1308,8 +1467,8 @@ class _DoctorProfileViewState extends State<DoctorProfileView>
                                                     });
                                                     pageGender = _gender;
                                                     personalEditing = false;
-                                                    nameTouched = false;
-                                                    ibanTouched = false;
+                                                    nameStartedTyping = false;
+                                                    ibanStartedTyping = false;
                                                     setPage(() {});
                                                   },
                                             style: OutlinedButton.styleFrom(
@@ -1340,15 +1499,15 @@ class _DoctorProfileViewState extends State<DoctorProfileView>
                             ],
                           ),
                         ),
-                        if (_isDeletingAccount) BouhLoadingOverlay(),
-                      ],
-                    ),
-                    bottomNavigationBar: SafeArea(
-                      minimum: const EdgeInsets.fromLTRB(22, 0, 22, 28),
-                      child: SizedBox(
-                        height: 46,
-                        child: ElevatedButton.icon(
-                          onPressed: _isDeletingAccount
+                          ],
+                        ),
+                        bottomNavigationBar: SafeArea(
+                          minimum: const EdgeInsets.fromLTRB(22, 0, 22, 28),
+                          child: SizedBox(
+                            height: 46,
+                            child: ElevatedButton.icon(
+                          onPressed: (_isDeletePreflightBusy ||
+                                  _isDeletingAccount)
                               ? null
                               : () => _handleDeleteAccount(),
                           style: ElevatedButton.styleFrom(
@@ -1359,10 +1518,19 @@ class _DoctorProfileViewState extends State<DoctorProfileView>
                               borderRadius: BorderRadius.circular(16),
                             ),
                           ),
-                          icon: const Icon(
-                            Icons.delete_outline_rounded,
-                            size: 18,
-                          ),
+                          icon: (_isDeletePreflightBusy || _isDeletingAccount)
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.delete_outline_rounded,
+                                  size: 18,
+                                ),
                           label: const Text(
                             'حذف الحساب',
                             style: TextStyle(
@@ -1370,9 +1538,12 @@ class _DoctorProfileViewState extends State<DoctorProfileView>
                               fontWeight: FontWeight.w800,
                             ),
                           ),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                      if (_isDeletingAccount) BouhFullScreenLoadingOverlay(),
+                    ],
                   ),
                 ),
               );
@@ -1385,6 +1556,7 @@ class _DoctorProfileViewState extends State<DoctorProfileView>
     ibanFocusNode.removeListener(onIbanFocusChange);
     nameFocusNode.dispose();
     ibanFocusNode.dispose();
+    _refreshPersonalDeleteOverlay = null;
 
     if (!mounted) return;
     if (!personalSaved) {
@@ -1504,24 +1676,32 @@ class _DoctorProfileViewState extends State<DoctorProfileView>
                                 customBorder: const CircleBorder(),
                                 onTap: () async {
                                   if (professionalEditing) {
-                                    setState(() {
-                                      _replaceQualificationEditors(
-                                        baselineQualsList,
-                                      );
-                                      _yearsOfExperience = baselineYears;
-                                      _saveError = null;
-                                    });
-                                  } else {
-                                    await _refreshProfessionalDraftFromBackend();
-                                    baselineQualsList = List<String>.from(
-                                      _qualificationsForSubmit(),
-                                    );
-                                    baselineQuals = baselineQualsList.join(
-                                      '\n',
-                                    );
-                                    baselineYears = _yearsOfExperience;
+                                    if (hasUnsavedProfessionalChanges()) {
+                                      final shouldDiscard =
+                                          await _confirmDiscardUnsavedChanges();
+                                      if (!shouldDiscard || !context.mounted) {
+                                        return;
+                                      }
+                                      setState(() {
+                                        _replaceQualificationEditors(
+                                          baselineQualsList,
+                                        );
+                                        _yearsOfExperience = baselineYears;
+                                        _saveError = null;
+                                      });
+                                    }
+                                    professionalEditing = false;
+                                    setPage(() {});
+                                    return;
                                   }
-                                  professionalEditing = !professionalEditing;
+                                  await _refreshProfessionalDraftFromBackend();
+                                  if (!context.mounted) return;
+                                  baselineQualsList = List<String>.from(
+                                    _qualificationsForSubmit(),
+                                  );
+                                  baselineQuals = baselineQualsList.join('\n');
+                                  baselineYears = _yearsOfExperience;
+                                  professionalEditing = true;
                                   setPage(() {});
                                 },
                                 child: _circularEditIcon(),
@@ -1611,19 +1791,6 @@ class _DoctorProfileViewState extends State<DoctorProfileView>
                                   ),
                                 ),
                               ),
-                              if (professionalEditing &&
-                                  qualificationsError != null) ...[
-                                const SizedBox(height: 6),
-                                Text(
-                                  qualificationsError,
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    color: BColors.validationError,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
                               if (professionalEditing &&
                                   yearsError != null) ...[
                                 const SizedBox(height: 6),
@@ -1910,17 +2077,6 @@ class _DoctorProfileViewState extends State<DoctorProfileView>
         p.endsWith('.heic');
   }
 
-  Future<String> _uploadDoctorProfilePhotoToStorage(File file) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return '';
-    final ref = FirebaseStorage.instance
-        .ref()
-        .child('doctorProfileImages')
-        .child('${user.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg');
-    await ref.putFile(file);
-    return ref.fullPath;
-  }
-
   Future<bool> _ensureGalleryPermissionForPicker() async {
     final photosStatus = await Permission.photos.status;
     if (photosStatus.isGranted || photosStatus.isLimited) return true;
@@ -1976,7 +2132,9 @@ class _DoctorProfileViewState extends State<DoctorProfileView>
     });
 
     try {
-      final uploadedPath = await _uploadDoctorProfilePhotoToStorage(file);
+      final uploadedPath = await _profileService.uploadDoctorProfilePhotoToStorage(
+        file,
+      );
       if (uploadedPath.isEmpty) {
         throw Exception('تعذر رفع صورة الملف الشخصي');
       }
@@ -1998,7 +2156,12 @@ class _DoctorProfileViewState extends State<DoctorProfileView>
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(_userFriendlyError(e))));
+        ).showSnackBar(
+          SnackBar(
+            content: Text(_userFriendlyError(e)),
+            backgroundColor: BColors.validationError,
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -2042,7 +2205,12 @@ class _DoctorProfileViewState extends State<DoctorProfileView>
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(_userFriendlyError(e))));
+      ).showSnackBar(
+        SnackBar(
+          content: Text(_userFriendlyError(e)),
+          backgroundColor: BColors.validationError,
+        ),
+      );
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -2051,9 +2219,13 @@ class _DoctorProfileViewState extends State<DoctorProfileView>
   Widget _buildIbanEditField({
     FocusNode? focusNode,
     ValueChanged<String>? onChanged,
+    bool hasError = false,
   }) {
     final ibanMax = ProfileFieldValidation.ibanSuffixDigitCount;
     final digitCount = _ibanCtrl.text.length;
+    final borderColor =
+        hasError ? BColors.validationError : BColors.grey;
+    final borderWidth = hasError ? 1.5 : 1.0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -2068,7 +2240,7 @@ class _DoctorProfileViewState extends State<DoctorProfileView>
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: BColors.grey),
+                  border: Border.all(color: borderColor, width: borderWidth),
                   color: BColors.white,
                 ),
                 child: TextField(
@@ -2099,7 +2271,7 @@ class _DoctorProfileViewState extends State<DoctorProfileView>
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: BColors.grey),
+                border: Border.all(color: borderColor, width: borderWidth),
                 color: BColors.grey.withOpacity(0.2),
               ),
               child: const Text(
@@ -2441,7 +2613,7 @@ class _DoctorProfileViewState extends State<DoctorProfileView>
                 ),
               ),
             ),
-            if (_isDeletingAccount || _loadingProfile || _saving)
+            if (_loadingProfile || _saving)
               BouhLoadingOverlay(),
           ],
         ),

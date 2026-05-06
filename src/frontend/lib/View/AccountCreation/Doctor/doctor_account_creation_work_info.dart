@@ -44,19 +44,16 @@ class _DoctorAccountCreationStep2State
   final _classificationFocusNode = FocusNode();
   final _ibanFocusNode = FocusNode();
 
-  /// When false, qualification inline errors are hidden (fresh step). Button still uses validation.
-  bool _qualificationsTouched = false;
-  bool _classificationTouched = false;
-  bool _ibanTouched = false;
+  /// Inline qualification errors only after the user starts typing in a qualification field.
+  bool _qualificationsTyped = false;
+
+  bool _classificationTyped = false;
+  bool _ibanTyped = false;
 
   String? _specialty;
   String? _years;
   bool _isSubmitting = false;
   String? _submitError;
-
-  static final _qualificationsTextRegex = RegExp(
-    r'^[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF0-9\s\.,]+$',
-  );
 
   void _trimQualificationsInPlace() {
     for (final c in _qualificationCtrls) {
@@ -81,8 +78,9 @@ class _DoctorAccountCreationStep2State
       return 'يرجى إدخال مؤهل واحد على الأقل';
     }
     for (final s in nonEmpty) {
-      if (!_qualificationsTextRegex.hasMatch(s)) {
-        return 'يرجى إدخال المؤهلات باللغة العربية';
+      final lineError = ProfileFieldValidation.qualificationLine(s);
+      if (lineError != null) {
+        return lineError;
       }
     }
     return null;
@@ -130,15 +128,15 @@ class _DoctorAccountCreationStep2State
     focusNode.addListener(() {
       if (!focusNode.hasFocus) {
         _trimQualificationsInPlace();
-        _qualificationsTouched = true;
-        _qualificationsError = _validateQualificationsList();
+        if (_qualificationsTyped) {
+          _qualificationsError = _validateQualificationsList();
+        }
         if (mounted) setState(() {});
       }
     });
     _qualificationCtrls.add(ctrl);
     _qualificationFocusNodes.add(focusNode);
-    if (!fromInitialSetup) {
-      _qualificationsTouched = true;
+    if (!fromInitialSetup && _qualificationsTyped) {
       _qualificationsError = _validateQualificationsList();
     }
     if (mounted) setState(() {});
@@ -150,14 +148,14 @@ class _DoctorAccountCreationStep2State
     _qualificationFocusNodes[index].dispose();
     _qualificationCtrls.removeAt(index);
     _qualificationFocusNodes.removeAt(index);
-    _qualificationsTouched = true;
-    _qualificationsError = _validateQualificationsList();
+    if (_qualificationsTyped) {
+      _qualificationsError = _validateQualificationsList();
+    }
     if (mounted) setState(() {});
   }
 
   void _onClassificationFocusChange() {
     if (!_classificationFocusNode.hasFocus) {
-      _classificationTouched = true;
       _classificationFieldKey.currentState?.validate();
       if (mounted) setState(() {});
     }
@@ -165,7 +163,6 @@ class _DoctorAccountCreationStep2State
 
   void _onIbanFocusChange() {
     if (!_ibanFocusNode.hasFocus) {
-      _ibanTouched = true;
       _ibanFieldKey.currentState?.validate();
       if (mounted) setState(() {});
     }
@@ -192,9 +189,9 @@ class _DoctorAccountCreationStep2State
     if (signupData == null || _isSubmitting) return;
     _trimQualificationsInPlace();
     setState(() {
-      _qualificationsTouched = true;
-      _classificationTouched = true;
-      _ibanTouched = true;
+      _qualificationsTyped = true;
+      _classificationTyped = true;
+      _ibanTyped = true;
       _qualificationsError = _validateQualificationsList();
     });
     if (_qualificationsError != null) return;
@@ -352,6 +349,7 @@ class _DoctorAccountCreationStep2State
                     ),
                     child: Form(
                       key: _formKey,
+                      autovalidateMode: AutovalidateMode.disabled,
                       child: Column(
                         children: [
                           // ================= HEADER =================
@@ -449,7 +447,7 @@ class _DoctorAccountCreationStep2State
                                         LengthLimitingTextInputFormatter(70),
                                       ],
                                       onChanged: (_) {
-                                        _qualificationsTouched = true;
+                                        _qualificationsTyped = true;
                                         _qualificationsError =
                                             _validateQualificationsList();
                                         setState(() {});
@@ -500,7 +498,7 @@ class _DoctorAccountCreationStep2State
                                 ),
                               ),
                             ),
-                          if (_qualificationsTouched &&
+                          if (_qualificationsTyped &&
                               _qualificationsError != null) ...[
                             const SizedBox(height: 4),
                             Align(
@@ -529,13 +527,10 @@ class _DoctorAccountCreationStep2State
                             ),
                             focusNode: _classificationFocusNode,
                             onChanged: (_) {
-                              if (_classificationTouched) {
-                                _classificationFieldKey.currentState
-                                    ?.validate();
-                              }
-                              setState(() {});
+                              setState(() => _classificationTyped = true);
+                              _classificationFieldKey.currentState?.validate();
                             },
-                            validator: (v) => _classificationTouched
+                            validator: (v) => _classificationTyped
                                 ? _validateSpecNumber(v)
                                 : null,
                             inputFormatters: [
@@ -555,13 +550,11 @@ class _DoctorAccountCreationStep2State
                             placeholder: 'أدخل 22 رقمًا بعد SA',
                             focusNode: _ibanFocusNode,
                             onChanged: (_) {
-                              if (_ibanTouched) {
-                                _ibanFieldKey.currentState?.validate();
-                              }
-                              setState(() {});
+                              setState(() => _ibanTyped = true);
+                              _ibanFieldKey.currentState?.validate();
                             },
                             validator: (v) =>
-                                _ibanTouched ? _validateIbanSuffix(v) : null,
+                                _ibanTyped ? _validateIbanSuffix(v) : null,
                           ),
 
                           const SizedBox(height: 14),

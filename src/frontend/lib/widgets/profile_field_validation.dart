@@ -32,9 +32,18 @@ class ProfileFieldValidation {
     );
   }
 
-  /// One qualification line (Arabic text, digits, commas): same whitespace rules as [normalizePersonName].
+  //One qualification line (Arabic text, digits, spaces, and only `.` / `,` as extra symbols).
   static String normalizeQualificationLine(String? value) =>
       normalizePersonName(value);
+
+  // When a line contains disallowed special characters (only `.` and `,` / `،` are allowed as punctuation).
+  static const String qualificationsInvalidCharactersMessage =
+      'يسمح بالفاصلة (، أو ,) والنقطة (.) فقط، دون أي رموز أخرى.';
+  static const String qualificationsArabicOnlyMessage =
+      'يرجى إدخال المؤهلات باللغة العربية فقط';
+  static final RegExp _qualificationArabicDigitsSpacesAndPunctuation = RegExp(
+    r'^[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF0-9\s\.,]+$',
+  );
 
   /// Unified max length for caregiver name, doctor name (after honorific), and child name.
   static const int personDisplayNameMaxLength = 20;
@@ -117,6 +126,21 @@ class ProfileFieldValidation {
   );
 
   static final RegExp _latinLetters = RegExp(r'[A-Za-z]');
+
+  /// Qualification line validation:
+  /// - English letters -> Arabic-only message
+  /// - Other disallowed symbols -> punctuation message
+  static String? qualificationLine(String? value) {
+    final normalized = normalizeQualificationLine(value);
+    if (normalized.isEmpty) return null;
+    if (_latinLetters.hasMatch(normalized)) {
+      return qualificationsArabicOnlyMessage;
+    }
+    if (!_qualificationArabicDigitsSpacesAndPunctuation.hasMatch(normalized)) {
+      return qualificationsInvalidCharactersMessage;
+    }
+    return null;
+  }
 
   static const String _doctorNameEnglishNotAllowedMessage =
       'يرجى إدخال الاسم باللغة العربية فقط';

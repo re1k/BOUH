@@ -36,20 +36,28 @@ class ConfirmationPopup extends StatelessWidget {
     bool isDestructive = false,
     bool singleButton = false,
     bool useDarkMessageText = false,
+    VoidCallback? onDialogVisible,
   }) async {
     final result = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => ConfirmationPopup(
-        title: title,
-        message: message,
-        confirmText: confirmText,
-        cancelText: cancelText,
-        isDestructive: isDestructive,
-        singleButton: singleButton,
-        useDarkMessageText: useDarkMessageText,
-        onConfirm: () {},
-      ),
+      builder: (ctx) {
+        if (onDialogVisible != null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            onDialogVisible();
+          });
+        }
+        return ConfirmationPopup(
+          title: title,
+          message: message,
+          confirmText: confirmText,
+          cancelText: cancelText,
+          isDestructive: isDestructive,
+          singleButton: singleButton,
+          useDarkMessageText: useDarkMessageText,
+          onConfirm: () {},
+        );
+      },
     );
     return result ?? false;
   }

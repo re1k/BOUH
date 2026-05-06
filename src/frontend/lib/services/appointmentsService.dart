@@ -7,7 +7,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:bouh/config/api_config.dart';
 import 'package:bouh/dto/upcomingAppointmentDto.dart';
 import 'package:bouh/authentication/AuthSession.dart';
-import 'package:bouh/dto/bookAppointmentRequestDto.dart';
 
 class AppointmentsService {
   final AuthSession _session = AuthSession.instance;
@@ -246,6 +245,17 @@ class AppointmentsService {
     }
 
     return DateTime(y, m, day, resolvedHour, min);
+  }
+
+  /// Same rule as the upcoming tab: hide rows whose end time has passed locally.
+  static List<UpcomingAppointmentDto> filterUpcomingNotEnded(
+    List<UpcomingAppointmentDto> list,
+  ) {
+    final now = DateTime.now();
+    return list.where((dto) {
+      final end = parseAppointmentTime(dto.date, dto.endTime);
+      return end == null || now.isBefore(end);
+    }).toList();
   }
 
   /// Returns (merged previous list, upcoming list). Widget shows merged and

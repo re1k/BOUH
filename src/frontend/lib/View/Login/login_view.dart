@@ -299,7 +299,12 @@ class _LoginViewState extends State<LoginView> {
     });
   }
 
-  void _handleCreateAccount() {
+  Future<void> _handleCreateAccount() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    await SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
+    await Future<void>.delayed(const Duration(milliseconds: 180));
+    if (!mounted) return;
+
     if (widget.onCreateAccount != null) {
       widget.onCreateAccount!();
       return;

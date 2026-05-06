@@ -71,6 +71,18 @@ class _DrawingHistoryPageState extends State<DrawingHistoryPage> {
       });
     } catch (e) {
       setState(() => _loadingChildren = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'تعذر تحميل قائمة الأطفال، يرجى المحاولة مرة أخرى',
+              textDirection: TextDirection.rtl,
+              style: TextStyle(color: BColors.white),
+            ),
+            backgroundColor: BColors.validationError,
+          ),
+        );
+      }
     }
   }
 
@@ -113,6 +125,18 @@ class _DrawingHistoryPageState extends State<DrawingHistoryPage> {
       });
     } catch (e) {
       setState(() => _loadingMore = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'تعذر تحميل المزيد من الرسومات، يرجى المحاولة مرة أخرى',
+              textDirection: TextDirection.rtl,
+              style: TextStyle(color: BColors.white),
+            ),
+            backgroundColor: BColors.validationError,
+          ),
+        );
+      }
     }
   }
 

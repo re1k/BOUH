@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:async';
 import 'dart:io';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:bouh/authentication/AuthService.dart';
 import 'package:bouh/authentication/AuthSession.dart';
@@ -28,8 +30,8 @@ class AccountUpdateResult {
   }
 }
 
-/// `GET /api/accounts/profile`
-/// ` PATCH /api/accounts/doctor/update`
+// GET /api/accounts/profile
+// PATCH /api/accounts/doctor/update
 class ProfileService {
   static const String _networkErrorMessage =
       'حدث خطأ، تأكد أنك متصل بالشبكة وحاول مرة أخرى';
@@ -48,7 +50,7 @@ class ProfileService {
     };
   }
 
-  /// `GET /api/accounts/profile`
+  // GET /api/accounts/profile
   Future<DoctorProfileResponseDto> fetchDoctorProfile() async {
     http.Response res;
     try {
@@ -105,7 +107,74 @@ class ProfileService {
     return DoctorProfileResponseDto.fromJson(map);
   }
 
-  /// `PATCH /api/accounts/doctor/update`
+  // GET /api/accounts/profile for caregiver view (name, email).
+  Future<Map<String, dynamic>> fetchCaregiverProfile() async {
+    var res = await http.get(
+      _url('/api/accounts/profile'),
+      headers: _authHeaders(json: true),
+    );
+
+    if (res.statusCode == 401) {
+      await AuthService.instance.refreshSession();
+      res = await http.get(
+        _url('/api/accounts/profile'),
+        headers: _authHeaders(json: true),
+      );
+    }
+
+    if (res.statusCode == 401 || res.statusCode == 403) {
+      throw Exception('UNAUTHORIZED');
+    }
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception(
+        res.body.isNotEmpty ? res.body : 'Failed to load caregiver profile',
+      );
+    }
+
+    final decoded = jsonDecode(res.body);
+    if (decoded is! Map<String, dynamic>) {
+      throw Exception('INVALID_PROFILE_PAYLOAD');
+    }
+    return decoded;
+  }
+
+  //PATCH /api/accounts/caregiver/update (name only).
+  Future<void> updateCaregiverName(String name) async {
+    var res = await http.patch(
+      _url('/api/accounts/caregiver/update'),
+      headers: _authHeaders(json: true),
+      body: jsonEncode({'name': name}),
+    );
+
+    if (res.statusCode == 401) {
+      await AuthService.instance.refreshSession();
+      res = await http.patch(
+        _url('/api/accounts/caregiver/update'),
+        headers: _authHeaders(json: true),
+        body: jsonEncode({'name': name}),
+      );
+    }
+
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception(
+        res.body.isNotEmpty ? res.body : 'Failed to update caregiver profile',
+      );
+    }
+  }
+
+  // Uploads doctor profile image to Firebase Storage and returns storage path.
+  Future<String> uploadDoctorProfilePhotoToStorage(File file) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return '';
+    final ref = FirebaseStorage.instance
+        .ref()
+        .child('doctorProfileImages')
+        .child('${user.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg');
+    await ref.putFile(file);
+    return ref.fullPath;
+  }
+
+  // PATCH /api/accounts/doctor/update
   Future<AccountUpdateResult> updateDoctor(DoctorUpdateDto dto) async {
     final body = dto.toJson();
     if (body.isEmpty) {

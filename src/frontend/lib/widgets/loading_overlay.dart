@@ -127,6 +127,30 @@ class _CircularGradientProgressPainter extends CustomPainter {
   }
 }
 
+/// Full-screen blocking variant of [BouhLoadingOverlay].
+/// Used when the overlay must cover the entire route (AppBar + body + bottom bar).
+class BouhFullScreenLoadingOverlay extends StatelessWidget {
+  const BouhFullScreenLoadingOverlay({
+    super.key,
+    this.barrierColor,
+    this.size = 56,
+  });
+
+  final Color? barrierColor;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.expand(
+      child: BouhLoadingOverlay(
+        barrierColor: barrierColor,
+        showBarrier: true,
+        size: size,
+      ),
+    );
+  }
+}
+
 /// Inline oval loading indicator using the app's gradient colors.
 /// Use inside buttons or small spaces
 class BouhOvalLoadingIndicator extends StatefulWidget {

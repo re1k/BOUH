@@ -396,10 +396,29 @@ class AuthService {
     if (response.statusCode == 200) {
       return '';
     } else if (response.statusCode == 409) {
-      throw jsonDecode(response.body)['message'];
+      throw AccountDeleteBlockedException(
+        _messageFromDeleteAccountResponse(response.body),
+      );
     } else {
-      throw jsonDecode(response.body)['message'];
+      final msg = _messageFromDeleteAccountResponse(response.body);
+      if (msg != null && msg.isNotEmpty) {
+        throw msg;
+      }
+      throw Exception(
+        'Delete account failed: ${response.statusCode} ${response.body}',
+      );
     }
+  }
+
+  static String? _messageFromDeleteAccountResponse(String body) {
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is Map) {
+        final m = decoded['message'];
+        if (m != null) return m.toString();
+      }
+    } catch (_) {}
+    return null;
   }
 
   //Session helper: set session from user
@@ -419,4 +438,11 @@ class AuthService {
 
     await _setSessionFromUser(user);
   }
+}
+
+// Backend returned 409 Conflict when deleting an account (blocked by rules).
+class AccountDeleteBlockedException implements Exception {
+  AccountDeleteBlockedException([this.serverMessage]);
+
+  final String? serverMessage;
 }
