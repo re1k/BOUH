@@ -18,7 +18,9 @@ import com.bouh.backend.service.GcsImageService;
 import com.bouh.backend.model.Dto.Qualificationrequestdto;
 import com.google.cloud.firestore.DocumentReference;
 import com.google.cloud.firestore.DocumentSnapshot;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Repository
 public class DoctorManagementRepository {
 
@@ -242,6 +244,20 @@ public class DoctorManagementRepository {
                 .document(requestId)
                 .delete()
                 .get();
+    }
+
+    public void deleteQualificationRequestsByDoctorId(String doctorId) {
+        try {
+            QuerySnapshot snapshot = firestore.collection("qualificationEditRequests")
+                    .whereEqualTo("doctorId", doctorId)
+                    .get()
+                    .get();
+            for (QueryDocumentSnapshot doc : snapshot.getDocuments()) {
+                doc.getReference().delete();
+            }
+        } catch (Exception e) {
+            log.error("Failed to delete qualification requests for doctorId={}: {}", doctorId, e.getMessage());
+        }
     }
 
     public String getDoctorIdFromRequest(String requestId)

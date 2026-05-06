@@ -170,14 +170,12 @@ class SuggestedDoctorCard extends StatelessWidget {
       );
     }
     return ClipOval(
-      child: Container(
+      child: SizedBox(
         width: _avatarSize,
         height: _avatarSize,
-        color: BColors.softGrey,
-        child: Icon(
-          Icons.person,
-          color: BColors.darkGrey,
-          size: _avatarSize * 0.5,
+        child: Image.asset(
+          'assets/Images/default_ProfileImage.png',
+          fit: BoxFit.cover,
         ),
       ),
     );

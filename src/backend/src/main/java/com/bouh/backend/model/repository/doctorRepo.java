@@ -27,6 +27,7 @@ public class doctorRepo {
     private final Firestore firestore;
     private final AppointmentRepo appointment;
     private final GcsImageService gcsImageService;
+    private final DoctorManagementRepository doctorManagementRepository;
 
     @Autowired
     private ApplicationContext context;
@@ -34,11 +35,13 @@ public class doctorRepo {
     public doctorRepo(
             Firestore firestore,
             AppointmentRepo appointment,
-            GcsImageService gcsImageService) {
+            GcsImageService gcsImageService,
+            DoctorManagementRepository doctorManagementRepository) {
 
         this.firestore = firestore;
         this.appointment = appointment;
         this.gcsImageService = gcsImageService;
+        this.doctorManagementRepository = doctorManagementRepository;
     }
 
      /*
@@ -429,6 +432,9 @@ public Map<String, Boolean> getDoctorMonthAvailability(
            if (doctor.getProfilePhotoURL() != null) {
                  gcsImageService.deleteImage(doctor.getProfilePhotoURL());
             }
+
+            // delete any pending qualification edit requests
+            doctorManagementRepository.deleteQualificationRequestsByDoctorId(uid);
 
             // soft-delete: keep appointments data, and mark as deactivated
             firestore.collection("doctors").document(uid)

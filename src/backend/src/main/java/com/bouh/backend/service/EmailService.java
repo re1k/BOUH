@@ -114,7 +114,7 @@ public class EmailService {
             helper.setText(
                     "<div dir='rtl' style='text-align: right; font-family: Arial, sans-serif;'>" +
                             "<p>مرحبًا " + caregiverName + "،</p>" +
-                            "<p>نود إعلامك بأنه تم حذف حساب الطبيب <strong>" + doctorName + "</strong> من قبل المسؤول.</p>" +
+                            "<p>نود إعلامك بأن الطبيب <strong>" + doctorName + "</strong> لم يعد متوفرًا على التطبيق.</p>" +
                             "<p>نتيجةً لذلك، تم إلغاء موعدك القادم مع الطبيب واسترداد مبلغ الدفع إلى حسابك.</p>" +
                             "<p>نعتذر عن أي إزعاج، ويمكنك حجز موعد مع طبيب آخر من خلال التطبيق.</p>" +
                             "<p>فريق بوح</p>" +

@@ -1,5 +1,6 @@
 package com.bouh.backend.model.repository;
 
+import com.bouh.backend.model.Dto.appointmentDto;
 import com.bouh.backend.model.Dto.caregiverDto;
 import com.bouh.backend.model.Dto.childDto;
 import com.google.api.core.ApiFuture;
@@ -25,9 +26,11 @@ public class caregiverRepo {
     // springBoot on config it will inject the globally created FireStore bean
     // (in Config File) into this Repo instance of fireStore
     private final Firestore firestore;
+    private final AppointmentRepo appointmentRepo;
 
-    public caregiverRepo(Firestore firestore) {
+    public caregiverRepo(Firestore firestore, AppointmentRepo appointmentRepo) {
         this.firestore = firestore; // set the instance so this repo use it
+        this.appointmentRepo = appointmentRepo;
     }
 
     /*
@@ -102,6 +105,20 @@ public class caregiverRepo {
      */
     public void deleteCaregiver(String uid) {
         try {
+            List<appointmentDto> upcoming = appointmentRepo.findUpcomingByCaregiverId(uid);
+            for (appointmentDto appt : upcoming) {
+                try {
+                    appointmentRepo.deleteByIdAtomically(appt.getAppointmentId());
+                } catch (Exception e) {
+                    log.error("Failed to delete appointment id={} for caregiver uid={}: {}",
+                            appt.getAppointmentId(), uid, e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            log.error("Failed to fetch upcoming appointments for caregiver uid={}: {}", uid, e.getMessage());
+        }
+
+        try {
             DocumentReference caregiverRef = firestore.collection("caregivers").document(uid);
 
             // soft-delete: keep data, mark as deactivated
@@ -110,7 +127,7 @@ public class caregiverRepo {
                 "fcmToken", FieldValue.delete()
             ).get();
 
-            // delete Firebase Authentication account 
+            // delete Firebase Authentication account
             FirebaseAuth.getInstance().deleteUser(uid);
 
         } catch (Exception e) {
