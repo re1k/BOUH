@@ -265,8 +265,8 @@ class CaregiverHomepageState extends State<CaregiverHomepage>
       actionColor = BColors.accent;
       onActionTap = () => _joinAgoraMeeting(dto);
     } else if (canCancel) {
-      actionLabel = 'الغاء';
-      actionColor = _cancelRed;
+      actionLabel = 'إلغاء';
+      actionColor = BColors.destructiveError;
 
       onActionTap = _refundLoading
           ? null

@@ -57,7 +57,8 @@ class AppointmentCard extends StatelessWidget {
               width: 52,
               height: 52,
               child: Image(
-                image: profileImage ??
+                image:
+                    profileImage ??
                     const AssetImage('assets/images/default_ProfileImage.png'),
                 fit: BoxFit.cover,
               ),
@@ -169,7 +170,7 @@ class AppointmentCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
       decoration: BoxDecoration(
-        color: isStart ? BColors.accent : Colors.redAccent,
+        color: isStart ? BColors.accent : BColors.destructiveError,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(

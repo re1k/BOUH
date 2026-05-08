@@ -1,19 +1,24 @@
 package com.bouh.backend.model.repository;
-
+import com.bouh.backend.config.TimeSlotConfig;
 import com.bouh.backend.model.Dto.appointmentDto;
 import com.bouh.backend.model.Dto.caregiverDto;
 import com.bouh.backend.model.Dto.childDto;
-import com.google.api.core.ApiFuture;
+import com.bouh.backend.model.Dto.AvailabilitySchedule.AvailabilityDayDto;
+import com.bouh.backend.model.Dto.AvailabilitySchedule.AvailabilityStoredSlotDto;
 import com.google.cloud.Timestamp;
 import com.google.cloud.firestore.*;
 import com.google.firebase.auth.FirebaseAuth;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -27,10 +32,12 @@ public class caregiverRepo {
     // (in Config File) into this Repo instance of fireStore
     private final Firestore firestore;
     private final AppointmentRepo appointmentRepo;
+    private final AvailabilityScheduleRepo availabilityScheduleRepo;
 
-    public caregiverRepo(Firestore firestore, AppointmentRepo appointmentRepo) {
+    public caregiverRepo(Firestore firestore, AppointmentRepo appointmentRepo,AvailabilityScheduleRepo availabilityScheduleRepo ) {
         this.firestore = firestore; // set the instance so this repo use it
         this.appointmentRepo = appointmentRepo;
+        this.availabilityScheduleRepo = availabilityScheduleRepo;
     }
 
     /*
@@ -49,8 +56,6 @@ public class caregiverRepo {
             caregiverData.put("email", dto.getEmail());
             caregiverData.put("fcmToken", dto.getFcmToken());
             caregiverData.put("isActivated", true);
-
-
 
             batch.set(caregiverRef, caregiverData);
 
@@ -105,9 +110,12 @@ public class caregiverRepo {
      */
     public void deleteCaregiver(String uid) {
         try {
+
+            // Delete any upcoming appointments without a refund
             List<appointmentDto> upcoming = appointmentRepo.findUpcomingByCaregiverId(uid);
             for (appointmentDto appt : upcoming) {
                 try {
+                    unlockAvailabilitySlot(appt);
                     appointmentRepo.deleteByIdAtomically(appt.getAppointmentId());
                 } catch (Exception e) {
                     log.error("Failed to delete appointment id={} for caregiver uid={}: {}",
@@ -123,9 +131,8 @@ public class caregiverRepo {
 
             // soft-delete: keep data, mark as deactivated
             caregiverRef.update("isActivated", false,
-                "email", FieldValue.delete(),
-                "fcmToken", FieldValue.delete()
-            ).get();
+                    "email", FieldValue.delete(),
+                    "fcmToken", FieldValue.delete()).get();
 
             // delete Firebase Authentication account
             FirebaseAuth.getInstance().deleteUser(uid);
@@ -134,6 +141,48 @@ public class caregiverRepo {
             log.error("Failed to delete caregiver account for uid={}", uid, e);
             throw new RuntimeException("Failed to delete caregiver account", e);
         }
+    }
+
+    private void unlockAvailabilitySlot(appointmentDto appt) {
+
+        Timestamp startTs = appt.getStartDateTime();
+        String doctorId = appt.getDoctorId();
+
+        if (doctorId == null || doctorId.isBlank() || startTs == null)
+            return;
+
+        ZonedDateTime start = ZonedDateTime.ofInstant(
+                Instant.ofEpochSecond(startTs.getSeconds(), startTs.getNanos()),
+                ZoneId.of("Asia/Riyadh"));
+
+        String date = start.toLocalDate().format(DateTimeFormatter.ISO_LOCAL_DATE);
+
+        int slotIndex = TimeSlotConfig.getSlotIndexForStartTime(start.toLocalTime());
+
+        if (slotIndex < 0)
+            return;
+
+        AvailabilityDayDto day = availabilityScheduleRepo.getDay(doctorId, date);
+
+        if (day == null || day.getSlots() == null)
+            return;
+
+        for (AvailabilityStoredSlotDto slot : day.getSlots()) {
+
+            if (slot.getIndex() == slotIndex) {
+                slot.setBooked(false);
+                break;
+            }
+        }
+
+        Map<String, AvailabilityDayDto> daysToUpdate = new HashMap<>();
+
+        daysToUpdate.put(date, day);
+
+        availabilityScheduleRepo.update(
+                doctorId,
+                daysToUpdate,
+                new HashSet<>());
     }
 
     public Timestamp ConvertChildDOB(LocalDate childDob) {
