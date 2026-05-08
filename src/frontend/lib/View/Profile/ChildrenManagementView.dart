@@ -779,8 +779,9 @@ class _AddChildDialogState extends State<_AddChildDialog> {
                 controller: nameCtrl,
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(
-                    RegExp(r"[a-zA-Z\u0600-\u06FF\s]"),
+                    RegExp(r"[a-zA-Z0-9\u0600-\u06FF\s]"),
                   ),
+                  LengthLimitingTextInputFormatter(10),
                 ],
                 decoration: InputDecoration(label: _requiredLabel("اسم الطفل")),
               ),
