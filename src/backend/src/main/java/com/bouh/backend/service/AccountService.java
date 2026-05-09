@@ -104,8 +104,21 @@ public class AccountService {
         }
     }
 
+    private static final String DOCTOR_NAME_HONORIFIC = "د. ";
+
     /** Updates doctor profile fields. */
     public accountResponseDto updateDoctor(String uid, doctorUpdateDto dto) {
+        validateUpdateRequest(dto);
+
+        // Normalize name: collapse spaces while preserving the "د. " prefix
+        if (dto.getName() != null) {
+            String raw = dto.getName().trim();
+            if (raw.startsWith(DOCTOR_NAME_HONORIFIC)) {
+                String body = raw.substring(DOCTOR_NAME_HONORIFIC.length()).trim().replaceAll("\\s+", " ");
+                dto.setName(DOCTOR_NAME_HONORIFIC + body);
+            }
+        }
+
         try {
             log.info("Updating doctor profile for uid={}", uid);
 
@@ -122,8 +135,90 @@ public class AccountService {
             return new accountResponseDto(
                     false,
                     "UPDATE_FAILED",
-                     e.getMessage() != null ? e.getMessage() : "فشل تحديث بيانات الدكتور");
+                    e.getMessage() != null ? e.getMessage() : "فشل تحديث بيانات الدكتور");
         }
+    }
+
+    private void validateUpdateRequest(doctorUpdateDto dto) {
+
+        // Name validation:
+        if (dto.getName() != null) {
+            String raw = dto.getName().trim();
+            if (raw.isEmpty())
+                throw new IllegalArgumentException("name is required");
+
+            // Strip "د. " honorific prefix if present
+            // Remove extra spaces between words
+            String body = raw.startsWith(DOCTOR_NAME_HONORIFIC)
+                    ? raw.substring(DOCTOR_NAME_HONORIFIC.length()).trim()
+                    : raw;
+            String normalizedBody = body.replaceAll("\\s+", " ");
+
+            if (normalizedBody.length() > 20)
+                throw new IllegalArgumentException("name must not exceed 20 characters");
+            if (normalizedBody.matches(".*[a-zA-Z].*"))
+                throw new IllegalArgumentException("name must be in Arabic only");
+            if (normalizedBody.matches(".*[0-9\\u0660-\\u0669\\u06F0-\\u06F9].*"))
+                throw new IllegalArgumentException("name cannot contain numbers or special characters");
+            // Disallow tatweel and Arabic punctuation symbols (e.g. ـ ، ؛ ؟)
+            if (normalizedBody.matches(".*[\\u0640\\u060C\\u061B\\u061F\\u066A-\\u066D\\u06DD\\u06DE\\u06E9\\uFD3C\\uFD3D].*"))
+                throw new IllegalArgumentException("name cannot contain numbers or special characters");
+
+            // Allow Arabic letters and spaces only
+            if (!normalizedBody.matches("[\\u0600-\\u06FF\\u0750-\\u077F\\u08A0-\\u08FF\\s]+"))
+                throw new IllegalArgumentException("name cannot contain numbers or special characters");
+        }
+
+        // Gender validation:
+        if (dto.getGender() != null) {
+            String gender = dto.getGender().trim();
+            if (gender.isEmpty())
+                throw new IllegalArgumentException("gender is required");
+            if (!gender.equals("male") && !gender.equals("female"))
+                throw new IllegalArgumentException("gender must be male or female");
+        }
+
+        // Years of experience validation:
+        if (dto.getYearsOfExperience() != null) {
+            // Valid range is 1 to 5
+            if (dto.getYearsOfExperience() < 1 || dto.getYearsOfExperience() > 5)
+                throw new IllegalArgumentException("yearsOfExperience must be between 1 and 5");
+        }
+
+        // Qualifications validation:
+        if (dto.getQualifications() != null) {
+            if (dto.getQualifications().isEmpty())
+                throw new IllegalArgumentException("qualifications must not be empty");
+            if (dto.getQualifications().size() > 12)
+                throw new IllegalArgumentException("qualifications must not exceed 12 items");
+            for (String q : dto.getQualifications()) {
+                if (q == null || q.trim().isEmpty()) continue;
+                String trimmed = q.trim();
+                if (trimmed.length() > 70)
+                    throw new IllegalArgumentException("each qualification must not exceed 70 characters");
+                if (trimmed.matches(".*[a-zA-Z].*"))
+                    throw new IllegalArgumentException("qualifications must be in Arabic only");
+                // Allow:
+                // - Arabic letters
+                // - Numbers
+                // - Spaces and basic punctuation
+                if (!trimmed.matches("[\\u0600-\\u06FF\\u0750-\\u077F\\u08A0-\\u08FF\\uFB50-\\uFDFF\\uFE70-\\uFEFF0-9\\s.,]+"))
+                    throw new IllegalArgumentException("qualifications contain invalid characters");
+            }
+        }
+
+        // Iban validation:
+        if (dto.getIban() != null) {
+            if (dto.getIban().trim().isEmpty())
+                throw new IllegalArgumentException("iban is required");
+            // Must match Saudi IBAN format: SA followed by 22 digits
+            if (!dto.getIban().trim().matches("SA[0-9]{22}"))
+                throw new IllegalArgumentException("iban must be a valid Saudi IBAN (SA followed by 22 digits)");
+        }
+
+        // Profile photo URL validation:
+        if (dto.getProfilePhotoURL() != null && dto.getProfilePhotoURL().trim().isEmpty())
+            throw new IllegalArgumentException("profilePhotoURL cannot be empty");
     }
 
     /** Updates caregiver name. */

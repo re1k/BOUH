@@ -907,9 +907,17 @@ class _AddChildDialogState extends State<_AddChildDialog> {
                 : () {
                     final err = _validate();
                     if (err != null) {
-                      ScaffoldMessenger.of(
-                        context,
-                      ).showSnackBar(SnackBar(content: Text(err)));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          backgroundColor: BColors.validationError,
+                          content: Text(
+                            err,
+                            textDirection: TextDirection.rtl,
+                            textAlign: TextAlign.right,
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                        ),
+                      );
                       return;
                     }
 

@@ -1,4 +1,5 @@
 package com.bouh.backend.service;
+
 import com.bouh.backend.model.repository.DoctorSuggestionRepository;
 import org.springframework.stereotype.Service;
 
@@ -19,7 +20,7 @@ public class DoctorSuggestionService {
     public List<String> suggestDoctors(String caregiverId, String childId, String emotionClass)
             throws ExecutionException, InterruptedException {
 
-        boolean shouldSuggest = doctorSuggestionRepository
+        boolean shouldSuggest = !emotionClass.equalsIgnoreCase("سعادة") && doctorSuggestionRepository
                 .hasEmotionExceededThreshold(caregiverId, childId, emotionClass);
 
         if (!shouldSuggest) {
@@ -33,6 +34,6 @@ public class DoctorSuggestionService {
         return doctorsData.stream()
                 .map(doc -> (String) doc.get("id"))
                 .collect(Collectors.toList());
-            }
-
     }
+
+}
