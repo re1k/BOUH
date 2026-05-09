@@ -1,4 +1,3 @@
-import 'package:bouh/View/caregiverHomepage/caregiverHomepage.dart';
 import 'package:bouh/View/caregiverHomepage/caregivernavbar.dart';
 import 'package:flutter/material.dart';
 import 'package:bouh/theme/base_themes/colors.dart';
@@ -6,8 +5,6 @@ import 'payment_sheet.dart';
 import 'package:flutter_stripe/flutter_stripe.dart' as stripe;
 import 'package:bouh/services/appointmentsService.dart';
 import 'package:bouh/dto/bookAppointmentRequestDto.dart';
-import 'package:bouh/View/viewAppointments/bookedAppointmentsUpcoming.dart';
-import 'package:bouh/authentication/AuthSession.dart';
 import 'package:bouh/widgets/loading_overlay.dart';
 
 class AppointmentDetailsView extends StatefulWidget {

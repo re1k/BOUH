@@ -8,8 +8,6 @@ import static org.mockito.Mockito.*;
 import com.bouh.backend.model.Dto.accountManagment.accountResponseDto;
 import com.bouh.backend.model.Dto.profiles.doctorUpdateDto;
 import com.bouh.backend.model.repository.ProfilesRepo;
-import com.bouh.backend.model.repository.caregiverRepo;
-import com.bouh.backend.model.repository.doctorRepo;
 import com.bouh.backend.service.AccountService;
 
 import java.util.List;
@@ -25,12 +23,6 @@ public class EditDoctorProfileUnitTest {
 
     @Mock
     private ProfilesRepo profilesRepo;
-
-    @Mock
-    private caregiverRepo caregiverRepo;
-
-    @Mock
-    private doctorRepo doctorRepo;
 
     @InjectMocks
     private AccountService accountService;
@@ -616,31 +608,6 @@ public class EditDoctorProfileUnitTest {
 
         // Verify message
         assertEquals("iban must be a valid Saudi IBAN (SA followed by 22 digits)", exception.getMessage());
-
-        // Verify repository was never called
-        verifyNoInteractions(profilesRepo);
-    }
-
-    @Test
-    void updateDoctorProfile_shouldThrowException_whenProfilePhotoURLIsBlank() {
-
-        // Create a request with a blank profilePhotoURL
-        doctorUpdateDto request = createRequest(
-                null,
-                null,
-                null,
-                null,
-                "   ",
-                null
-        );
-
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> accountService.updateDoctor(doctorId, request)
-        );
-
-        // Verify message
-        assertEquals("profilePhotoURL cannot be empty", exception.getMessage());
 
         // Verify repository was never called
         verifyNoInteractions(profilesRepo);

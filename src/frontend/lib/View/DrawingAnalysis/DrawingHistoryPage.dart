@@ -65,10 +65,17 @@ class _DrawingHistoryPageState extends State<DrawingHistoryPage> {
     if (caregiverId == null) return;
     try {
       final children = await _childrenService.getChildrenNames(caregiverId);
+      if (!mounted) return;
       setState(() {
         _children = children;
         _loadingChildren = false;
+        if (children.isNotEmpty) {
+          _selectedChild = children.first;
+        }
       });
+      if (children.isNotEmpty) {
+        await _loadFirstPage(children.first.id);
+      }
     } catch (e) {
       setState(() => _loadingChildren = false);
       if (mounted) {

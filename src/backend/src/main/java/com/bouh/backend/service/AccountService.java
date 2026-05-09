@@ -216,9 +216,6 @@ public class AccountService {
                 throw new IllegalArgumentException("iban must be a valid Saudi IBAN (SA followed by 22 digits)");
         }
 
-        // Profile photo URL validation:
-        if (dto.getProfilePhotoURL() != null && dto.getProfilePhotoURL().trim().isEmpty())
-            throw new IllegalArgumentException("profilePhotoURL cannot be empty");
     }
 
     /** Updates caregiver name. */

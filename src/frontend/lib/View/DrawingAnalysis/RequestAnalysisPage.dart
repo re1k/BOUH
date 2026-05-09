@@ -53,6 +53,9 @@ class _RequestAnalysisPageState extends State<RequestAnalysisPage> {
       setState(() {
         _children = children;
         _loadingChildren = false;
+        if (children.isNotEmpty) {
+          _selectedChild = children.first;
+        }
       });
     } catch (e) {
       setState(() => _loadingChildren = false);

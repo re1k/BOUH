@@ -23,7 +23,7 @@ class AvailabilityScheduleServiceTest {
 
     // SLOT_COUNT is read at test-time so tests stay correct if the flag changes.
     // Currently: AFTERNOON_SLOT_COUNT(10) + MORNING_SLOT_COUNT(2) = 12
-    private static final int SLOT_COUNT = TimeSlotConfig.SLOT_COUNT; // 12
+    private static final int SLOT_COUNT = TimeSlotConfig.AFTERNOON_SLOT_COUNT; // 12
     private static final int MAX_SLOT_INDEX = SLOT_COUNT - 1; // 11
 
     @Mock
@@ -32,7 +32,7 @@ class AvailabilityScheduleServiceTest {
     @InjectMocks
     private AvailabilityScheduleService service;
 
-    private static final String DOCTOR_ID = "doctor-001";
+    private static final String DOCTOR_ID = "N7k5KcwJqtYiuKhuEHWR8K1VaMP2";
 
     // Helper builders
 
@@ -99,6 +99,37 @@ class AvailabilityScheduleServiceTest {
     }
 
     // getSchedule()
+
+    @Test
+    void getSchedule_validRange_returnsStoredAndEmptyDays() {
+
+        String storedDate = tomorrow();
+        Map<String, AvailabilityDayDto> stored = new HashMap<>();
+        stored.put(storedDate, buildDay(storedDate, 0, 2, 5));
+
+        when(scheduleRepo.getDaysInRangeMap(
+                eq(DOCTOR_ID),
+                eq(today()),
+                eq(tomorrow())))
+                .thenReturn(stored);
+
+        AvailabilityScheduleDto result = service.getSchedule(DOCTOR_ID, today(), tomorrow());
+
+        // today has no stored data → empty slots
+        boolean hasTodayEmpty = result.getDays().stream()
+                .anyMatch(d -> today().equals(d.getDate()) && d.getSlots().isEmpty());
+        assertThat(hasTodayEmpty).isTrue();
+
+        // tomorrow has stored data → slots 0, 2, 5
+        boolean hasTomorrowSlots = result.getDays().stream()
+                .anyMatch(d -> tomorrow().equals(d.getDate()) && d.getSlots().size() >= 3);
+        assertThat(hasTomorrowSlots).isTrue();
+
+        verify(scheduleRepo).getDaysInRangeMap(
+                eq(DOCTOR_ID),
+                eq(today()),
+                eq(tomorrow()));
+    }
 
     @Test
     void getSchedule_whenDayNotSet_returnsEmptyDay() {
@@ -356,86 +387,172 @@ class AvailabilityScheduleServiceTest {
     // updateSchedule() – delete-on-empty logic
 
     @Test
-    void updateSchedule_emptyIndexes_dateScheduledForDeletion() {
-        String date = tomorrow();
-        when(scheduleRepo.getDaysByDates(any(), any())).thenReturn(new HashMap<>());
+    void updateSchedule_emptyIndexes_deletesOneFromExistingDocs() {
 
-        ArgumentCaptor<Set<String>> deleteCaptor = ArgumentCaptor.captor();
+        String date1 = tomorrow();
+        String date2 = oneMonthAhead();
+
+        Map<String, AvailabilityDayDto> existing = new HashMap<>();
+        existing.put(date1, buildDay(date1, 0, 2, 5)); // doctor clears this one
+        existing.put(date2, buildDay(date2, 1, 3)); // this one is untouched
+
+        when(scheduleRepo.getDaysByDates(eq(DOCTOR_ID), eq(List.of(date1))))
+                .thenReturn(existing);
+
         ArgumentCaptor<Map<String, AvailabilityDayDto>> writeCaptor = ArgumentCaptor.captor();
-        doNothing().when(scheduleRepo).update(any(), writeCaptor.capture(), deleteCaptor.capture());
+        ArgumentCaptor<Set<String>> deleteCaptor = ArgumentCaptor.captor();
+        doNothing().when(scheduleRepo).update(eq(DOCTOR_ID), writeCaptor.capture(), deleteCaptor.capture());
 
         AvailabilityDayUpdateDto day = new AvailabilityDayUpdateDto();
-        day.setDate(date);
-        day.setOfferedSlotIndexes(new ArrayList<>());
+        day.setDate(date1);
+        day.setOfferedSlotIndexes(new ArrayList<>()); // empty → delete only date1
         AvailabilityScheduleUpdateDto req = new AvailabilityScheduleUpdateDto();
         req.setDays(List.of(day));
 
         service.updateSchedule(DOCTOR_ID, req);
 
-        assertThat(deleteCaptor.getValue()).contains(date);
+        assertThat(deleteCaptor.getValue()).contains(date1);
+        assertThat(deleteCaptor.getValue()).doesNotContain(date2);
+
         assertThat(writeCaptor.getValue()).isEmpty();
 
-        verify(scheduleRepo).getDaysByDates(eq(DOCTOR_ID), eq(List.of(date)));
-        verify(scheduleRepo).update(DOCTOR_ID, writeCaptor.getValue(), deleteCaptor.getValue());
-    }
-
-    // updateSchedule() – successful write paths
-
-    @Test
-    void updateSchedule_noExistingDoc_writesCorrectSlotsAsNotBooked() {
-        String date = tomorrow();
-        when(scheduleRepo.getDaysByDates(any(), any())).thenReturn(new HashMap<>());
-
-        ArgumentCaptor<Map<String, AvailabilityDayDto>> writeCaptor = ArgumentCaptor.captor();
-        ArgumentCaptor<Set<String>> deleteCaptor = ArgumentCaptor.captor();
-        doNothing().when(scheduleRepo).update(any(), writeCaptor.capture(), deleteCaptor.capture());
-
-        service.updateSchedule(DOCTOR_ID, buildRequest(date, 0, 5, MAX_SLOT_INDEX));
-
-        Map<String, AvailabilityDayDto> written = writeCaptor.getValue();
-
-        // check correct indexes
-        assertThat(written).containsKey(date);
-        assertThat(written.get(date).getSlots())
-                .hasSize(3)
-                .extracting(AvailabilityStoredSlotDto::getIndex)
-                .containsExactlyInAnyOrder(0, 5, MAX_SLOT_INDEX);
-
-        // check all slots are not booked
-        assertThat(written.get(date).getSlots())
-                .allMatch(s -> !s.isBooked());
-
-        verify(scheduleRepo).getDaysByDates(eq(DOCTOR_ID), eq(List.of(date)));
+        verify(scheduleRepo).getDaysByDates(eq(DOCTOR_ID), eq(List.of(date1)));
         verify(scheduleRepo).update(DOCTOR_ID, writeCaptor.getValue(), deleteCaptor.getValue());
     }
 
     @Test
-    void updateSchedule_multipleDays_allDaysWritten() {
+    void updateSchedule_multipleEmptyIndexes_existingDocs_multipleDatesDeleted() {
+
         String date1 = tomorrow();
         String date2 = oneMonthAhead();
-        when(scheduleRepo.getDaysByDates(any(), any())).thenReturn(new HashMap<>());
+
+        Map<String, AvailabilityDayDto> existing = new HashMap<>();
+        existing.put(date1, buildDay(date1, 0, 2));
+        existing.put(date2, buildDay(date2, 1, 3));
+
+        when(scheduleRepo.getDaysByDates(eq(DOCTOR_ID), any()))
+                .thenReturn(existing);
 
         ArgumentCaptor<Map<String, AvailabilityDayDto>> writeCaptor = ArgumentCaptor.captor();
         ArgumentCaptor<Set<String>> deleteCaptor = ArgumentCaptor.captor();
-        doNothing().when(scheduleRepo).update(any(), writeCaptor.capture(), deleteCaptor.capture());
+        doNothing().when(scheduleRepo).update(eq(DOCTOR_ID), writeCaptor.capture(), deleteCaptor.capture());
 
         AvailabilityDayUpdateDto d1 = new AvailabilityDayUpdateDto();
         d1.setDate(date1);
-        d1.setOfferedSlotIndexes(new ArrayList<>(List.of(0)));
+        d1.setOfferedSlotIndexes(new ArrayList<>()); // empty → delete
 
         AvailabilityDayUpdateDto d2 = new AvailabilityDayUpdateDto();
         d2.setDate(date2);
-        d2.setOfferedSlotIndexes(new ArrayList<>(List.of(1, 2)));
+        d2.setOfferedSlotIndexes(new ArrayList<>()); // empty → delete
 
         AvailabilityScheduleUpdateDto req = new AvailabilityScheduleUpdateDto();
         req.setDays(List.of(d1, d2));
 
         service.updateSchedule(DOCTOR_ID, req);
 
-        assertThat(writeCaptor.getValue()).containsKeys(date1, date2);
-
-        verify(scheduleRepo).getDaysByDates(eq(DOCTOR_ID), eq(List.of(date1, date2)));
+        verify(scheduleRepo).getDaysByDates(eq(DOCTOR_ID), any());
         verify(scheduleRepo).update(DOCTOR_ID, writeCaptor.getValue(), deleteCaptor.getValue());
+
+        assertThat(deleteCaptor.getValue()).contains(date1, date2);
+
+        assertThat(writeCaptor.getValue()).isEmpty();
+    }
+
+    // updateSchedule() – successful write paths
+
+    @Test
+    void updateSchedule_writeOneSlot_noExistingDoc() {
+        String date = tomorrow();
+        when(scheduleRepo.getDaysByDates(eq(DOCTOR_ID), eq(List.of(date))))
+                .thenReturn(new HashMap<>());
+
+        ArgumentCaptor<Map<String, AvailabilityDayDto>> writeCaptor = ArgumentCaptor.captor();
+        ArgumentCaptor<Set<String>> deleteCaptor = ArgumentCaptor.captor();
+        doNothing().when(scheduleRepo).update(eq(DOCTOR_ID), writeCaptor.capture(), deleteCaptor.capture());
+
+        service.updateSchedule(DOCTOR_ID, buildRequest(date, 3));
+
+        List<AvailabilityStoredSlotDto> slots = writeCaptor.getValue().get(date).getSlots();
+        assertThat(slots).hasSize(1);
+        assertThat(slots.get(0).getIndex()).isEqualTo(3);
+        assertThat(slots.get(0).isBooked()).isFalse();
+        assertThat(deleteCaptor.getValue()).isEmpty();
+
+        verify(scheduleRepo).getDaysByDates(eq(DOCTOR_ID), eq(List.of(date)));
+        verify(scheduleRepo).update(DOCTOR_ID, writeCaptor.getValue(), deleteCaptor.getValue());
+    }
+
+    @Test
+    void updateSchedule_writeOneSlot_existingDoc() {
+        String date = tomorrow();
+        Map<String, AvailabilityDayDto> existing = new HashMap<>();
+        existing.put(date, buildDay(date, 0));
+        when(scheduleRepo.getDaysByDates(eq(DOCTOR_ID), eq(List.of(date))))
+                .thenReturn(existing);
+
+        ArgumentCaptor<Map<String, AvailabilityDayDto>> writeCaptor = ArgumentCaptor.captor();
+        ArgumentCaptor<Set<String>> deleteCaptor = ArgumentCaptor.captor();
+        doNothing().when(scheduleRepo).update(eq(DOCTOR_ID), writeCaptor.capture(), deleteCaptor.capture());
+
+        service.updateSchedule(DOCTOR_ID, buildRequest(date, 0, 3));
+
+        List<AvailabilityStoredSlotDto> slots = writeCaptor.getValue().get(date).getSlots();
+        assertThat(slots).hasSize(2);
+        assertThat(slots).extracting(AvailabilityStoredSlotDto::getIndex)
+                .containsExactlyInAnyOrder(0, 3);
+        assertThat(slots).allMatch(s -> !s.isBooked());
+        assertThat(deleteCaptor.getValue()).isEmpty();
+
+        verify(scheduleRepo).getDaysByDates(eq(DOCTOR_ID), eq(List.of(date)));
+        verify(scheduleRepo).update(DOCTOR_ID, writeCaptor.getValue(), deleteCaptor.getValue());
+    }
+
+    @Test
+    void updateSchedule_writeMultipleSlots_noExistingDoc() {
+        String date = tomorrow();
+        when(scheduleRepo.getDaysByDates(eq(DOCTOR_ID), eq(List.of(date))))
+                .thenReturn(new HashMap<>());
+
+        ArgumentCaptor<Map<String, AvailabilityDayDto>> writeCaptor = ArgumentCaptor.captor();
+        ArgumentCaptor<Set<String>> deleteCaptor = ArgumentCaptor.captor();
+        doNothing().when(scheduleRepo).update(eq(DOCTOR_ID), writeCaptor.capture(), deleteCaptor.capture());
+
+        service.updateSchedule(DOCTOR_ID, buildRequest(date, 0, 5, MAX_SLOT_INDEX));
+
+        List<AvailabilityStoredSlotDto> slots = writeCaptor.getValue().get(date).getSlots();
+        assertThat(slots).hasSize(3);
+        assertThat(slots).extracting(AvailabilityStoredSlotDto::getIndex)
+                .containsExactlyInAnyOrder(0, 5, MAX_SLOT_INDEX);
+        assertThat(slots).allMatch(s -> !s.isBooked());
+        assertThat(deleteCaptor.getValue()).isEmpty();
+
+        verify(scheduleRepo).getDaysByDates(eq(DOCTOR_ID), eq(List.of(date)));
+        verify(scheduleRepo).update(DOCTOR_ID, writeCaptor.getValue(), deleteCaptor.getValue());
+    }
+
+    @Test
+    void updateSchedule_writeMultipleSlots_existingDoc() {
+        String date = tomorrow();
+        Map<String, AvailabilityDayDto> existing = new HashMap<>();
+        existing.put(date, buildDay(date, 0, 1));
+        when(scheduleRepo.getDaysByDates(eq(DOCTOR_ID), eq(List.of(date))))
+                .thenReturn(existing);
+
+        ArgumentCaptor<Map<String, AvailabilityDayDto>> writeCaptor = ArgumentCaptor.captor();
+        ArgumentCaptor<Set<String>> deleteCaptor = ArgumentCaptor.captor();
+        doNothing().when(scheduleRepo).update(eq(DOCTOR_ID), writeCaptor.capture(), deleteCaptor.capture());
+
+        service.updateSchedule(DOCTOR_ID, buildRequest(date, 0, 1, 3, 5, 7));
+
+        verify(scheduleRepo).getDaysByDates(eq(DOCTOR_ID), eq(List.of(date)));
+        verify(scheduleRepo).update(DOCTOR_ID, writeCaptor.getValue(), deleteCaptor.getValue());
+
+        List<AvailabilityStoredSlotDto> slots = writeCaptor.getValue().get(date).getSlots();
+        assertThat(slots).hasSize(5);
+        assertThat(slots).extracting(AvailabilityStoredSlotDto::getIndex)
+                .containsExactlyInAnyOrder(0, 1, 3, 5, 7);
+        assertThat(slots).allMatch(s -> !s.isBooked());
+        assertThat(deleteCaptor.getValue()).isEmpty();
     }
 
     // updateSchedule() – mixed write + delete in one request
