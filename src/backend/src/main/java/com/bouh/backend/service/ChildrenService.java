@@ -36,10 +36,14 @@ public ChildrenService(childrenRepo childrenRepo, AppointmentsService appointmen
             throw new IllegalStateException("You can only add up to 5 children.");
         }
 
+        String normalizedName = request.getName()
+            .trim()
+            .replaceAll("\\s+", " ");
+
         String gender = normalizeGender(request.getGender());
         return childrenRepo.addChild(
                 caregiverId,
-                request.getName().trim(),
+                normalizedName,
                 request.getDateOfBirth(),
                 gender
         );
@@ -92,12 +96,55 @@ public void deleteChild(String caregiverId, String childId) throws Exception {
 
     private void validateAddRequest(ChildRequestDto request) {
         if (request == null) throw new IllegalArgumentException("Request body is required.");
+
+        // 1- NAME VALIDATION:
         if (isBlank(request.getName())) throw new IllegalArgumentException("name is required");
+        
+        // Remove leading/trailing spaces
+        // Convert multiple spaces into a single space
+        String normalizedName = request.getName()
+                .trim()
+                .replaceAll("\\s+", " ");
+
+        if (normalizedName.length() > 10) {
+            throw new IllegalArgumentException("name must not exceed 10 characters");
+        }
+
+        // Allow:
+        // - English letters
+        // - Arabic letters
+        // - Numbers
+        // - Spaces
+        // Disallow special characters
+        if (!normalizedName.matches("[a-zA-Z0-9\\u0600-\\u06FF ]+")) {
+            throw new IllegalArgumentException(
+                    "name cannot contain special characters"
+            );
+        }
+
+        // 2- DOB VALIDATION:
         if (isBlank(request.getDateOfBirth())) throw new IllegalArgumentException("dateOfBirth is required");
+        validateIsoDate(request.getDateOfBirth()); // checks format and valid date
+        
+        LocalDate birthDate = LocalDate.parse(request.getDateOfBirth());
+        LocalDate today = LocalDate.now();
+        int age = today.getYear() - birthDate.getYear();
+
+        if (today.getMonthValue() < birthDate.getMonthValue()
+                || (today.getMonthValue() == birthDate.getMonthValue()
+                && today.getDayOfMonth() < birthDate.getDayOfMonth())) {
+            age--;
+        }
+
+        // Check age between 6 and 13 years
+        if (age < 6 || age > 13) {
+            throw new IllegalArgumentException(
+                    "Child age must be between 6 and 13 years."
+            );
+        }
+
+        // 3- GENDER VALIDATION:
         if (isBlank(request.getGender())) throw new IllegalArgumentException("gender is required");
-
-        validateIsoDate(request.getDateOfBirth());
-
         String g = normalizeGender(request.getGender());
         if (g == null) throw new IllegalArgumentException("gender must be male/female");
     }
