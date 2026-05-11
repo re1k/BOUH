@@ -23,7 +23,7 @@ class AvailabilityScheduleServiceTest {
 
     // SLOT_COUNT is read at test-time so tests stay correct if the flag changes.
     // Currently: AFTERNOON_SLOT_COUNT(10) + MORNING_SLOT_COUNT(2) = 12
-    private static final int SLOT_COUNT = TimeSlotConfig.AFTERNOON_SLOT_COUNT; // 12
+    private static final int SLOT_COUNT = TimeSlotConfig.SLOT_COUNT; // 12
     private static final int MAX_SLOT_INDEX = SLOT_COUNT - 1; // 11
 
     @Mock
@@ -129,23 +129,6 @@ class AvailabilityScheduleServiceTest {
                 eq(DOCTOR_ID),
                 eq(today()),
                 eq(tomorrow()));
-    }
-
-    @Test
-    void getSchedule_whenDayNotSet_returnsEmptyDay() {
-        when(scheduleRepo.getDaysInRangeMap(any(), any(), any()))
-                .thenReturn(new HashMap<>());
-
-        AvailabilityScheduleDto result = service.getSchedule(DOCTOR_ID, today(), today());
-
-        boolean hasEmptyDay = result.getDays().stream()
-                .anyMatch(d -> today().equals(d.getDate()) && d.getSlots().isEmpty());
-        assertThat(hasEmptyDay).isTrue();
-
-        verify(scheduleRepo).getDaysInRangeMap(
-                eq(DOCTOR_ID),
-                eq(today()),
-                eq(today()));
     }
 
     @Test

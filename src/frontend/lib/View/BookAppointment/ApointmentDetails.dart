@@ -1,4 +1,5 @@
 import 'package:bouh/View/caregiverHomepage/caregivernavbar.dart';
+import 'package:bouh/theme/base_themes/typography.dart';
 import 'package:flutter/material.dart';
 import 'package:bouh/theme/base_themes/colors.dart';
 import 'payment_sheet.dart';
@@ -259,7 +260,7 @@ class _AppointmentDetailsViewState extends State<AppointmentDetailsView> {
                     const SizedBox(width: 63),
                     Text(
                       "تفاصيل الموعد",
-                      style: TextStyle(
+                      style: BTypography.pageTitle.copyWith(
                         fontSize: 32,
                         fontWeight: FontWeight.w600,
                         color: Colors.black.withOpacity(0.78),

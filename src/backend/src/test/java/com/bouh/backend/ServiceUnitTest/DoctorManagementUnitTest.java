@@ -26,7 +26,7 @@ public class DoctorManagementUnitTest {
     void acceptDoctor_shouldApproveDoctorAndSendEmail() throws Exception {
         // Mock the repository to return email and name for the doctor
         when(doctorManagementRepository.getDoctorEmailAndName("vj3inj1KveMSSbTo2G8z04O252l1"))
-                .thenReturn(new String[]{"doctor@gmail.com", "Dr Ahmad"});
+                .thenReturn(new String[]{"doctor@gmail.com", "د. سارة خالد"});
 
         // Call the method under test
         doctorManagementService.acceptDoctor("vj3inj1KveMSSbTo2G8z04O252l1");
@@ -35,14 +35,14 @@ public class DoctorManagementUnitTest {
         verify(doctorManagementRepository).updateRegistrationStatus("vj3inj1KveMSSbTo2G8z04O252l1", "APPROVED");
 
         // Verify that the email service was called to send the acceptance email
-        verify(emailService).sendRegistrationAcceptedEmail("doctor@gmail.com", "Dr Ahmad");
+        verify(emailService).sendRegistrationAcceptedEmail("doctor@gmail.com", "د. سارة خالد");
     }
 
     @Test
     void rejectDoctor_shouldDeleteDoctorAndSendEmail() throws Exception {
         // Mock the repository to return email and name for the doctor
         when(doctorManagementRepository.getDoctorEmailAndName("vj3inj1KveMSSbTo2G8z04O252l1"))
-                .thenReturn(new String[]{"doctor@gmail.com", "Dr Ahmad"});
+                .thenReturn(new String[]{"doctor@gmail.com", "د. سارة خالد"});
 
         // Call the method under test
         doctorManagementService.rejectDoctor("vj3inj1KveMSSbTo2G8z04O252l1");
@@ -51,7 +51,7 @@ public class DoctorManagementUnitTest {
         verify(doctorManagementRepository).deleteDoctor("vj3inj1KveMSSbTo2G8z04O252l1");
 
         // Verify that the email service was called to send the rejection email
-        verify(emailService).sendRegistrationRejectedEmail("doctor@gmail.com", "Dr Ahmad");
+        verify(emailService).sendRegistrationRejectedEmail("doctor@gmail.com", "د. سارة خالد");
     }
 }
 

@@ -32,13 +32,13 @@ public class ViewDoctorDetailsUnitTest {
         String doctorId = "vj3inj1KveMSSbTo2G8z04O252l1";
         DoctorDetailsDto expectedDto = new DoctorDetailsDto();
         expectedDto.setDoctorID(doctorId);
-        expectedDto.setName("Dr Ahmad");
+        expectedDto.setName("د. أحمد");
         expectedDto.setEmail("doctor@gmail.com");
         expectedDto.setGender("Male");
         expectedDto.setAverageRating(4.5);
-        expectedDto.setAreaOfKnowledge("Child Psychology");
-        expectedDto.setQualifications(List.of("PhD", "MD"));
-        expectedDto.setYearsOfExperience(10);
+        expectedDto.setAreaOfKnowledge("غضب");
+        expectedDto.setQualifications(List.of("دكتوراه", "ماجستير"));
+        expectedDto.setYearsOfExperience(3);
         expectedDto.setProfilePhotoURL("https://example.com/photo.jpg");
         when(doctorRepo.getDoctorDetails(doctorId)).thenReturn(expectedDto);
 
@@ -51,13 +51,13 @@ public class ViewDoctorDetailsUnitTest {
         // Verify that all fields in the returned DTO match the expected values
         assertNotNull(result);
         assertEquals(doctorId, result.getDoctorID());
-        assertEquals("Dr Ahmad", result.getName());
+        assertEquals("د. أحمد", result.getName());
         assertEquals("doctor@gmail.com", result.getEmail());
         assertEquals("Male", result.getGender());
         assertEquals(4.5, result.getAverageRating());
-        assertEquals("Child Psychology", result.getAreaOfKnowledge());
-        assertEquals(List.of("PhD", "MD"), result.getQualifications());
-        assertEquals(10, result.getYearsOfExperience());
+        assertEquals("غضب", result.getAreaOfKnowledge());
+        assertEquals(List.of("دكتوراه", "ماجستير"), result.getQualifications());
+        assertEquals(3, result.getYearsOfExperience());
         assertEquals("https://example.com/photo.jpg", result.getProfilePhotoURL());
     }
 

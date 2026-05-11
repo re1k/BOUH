@@ -45,9 +45,9 @@ public class CancelAppointmentUnitTest {
 
         // Create fake appointment
         appointmentDto appointment = new appointmentDto();
-        appointment.setAppointmentId("appt1");
-        appointment.setCaregiverId("caregiver1");
-        appointment.setDoctorId("doctor1");
+        appointment.setAppointmentId("YH5q4wANmIq5Hv81hUHT");
+        appointment.setCaregiverId("eFXGJMjrouTwE3uj0FaVAS6evAf2");
+        appointment.setDoctorId("vj3inj1KveMSSbTo2G8z04O252l1");
 
         // Appointment after 2 hours
        ZonedDateTime future = ZonedDateTime.now(ZoneId.of("Asia/Riyadh"))
@@ -65,7 +65,7 @@ public class CancelAppointmentUnitTest {
         );
 
         // Mock repo
-        when(appointmentRepo.findById("appt1"))
+        when(appointmentRepo.findById("YH5q4wANmIq5Hv81hUHT"))
                 .thenReturn(appointment);
 
         // Fake availability slot
@@ -76,24 +76,24 @@ public class CancelAppointmentUnitTest {
         AvailabilityDayDto day = new AvailabilityDayDto();
         day.setSlots(List.of(slot));
 
-        when(availabilityScheduleRepo.getDay(eq("doctor1"), anyString()))
+        when(availabilityScheduleRepo.getDay(eq("vj3inj1KveMSSbTo2G8z04O252l1"), anyString()))
                 .thenReturn(day);
 
         // Call service
-        appointmentsService.cancelAppointment("caregiver1", "appt1");
+        appointmentsService.cancelAppointment("eFXGJMjrouTwE3uj0FaVAS6evAf2", "YH5q4wANmIq5Hv81hUHT");
 
         // Verify delete called
-        verify(appointmentRepo).deleteByIdAtomically("appt1");
+        verify(appointmentRepo).deleteByIdAtomically("YH5q4wANmIq5Hv81hUHT");
 
         // Verify availability fetched
         verify(availabilityScheduleRepo).getDay(
-                eq("doctor1"),
+                eq("vj3inj1KveMSSbTo2G8z04O252l1"),
                 eq(future.toLocalDate().toString())
         );
 
         // Verify availability updated
         verify(availabilityScheduleRepo).update(
-                eq("doctor1"),
+                eq("vj3inj1KveMSSbTo2G8z04O252l1"),
                 argThat(map -> {
                 AvailabilityDayDto updatedDay = map.get(future.toLocalDate().toString());
 
@@ -107,15 +107,15 @@ public class CancelAppointmentUnitTest {
         @Test
         void cancelAppointment_shouldThrowWhenAppointmentNotFound() throws Exception {
         // Mock repo to return null appointment
-        when(appointmentRepo.findById("appt1"))
+        when(appointmentRepo.findById("YH5q4wANmIq5Hv81hUHT"))
                 .thenReturn(null);
         // Verify exception is thrown
         assertThrows(
                 IllegalArgumentException.class,
-                () -> appointmentsService.cancelAppointment("caregiver1", "appt1")
+                () -> appointmentsService.cancelAppointment("eFXGJMjrouTwE3uj0FaVAS6evAf2", "YH5q4wANmIq5Hv81hUHT")
         );
 
-        verify(appointmentRepo).findById("appt1");
+        verify(appointmentRepo).findById("YH5q4wANmIq5Hv81hUHT");
 
         verify(appointmentRepo, never())
         .deleteByIdAtomically(anyString());
@@ -133,8 +133,8 @@ public class CancelAppointmentUnitTest {
         void cancelAppointment_shouldThrowWhenLessThan30Minutes() throws Exception {
         // Create fake appointment
                 appointmentDto appointment = new appointmentDto();
-                appointment.setCaregiverId("caregiver1");
-                appointment.setDoctorId("doctor1");
+                appointment.setCaregiverId("eFXGJMjrouTwE3uj0FaVAS6evAf2");
+                appointment.setDoctorId("vj3inj1KveMSSbTo2G8z04O252l1");
 
                 // Appointment after 10 minutes
                 Instant future = Instant.now().plusSeconds(600);
@@ -146,15 +146,15 @@ public class CancelAppointmentUnitTest {
                         )
                 );
         // Mock repo
-                when(appointmentRepo.findById("appt1"))
+                when(appointmentRepo.findById("YH5q4wANmIq5Hv81hUHT"))
                         .thenReturn(appointment);
         // Verify exception is thrown
                 assertThrows(
                         IllegalStateException.class,
-                        () -> appointmentsService.cancelAppointment("caregiver1", "appt1")
+                        () -> appointmentsService.cancelAppointment("eFXGJMjrouTwE3uj0FaVAS6evAf2", "YH5q4wANmIq5Hv81hUHT")
                 );
 
-        verify(appointmentRepo).findById("appt1");
+        verify(appointmentRepo).findById("YH5q4wANmIq5Hv81hUHT");
 
         verify(appointmentRepo, never())
         .deleteByIdAtomically(anyString());

@@ -91,6 +91,9 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(home: LoginResolverView());
+    return MaterialApp(
+      theme: ThemeData(fontFamily: GoogleFonts.markaziText().fontFamily),
+      home: const LoginResolverView(),
+    );
   }
 }
