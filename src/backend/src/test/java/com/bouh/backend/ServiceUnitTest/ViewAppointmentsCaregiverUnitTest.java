@@ -100,10 +100,6 @@ public class ViewAppointmentsCaregiverUnitTest {
                 String idIn3Days = "apM7nO8pQ9rS0tU1vW2x";
                 String idIn7Days = "apY3zA4bC5dE6fG7hI8j";
 
-                String idIn1Day  = "apA1bC2dE3fG4hI5jK6l";
-                String idIn3Days = "apM7nO8pQ9rS0tU1vW2x";
-                String idIn7Days = "apY3zA4bC5dE6fG7hI8j";
-
                 Instant base = Instant.now();
                 appointmentDto in7Days = buildBasicAppointment(idIn7Days, base.plusSeconds(7 * 86400), 1, false);
                 appointmentDto in1Day = buildBasicAppointment(idIn1Day, base.plusSeconds(86400), 1, false);

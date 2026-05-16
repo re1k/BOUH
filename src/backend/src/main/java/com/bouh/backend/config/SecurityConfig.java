@@ -38,9 +38,6 @@ public class SecurityConfig {
                         .requestMatchers("/api/admin/forgot-password").permitAll()
                         .requestMatchers("/api/admin/**").authenticated()
 
-                        // Classifier test endpoint (remove after testing)
-                        .requestMatchers("/api/classification/**").permitAll()
-
                         // Any other request must also be authenticated
                         .anyRequest().authenticated()
                 )

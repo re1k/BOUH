@@ -32,15 +32,26 @@ public class FirebaseConfig {
         String credentialsPath = dotenv.get("FIREBASE_SERVICE_ACCOUNT_PATH");
         System.out.println(" Firebase credentials path = " + credentialsPath);
 
-        if (credentialsPath == null) {
-            throw new RuntimeException("FIREBASE_SERVICE_ACCOUNT_PATH not found in .env"); //stop the exec if not exist, prevent app running with no database setted
+        FirebaseOptions options;
+
+        if (credentialsPath != null && !credentialsPath.isBlank()) {
+            System.out.println("Using local Firebase credentials: " + credentialsPath);
+
+            FileInputStream serviceAccount = new FileInputStream(credentialsPath);
+
+            options = FirebaseOptions.builder()
+                    .setCredentials(GoogleCredentials.fromStream(serviceAccount))
+                    .build();
+
+        } else {
+            System.out.println("Using Google Cloud default credentials");
+
+            options = FirebaseOptions.builder()
+                    .setCredentials(GoogleCredentials.getApplicationDefault())
+                    .setProjectId("bouh-94761")
+                    .build();
         }
 
-        FileInputStream serviceAccount = new FileInputStream(credentialsPath);
-
-        FirebaseOptions options = FirebaseOptions.builder()
-                .setCredentials(GoogleCredentials.fromStream(serviceAccount))
-                .build(); //create the service account and trust it
 
         return FirebaseApp.initializeApp(options); //run the instance
     }

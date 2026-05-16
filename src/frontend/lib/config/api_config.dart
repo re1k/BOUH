@@ -1,8 +1,9 @@
 class ApiConfig {
-  static const bool isProd = false;
+  static const bool isProd = true;
 
   static const String localBaseUrl = "http://10.0.2.2:8080";
-  static const String prodBaseUrl = "https://YOUR-CLOUDRUN-URL.a.run.app";
+  static const String prodBaseUrl =
+      "https://bouh-backend-1065699977643.us-central1.run.app";
 
   static String get baseUrl => isProd ? prodBaseUrl : localBaseUrl;
 

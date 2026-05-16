@@ -37,7 +37,7 @@ class LoginView extends StatefulWidget {
 
 class _LoginViewState extends State<LoginView> {
   static const String _kInvalidCredentialsMessage =
-      'البريد الإلكتروني أو كلمة المرور غير صحيحة. لم يتم العثور على الحساب.';
+      'البريد الإلكتروني أو كلمة المرور غير صحيحة.';
 
   static const String _kNetworkFailureMessage =
       'لا يوجد اتصال بالإنترنت. تحقق من الشبكة وحاول مرة أخرى.';

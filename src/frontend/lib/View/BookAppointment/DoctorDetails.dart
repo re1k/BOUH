@@ -54,7 +54,16 @@ class _DoctorDetailsViewState extends State<DoctorDetailsView> {
                 final doctorName = doctor.name;
                 final doctorMajor = doctor.areaOfKnowledge;
                 final rating = doctor.averageRating ?? 0.0;
-                final profilePhotoUrl = doctor.profilePhotoURL;
+                final streamPhoto = doctor.profilePhotoURL;
+
+                final bool streamHasValidUrl =
+                    streamPhoto != null &&
+                    streamPhoto.isNotEmpty &&
+                    streamPhoto.startsWith('http');
+
+                final profilePhotoUrl = streamHasValidUrl
+                    ? streamPhoto
+                    : widget.doctor.profilePhotoURL;
                 final years = doctor.yearsOfExperience;
                 final qualifications = doctor.qualifications;
 
