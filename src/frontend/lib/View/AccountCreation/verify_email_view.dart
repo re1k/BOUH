@@ -577,8 +577,12 @@ class _VerifyEmailViewState extends State<VerifyEmailView> {
                     onPressed: _isChecking ? null : _onDoneTapped,
                     style: ElevatedButton.styleFrom(
                       elevation: 0,
-                      backgroundColor: BColors.secondary,
-                      foregroundColor: BColors.textDarkestBlue,
+                      backgroundColor: BColors.primary,
+                      foregroundColor: BColors.white,
+                      disabledBackgroundColor:
+                          BColors.primary.withOpacity(0.4),
+                      disabledForegroundColor:
+                          BColors.white.withOpacity(0.7),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20),
                       ),

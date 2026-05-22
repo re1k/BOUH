@@ -112,7 +112,8 @@ class SuggestedDoctorCard extends StatelessWidget {
                         specialty,
                         style: TextStyle(
                           fontFamily: 'Markazi Text',
-                          fontSize: 13,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
                           color: BColors.darkGrey,
                         ),
                       ),

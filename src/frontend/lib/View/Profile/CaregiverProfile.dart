@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:bouh/View/Profile/ChildrenManagementView.dart';
+import 'package:bouh/View/Profile/profile_static_info_page.dart';
 import 'package:bouh/View/caregiverHomepage/widgets/caregiverBottomNav.dart';
 import 'package:bouh/authentication/AuthService.dart';
 import 'package:bouh/authentication/AuthSession.dart';
@@ -35,8 +36,28 @@ class CaregiverAccountView extends StatefulWidget {
   State<CaregiverAccountView> createState() => _CaregiverAccountViewState();
 }
 
+/// Field titles — matches caregiver account creation `_buildLabel`.
+const TextStyle _kCaregiverProfileFieldLabelStyle = TextStyle(
+  fontSize: 16,
+  color: BColors.textDarkestBlue,
+  fontWeight: FontWeight.w700,
+);
+
+const TextStyle _kCaregiverProfileFieldValueStyle = TextStyle(
+  fontSize: 18,
+  fontWeight: FontWeight.normal,
+  color: BColors.textDarkestBlue,
+);
+
+const TextStyle _kCaregiverProfileFieldErrorStyle = TextStyle(
+  fontSize: 13,
+  fontWeight: FontWeight.w500,
+  color: BColors.validationError,
+);
+
 class _CaregiverAccountViewState extends State<CaregiverAccountView> {
   static const double _kControlHeight = 56;
+  static const double _kEmailFieldHeight = 46;
   static const double _kControlRadius = 10;
   static const String _profileLoadFallbackErrorMessage =
       'حدث خطأ في استرجاع البيانات، تأكد من اتصالك بالشبكة وحاول مرة اخرى';
@@ -172,6 +193,29 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
                           ),
                         ],
 
+                        const SizedBox(height: 34),
+                        _settingsCard(
+                          children: [
+                            _settingsItem(
+                              title: 'من نحن',
+                              titleColor: BColors.textDarkestBlue,
+                              icon: Icons.info_outline_rounded,
+                              iconColor: BColors.primary,
+                              showChevron: true,
+                              onTap: () =>
+                                  ProfileStaticInfoPage.openAbout(context),
+                            ),
+                            _settingsItem(
+                              title: 'تواصل معنا',
+                              titleColor: BColors.textDarkestBlue,
+                              icon: Icons.mail_outline_rounded,
+                              iconColor: BColors.primary,
+                              showChevron: true,
+                              onTap: () =>
+                                  ProfileStaticInfoPage.openContact(context),
+                            ),
+                          ],
+                        ),
                         const SizedBox(height: 34),
                         _settingsCard(
                           children: [
@@ -360,9 +404,7 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
       if (!nameFocusNode.hasFocus && editingNameRef[0]) {
         ProfileFieldValidation.syncTextControllerToNormalizedPersonName(_nameCtrl);
         if (nameStartedTyping) {
-          setState(() {
-            _nameError = _validateName(_nameCtrl.text);
-          });
+          _nameError = _validateName(_nameCtrl.text);
         }
         refreshPersonalPage?.call();
       }
@@ -370,6 +412,12 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
 
     nameFocusNode.addListener(onNameFocusChange);
     const discardChangesMessage = 'لديك تغييرات غير محفوظة. هل تريد المغادرة؟';
+
+    Future<void> dismissKeyboard() async {
+      FocusManager.instance.primaryFocus?.unfocus();
+      await SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
+      await Future.delayed(const Duration(milliseconds: 180));
+    }
 
     Future<bool> confirmDiscardIfNeeded() async {
       final hasUnsavedChanges = editingNameRef[0] && _hasNameChanged;
@@ -389,12 +437,20 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
           builder: (context, setPage) {
             refreshPersonalPage = () => setPage(() {});
             _refreshCaregiverPersonalPage = () => setPage(() {});
+
+            final liveNameError = editingNameRef[0]
+                ? ProfileFieldValidation.caregiverDisplayName(_nameCtrl.text)
+                : null;
+            final canSaveName =
+                editingNameRef[0] &&
+                _hasNameChanged &&
+                liveNameError == null;
+
             return Directionality(
               textDirection: TextDirection.rtl,
               child: WillPopScope(
                 onWillPop: () async {
-                  FocusManager.instance.primaryFocus?.unfocus();
-                  await Future.delayed(const Duration(milliseconds: 160));
+                  await dismissKeyboard();
                   if (!context.mounted) return false;
                   final shouldDiscard = await confirmDiscardIfNeeded();
                   if (!shouldDiscard) return false;
@@ -417,8 +473,7 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
                         color: BColors.textDarkestBlue,
                       ),
                       onPressed: () async {
-                        FocusManager.instance.primaryFocus?.unfocus();
-                        await Future.delayed(const Duration(milliseconds: 160));
+                        await dismissKeyboard();
                         if (!context.mounted) return;
                         final shouldDiscard = await confirmDiscardIfNeeded();
                         if (!shouldDiscard || !context.mounted) return;
@@ -453,12 +508,13 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
                                   text: _email.isEmpty ? '—' : _email,
                                   textColor: BColors.darkGrey,
                                   backgroundColor: const Color(0xFFF5F5F5),
+                                  height: _kEmailFieldHeight,
                                 ),
                               ),
                               _sectionFieldItem(
                                 label: 'الاسم',
                                 child: Container(
-                                  height: _kControlHeight,
+                                  height: _kEmailFieldHeight,
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 12,
                                   ),
@@ -468,7 +524,9 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
                                       _kControlRadius,
                                     ),
                                     border: Border.all(
-                                      color: Colors.black.withOpacity(0.1),
+                                      color: liveNameError != null
+                                          ? BColors.validationError
+                                          : Colors.black.withOpacity(0.1),
                                     ),
                                   ),
                                   child: Row(
@@ -480,11 +538,7 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
                                           readOnly:
                                               !editingNameRef[0] || _savingName,
                                           textAlign: TextAlign.right,
-                                          style: const TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w600,
-                                            color: Colors.black,
-                                          ),
+                                          style: _kCaregiverProfileFieldValueStyle,
                                           inputFormatters: [
                                             LengthLimitingTextInputFormatter(
                                               ProfileFieldValidation
@@ -498,11 +552,9 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
                                           ),
                                           onChanged: (_) {
                                             nameStartedTyping = true;
-                                            setState(() {
-                                              _nameError = _validateName(
-                                                _nameCtrl.text,
-                                              );
-                                            });
+                                            _nameError = _validateName(
+                                              _nameCtrl.text,
+                                            );
                                             setPage(() {});
                                           },
                                         ),
@@ -520,27 +572,34 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
                                             ),
                                           )
                                         else ...[
-                                          IconButton(
-                                            onPressed: !_hasNameChanged
-                                                ? null
-                                                : () async {
-                                                    await _saveNameInline();
-                                                    if (!mounted) return;
-                                                    if (_nameError == null) {
-                                                      editingNameRef[0] = false;
-                                                      nameStartedTyping = false;
+                                          AbsorbPointer(
+                                            absorbing: !canSaveName,
+                                            child: IconButton(
+                                              onPressed: canSaveName
+                                                  ? () async {
+                                                      await _saveNameInline();
+                                                      if (!mounted) return;
+                                                      if (_nameError == null) {
+                                                        editingNameRef[0] =
+                                                            false;
+                                                        nameStartedTyping =
+                                                            false;
+                                                      }
+                                                      setPage(() {});
                                                     }
-                                                    setPage(() {});
-                                                  },
-                                            icon: Icon(
-                                              Icons.check,
-                                              color: _hasNameChanged
-                                                  ? BColors.primary
-                                                  : BColors.grey,
+                                                  : null,
+                                              icon: Icon(
+                                                Icons.check,
+                                                color: canSaveName
+                                                    ? BColors.primary
+                                                    : BColors.grey,
+                                              ),
                                             ),
                                           ),
                                           IconButton(
                                             onPressed: () async {
+                                              await dismissKeyboard();
+                                              if (!context.mounted) return;
                                               final shouldDiscard =
                                                   await confirmDiscardIfNeeded();
                                               if (!shouldDiscard) return;
@@ -576,16 +635,12 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
                               ),
                               if (editingNameRef[0] &&
                                   nameStartedTyping &&
-                                  _nameError != null) ...[
+                                  liveNameError != null) ...[
                                 const SizedBox(height: 8),
                                 Text(
-                                  _nameError!,
+                                  liveNameError,
                                   textAlign: TextAlign.right,
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: BColors.validationError,
-                                    fontWeight: FontWeight.w500,
-                                  ),
+                                  style: _kCaregiverProfileFieldErrorStyle,
                                 ),
                               ],
                             ],
@@ -722,13 +777,9 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
   }
 
   static Widget _label(String text) {
-    return Text(
-      text,
-      style: TextStyle(
-        fontSize: 16,
-        fontWeight: FontWeight.w600,
-        color: Colors.black.withOpacity(0.45),
-      ),
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Text(text, style: _kCaregiverProfileFieldLabelStyle),
     );
   }
 
@@ -737,9 +788,10 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
     Widget? trailing,
     Color textColor = Colors.black,
     Color backgroundColor = Colors.white,
+    double? height,
   }) {
     return Container(
-      height: _kControlHeight,
+      height: height ?? _kControlHeight,
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
         color: backgroundColor,
@@ -751,9 +803,7 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
           Expanded(
             child: Text(
               text,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
+              style: _kCaregiverProfileFieldValueStyle.copyWith(
                 color: textColor,
               ),
             ),
@@ -776,7 +826,7 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
           shape: BoxShape.circle,
           border: Border.all(color: Colors.black.withOpacity(0.1)),
         ),
-        child: const Icon(Icons.edit, size: 18, color: Colors.grey),
+        child: const Icon(Icons.edit, size: 18, color: BColors.primary),
       ),
     );
   }
@@ -852,10 +902,10 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
 
   Widget _sectionFieldItem({required String label, required Widget child}) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      padding: const EdgeInsets.symmetric(vertical: 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [_label(label), const SizedBox(height: 6), child],
+        children: [_label(label), const SizedBox(height: 8), child],
       ),
     );
   }
@@ -876,10 +926,10 @@ class _CaregiverAccountViewState extends State<CaregiverAccountView> {
             height: _kControlHeight,
             child: Row(
               children: const [
-                Icon(Icons.family_restroom, size: 20, color: BColors.primary),
+                Icon(Icons.groups_outlined, size: 20, color: BColors.primary),
                 SizedBox(width: 10),
                 Text(
-                  "ادارة الاطفال",
+                  'ادارة الاطفال',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,

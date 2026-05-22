@@ -87,11 +87,20 @@ public class AccountService {
 
     /** Updates FCM token for doctor or caregiver. */
     public boolean updateUserFcmToken(String uid, String fcmToken) {
-        if (fcmToken == null || fcmToken.isBlank()) {
-            return false;
-        }
         authDto auth = resolveAuthState(uid);
         String role = auth.getRole();
+        if (fcmToken == null || fcmToken.isBlank()) {
+              switch (role) {
+                case "doctor":
+                    doctorRepository.clearFcmToken(uid);
+                    return true;
+                case "caregiver":
+                    caregiverRepository.clearFcmToken(uid);
+                    return true;
+                default:
+                    return false;
+            }
+        }
         switch (role) {
             case "doctor":
                 doctorRepository.updateFcmToken(uid, fcmToken);

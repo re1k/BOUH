@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_performance/firebase_performance.dart';
 import 'package:flutter/material.dart';
 import '../../theme/base_themes/colors.dart';
 import 'package:bouh/View/caregiverHomepage/widgets/caregiverBottomNav.dart';
@@ -118,11 +117,7 @@ class _BookedAppointmentsPreviousState
       _list = [];
       _upcomingCache = [];
     });
-    final trace = FirebasePerformance.instance.newTrace(
-      'load_caregiver_previous_appointments_trace',
-    );
 
-    trace.start();
     _subscription = _appointmentsService
         .streamPreviousAppointments(caregiverId)
         .listen(
@@ -137,7 +132,6 @@ class _BookedAppointmentsPreviousState
             _startTicker();
             _updateDoctorListeners(_list);
             _updateChildListeners(_list);
-            trace.stop();
           },
           onError: (e) {
             if (!mounted) return;

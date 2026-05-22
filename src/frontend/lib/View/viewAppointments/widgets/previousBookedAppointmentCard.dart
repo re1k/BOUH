@@ -115,7 +115,8 @@ class PreviousBookedAppointmentCard extends StatelessWidget {
                               specialty,
                               style: TextStyle(
                                 fontFamily: 'Markazi Text',
-                                fontSize: 13,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w500,
                                 color: BColors.darkGrey,
                               ),
                             ),
@@ -187,7 +188,7 @@ class PreviousBookedAppointmentCard extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         textDirection: TextDirection.rtl,
         children: [
-          Icon(Icons.calendar_today, size: 14, color: BColors.darkGrey),
+          Icon(Icons.calendar_today, size: 14, color: BColors.primary),
           const SizedBox(width: 6),
           Transform.translate(
             offset: const Offset(0, _dateTimeTextOffsetY),
@@ -201,7 +202,7 @@ class PreviousBookedAppointmentCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          Icon(Icons.access_time, size: 14, color: BColors.darkGrey),
+          Icon(Icons.access_time, size: 14, color: BColors.primary),
           const SizedBox(width: 6),
           Transform.translate(
             offset: const Offset(0, _dateTimeTextOffsetY),
@@ -260,8 +261,8 @@ class PreviousBookedAppointmentCard extends StatelessWidget {
           childName,
           style: TextStyle(
             fontFamily: 'Markazi Text',
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
             color: BColors.white,
           ),
           softWrap: true,

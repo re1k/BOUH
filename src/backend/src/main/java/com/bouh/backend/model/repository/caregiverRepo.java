@@ -207,6 +207,18 @@ public class caregiverRepo {
         }
     }
 
+    public void clearFcmToken(String uid) {
+        try {
+            firestore.collection("caregivers")
+                    .document(uid)
+                    .update("fcmToken", FieldValue.delete())
+                    .get();
+        } catch (Exception e) {
+            log.error("Failed to clear caregiver FCM token for uid={}", uid, e);
+            throw new RuntimeException("Failed to clear caregiver FCM token", e);
+        }
+    }
+
     /*
      * Returns caregiver profile Info Id,email,name,fcmToken
      */

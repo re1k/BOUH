@@ -7,7 +7,11 @@ import 'package:bouh/widgets/profile_field_validation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:bouh/dto/doctorSignupData.dart';
+import 'package:bouh/dto/doctor_work_info_draft.dart';
 import 'package:bouh/View/AccountCreation/Doctor/doctor_account_creation_work_info.dart';
+import 'package:bouh/View/AccountCreation/Doctor/doctor_account_creation_step_progress.dart';
+import 'package:bouh/widgets/registration_flow_cache.dart';
+import 'package:bouh/widgets/confirmation_popup.dart';
 import 'package:bouh/widgets/password_strength_widget.dart';
 
 class DoctorAccountCreationStep1 extends StatefulWidget {
@@ -60,6 +64,9 @@ class _DoctorAccountCreationStep1State
   File? _profileImage;
   String? _profileImagePath;
 
+  /// Work-info fields saved when the user goes back from step 2.
+  DoctorWorkInfoDraft? _workInfoDraft;
+
   final ImagePicker _picker = ImagePicker();
 
   bool get _isFormComplete {
@@ -86,9 +93,24 @@ class _DoctorAccountCreationStep1State
 
   static const String _namePrefix = 'د. ';
 
+  void _clearRegistrationDrafts() {
+    _workInfoDraft = null;
+    RegistrationFlowCache.clearDoctor();
+  }
+
+  bool _hasRegistrationProgress() {
+    if (_workInfoDraft != null) return true;
+    if (_profileImage != null) return true;
+    if (_emailCtrl.text.trim().isNotEmpty) return true;
+    if (_passCtrl.text.isNotEmpty) return true;
+    if (_confirmCtrl.text.isNotEmpty) return true;
+    return _nameCtrl.text.trim().length > _namePrefix.length;
+  }
+
   @override
   void initState() {
     super.initState();
+    _clearRegistrationDrafts();
     _nameCtrl.text = _namePrefix;
     _nameCtrl.selection = TextSelection.collapsed(offset: _namePrefix.length);
     _emailFocusNode.addListener(_onEmailFocusChange);
@@ -205,6 +227,7 @@ class _DoctorAccountCreationStep1State
 
   @override
   void dispose() {
+    _clearRegistrationDrafts();
     _emailFocusNode.removeListener(_onEmailFocusChange);
     _passwordFocusNode.removeListener(_onPasswordFocusChange);
     _confirmFocusNode.removeListener(_onConfirmFocusChange);
@@ -338,7 +361,7 @@ class _DoctorAccountCreationStep1State
     return trimmed.replaceAll('\\', '/');
   }
 
-  void _handleNext() {
+  Future<void> _handleNext() async {
     if (!_isFormComplete) return;
     setState(() {
       _emailTouched = true;
@@ -372,13 +395,28 @@ class _DoctorAccountCreationStep1State
     print(
       '[DoctorReg Step1] _handleNext: signupData created with profileImage=${_profileImage != null ? _profileImage!.path : "null"}',
     );
-    Navigator.push(
+    final draftToRestore =
+        _workInfoDraft ?? RegistrationFlowCache.doctorWorkInfo;
+
+    final returnedDraft = await Navigator.push<DoctorWorkInfoDraft>(
       context,
       MaterialPageRoute(
-        builder: (_) => DoctorAccountCreationStep2(signupData: signupData),
+        builder: (_) => DoctorAccountCreationStep2(
+          signupData: signupData,
+          initialDraft: draftToRestore,
+        ),
       ),
     );
-    print('[DoctorReg Step1] _handleNext: pushed to Step2 with signupData');
+    if (!mounted) return;
+    final merged =
+        returnedDraft ?? RegistrationFlowCache.doctorWorkInfo;
+    if (merged != null) {
+      setState(() {
+        _workInfoDraft = merged;
+        RegistrationFlowCache.doctorWorkInfo = merged;
+      });
+    }
+    print('[DoctorReg Step1] _handleNext: returned from Step2 with signupData');
   }
 
   Future<void> _popStep1() async {
@@ -386,6 +424,19 @@ class _DoctorAccountCreationStep1State
     await SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
     await Future<void>.delayed(const Duration(milliseconds: 180));
     if (!mounted) return;
+
+    if (_hasRegistrationProgress()) {
+      final shouldLeave = await ConfirmationPopup.show(
+        context,
+        title: 'مغادرة إنشاء الحساب',
+        message: 'ستفقد البيانات التي أدخلتها. هل تريد المغادرة؟',
+        confirmText: 'مغادرة',
+        cancelText: 'بقاء',
+      );
+      if (!shouldLeave || !mounted) return;
+    }
+
+    _clearRegistrationDrafts();
     Navigator.of(context).pop();
   }
 
@@ -405,7 +456,7 @@ class _DoctorAccountCreationStep1State
       ),
       errorStyle: const TextStyle(
         color: BColors.validationError,
-        fontSize: 12,
+        fontSize: 13,
         fontWeight: FontWeight.w500,
       ),
       errorBorder: OutlineInputBorder(
@@ -483,10 +534,8 @@ class _DoctorAccountCreationStep1State
                         ),
                         const SizedBox(height: 14),
 
-                        const _StepProgress(
-                          rightLabel: 'المعلومات الشخصية',
-                          leftLabel: 'معلومات العمل',
-                          activeRight: true,
+                        const DoctorAccountCreationStepProgress(
+                          activePersonalInfo: true,
                         ),
                         const SizedBox(height: 18),
 
@@ -522,6 +571,7 @@ class _DoctorAccountCreationStep1State
                           controller: _emailCtrl,
                           keyboardType: TextInputType.emailAddress,
                           obscure: false,
+                          inputFontSize: 17,
                           decoration: _inputDecoration(),
                           focusNode: _emailFocusNode,
                           fieldKey: _emailFieldKey,
@@ -606,15 +656,13 @@ class _DoctorAccountCreationStep1State
                         ),
                         const SizedBox(height: 14),
 
-                        const SizedBox(height: 14),
-
                         Align(
                           alignment: Alignment.centerRight,
                           child: RichText(
                             text: const TextSpan(
                               style: TextStyle(
-                                fontSize: 13,
-                                color: BColors.darkGrey,
+                                fontSize: 14,
+                                color: BColors.textDarkestBlue,
                               ),
                               children: [
                                 TextSpan(text: 'الجنس '),
@@ -639,10 +687,10 @@ class _DoctorAccountCreationStep1State
                         Align(
                           alignment: Alignment.centerRight,
                           child: const Text(
-                            'صورة شخصية',
+                            'الصورة الشخصية',
                             style: TextStyle(
-                              fontSize: 13,
-                              color: BColors.darkGrey,
+                              fontSize: 14,
+                              color: BColors.textDarkestBlue,
                             ),
                           ),
                         ),
@@ -685,7 +733,7 @@ class _DoctorAccountCreationStep1State
                               if (_profileImage != null) ...[
                                 _circleProfileImageAction(
                                   icon: Icons.edit,
-                                  iconColor: Colors.grey,
+                                  iconColor: BColors.primary,
                                   onTap: _pickImage,
                                 ),
                                 const SizedBox(width: 10),
@@ -715,12 +763,12 @@ class _DoctorAccountCreationStep1State
                                 : null,
                             style: ElevatedButton.styleFrom(
                               elevation: 0,
-                              backgroundColor: BColors.secondary,
-                              foregroundColor: BColors.textDarkestBlue,
-                              disabledBackgroundColor: BColors.secondary
+                              backgroundColor: BColors.primary,
+                              foregroundColor: BColors.white,
+                              disabledBackgroundColor: BColors.primary
                                   .withOpacity(0.4),
-                              disabledForegroundColor: BColors.textDarkestBlue
-                                  .withOpacity(0.5),
+                              disabledForegroundColor: BColors.white
+                                  .withOpacity(0.7),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(16),
                               ),
@@ -743,96 +791,6 @@ class _DoctorAccountCreationStep1State
           ),
         ),
       ),
-      ),
-    );
-  }
-}
-
-class _StepProgress extends StatelessWidget {
-  final String rightLabel;
-  final String leftLabel;
-  final bool activeRight;
-
-  const _StepProgress({
-    required this.rightLabel,
-    required this.leftLabel,
-    required this.activeRight,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          rightLabel,
-          style: const TextStyle(fontSize: 12, color: BColors.darkGrey),
-        ),
-        const SizedBox(width: 10),
-        _Dot(active: activeRight),
-        const SizedBox(width: 10),
-        const _MiniDots(),
-        const SizedBox(width: 10),
-        _Dot(active: !activeRight),
-        const SizedBox(width: 10),
-        Text(
-          leftLabel,
-          style: const TextStyle(fontSize: 12, color: BColors.darkGrey),
-        ),
-      ],
-    );
-  }
-}
-
-class _Dot extends StatelessWidget {
-  final bool active;
-  const _Dot({required this.active});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 14,
-      height: 14,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: active ? BColors.primary : BColors.grey,
-          width: 2,
-        ),
-      ),
-      child: active
-          ? Center(
-              child: Container(
-                width: 6,
-                height: 6,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: BColors.primary,
-                ),
-              ),
-            )
-          : null,
-    );
-  }
-}
-
-class _MiniDots extends StatelessWidget {
-  const _MiniDots();
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: List.generate(
-        3,
-        (i) => Container(
-          width: 4,
-          height: 4,
-          margin: const EdgeInsets.symmetric(horizontal: 2),
-          decoration: const BoxDecoration(
-            shape: BoxShape.circle,
-            color: BColors.grey,
-          ),
-        ),
       ),
     );
   }
@@ -902,7 +860,7 @@ class _SegButton extends StatelessWidget {
         child: Text(
           text,
           style: TextStyle(
-            fontSize: 13,
+            fontSize: 14,
             fontWeight: FontWeight.w700,
             color: selected ? BColors.white : BColors.darkGrey,
           ),
@@ -956,6 +914,7 @@ class _LabeledFormField extends StatelessWidget {
   final String? Function(String?)? validator;
   final ValueChanged<String> onChanged;
   final List<TextInputFormatter>? inputFormatters;
+  final double inputFontSize;
 
   const _LabeledFormField({
     required this.label,
@@ -969,6 +928,7 @@ class _LabeledFormField extends StatelessWidget {
     this.fieldKey,
     this.validator,
     this.inputFormatters,
+    this.inputFontSize = 16,
   });
 
   @override
@@ -984,9 +944,16 @@ class _LabeledFormField extends StatelessWidget {
           focusNode: focusNode,
           keyboardType: keyboardType,
           obscureText: obscure,
+          style: TextStyle(
+            fontSize: inputFontSize,
+            color: BColors.textDarkestBlue,
+          ),
           decoration: decoration.copyWith(
             hintText: placeholder,
-            hintStyle: const TextStyle(color: BColors.darkGrey, fontSize: 13),
+            hintStyle: TextStyle(
+              color: BColors.darkGrey,
+              fontSize: inputFontSize > 16 ? 16 : 15,
+            ),
           ),
           validator: validator,
           textAlign: TextAlign.right,
@@ -1003,14 +970,14 @@ class _LabeledFormField extends StatelessWidget {
     if (!hasRequiredStar) {
       return Text(
         label,
-        style: const TextStyle(fontSize: 13, color: BColors.darkGrey),
+        style: const TextStyle(fontSize: 14, color: BColors.textDarkestBlue),
       );
     }
 
     final base = trimmed.substring(0, trimmed.length - 1).trimRight();
     return RichText(
       text: TextSpan(
-        style: const TextStyle(fontSize: 13, color: BColors.darkGrey),
+        style: const TextStyle(fontSize: 14, color: BColors.textDarkestBlue),
         children: [
           TextSpan(text: '$base '),
           const TextSpan(

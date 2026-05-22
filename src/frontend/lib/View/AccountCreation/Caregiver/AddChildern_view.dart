@@ -6,19 +6,25 @@ import 'package:flutter/services.dart';
 import 'package:bouh/theme/base_themes/colors.dart';
 import 'package:bouh/widgets/profile_field_validation.dart';
 import 'package:bouh/dto/caregiverSignupData.dart';
+import 'package:bouh/dto/caregiver_children_draft.dart';
 import 'package:bouh/dto/caregiverDto.dart';
 import 'package:bouh/authentication/AuthService.dart';
 import 'package:bouh/View/AccountCreation/verify_email_view.dart';
 import 'package:bouh/services/childrenService.dart';
 import 'package:bouh/widgets/loading_overlay.dart';
+import 'package:bouh/widgets/registration_flow_cache.dart';
 
 class CaregiverAccountCreationStep2 extends StatefulWidget {
   const CaregiverAccountCreationStep2({
     super.key,
     this.signupData,
+    this.initialDraft,
   });
 
   final CaregiverSignupData? signupData;
+
+  /// Restored when the user returns from this screen via back navigation.
+  final CaregiverChildrenDraft? initialDraft;
 
   @override
   State<CaregiverAccountCreationStep2> createState() =>
@@ -31,13 +37,16 @@ class _ChildFormData {
   /// Same pattern as qualifications: remove listener before disposing [nameFocusNode].
   VoidCallback? _onNameBlurNormalize;
 
+  /// Name error shows only after the user focuses or types in the name field (or on submit).
+  bool nameTouched = false;
+
   String gender = 'female';
   String? day;
   String? month;
   String? year;
 
   bool get isComplete =>
-      nameController.text.trim().isNotEmpty &&
+      ProfileFieldValidation.childDisplayName(nameController.text) == null &&
       day != null &&
       month != null &&
       year != null;
@@ -57,6 +66,7 @@ class _CaregiverAccountCreationStep2State
 
   final List<_ChildFormData> _childrenForms = [_ChildFormData()];
   bool _isSubmitting = false;
+  bool _submittedSuccessfully = false;
   String? _submitError;
 
   /// Number of days in the given month/year (leap-year aware).
@@ -137,6 +147,7 @@ class _CaregiverAccountCreationStep2State
   void _attachChildNameBlurNormalize(_ChildFormData c) {
     void listener() {
       if (!c.nameFocusNode.hasFocus) {
+        c.nameTouched = true;
         ProfileFieldValidation.syncTextControllerToNormalizedPersonName(
           c.nameController,
         );
@@ -151,9 +162,81 @@ class _CaregiverAccountCreationStep2State
   @override
   void initState() {
     super.initState();
-    for (final c in _childrenForms) {
-      _attachChildNameBlurNormalize(c);
+    final draft =
+        widget.initialDraft ?? RegistrationFlowCache.caregiverChildren;
+    if (draft != null && draft.children.isNotEmpty) {
+      _applyDraft(draft);
+    } else {
+      _attachChildNameBlurNormalize(_childrenForms.first);
     }
+  }
+
+  CaregiverChildrenDraft _captureDraft() {
+    return CaregiverChildrenDraft(
+      children: _childrenForms
+          .map(
+            (c) => CaregiverChildDraft(
+              name: c.nameController.text,
+              gender: c.gender,
+              day: c.day,
+              month: c.month,
+              year: c.year,
+              nameTouched: c.nameTouched,
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  void _applyDraft(CaregiverChildrenDraft draft) {
+    for (final f in _childrenForms) {
+      f.dispose();
+    }
+    _childrenForms.clear();
+
+    for (final child in draft.children) {
+      final form = _ChildFormData();
+      form.nameController.text = child.name;
+      form.gender = child.gender;
+      form.day = child.day;
+      form.month = child.month;
+      form.year = child.year;
+      form.nameTouched = child.nameTouched;
+      _attachChildNameBlurNormalize(form);
+      _childrenForms.add(form);
+    }
+
+    if (_childrenForms.isEmpty) {
+      final form = _ChildFormData();
+      _attachChildNameBlurNormalize(form);
+      _childrenForms.add(form);
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  void _persistDraftToCache() {
+    RegistrationFlowCache.caregiverChildren = _captureDraft();
+  }
+
+  Future<void> _popStep2() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    await SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
+    await Future<void>.delayed(const Duration(milliseconds: 180));
+    if (!mounted) return;
+    final draft = _captureDraft();
+    RegistrationFlowCache.caregiverChildren = draft;
+    Navigator.of(context).pop(draft);
+  }
+
+  @override
+  void deactivate() {
+    if (!_submittedSuccessfully) {
+      _persistDraftToCache();
+    }
+    super.deactivate();
   }
 
   @override
@@ -194,10 +277,28 @@ class _CaregiverAccountCreationStep2State
     final signupData = widget.signupData;
     if (signupData == null) return;
 
+    setState(() {
+      for (final c in _childrenForms) {
+        c.nameTouched = true;
+      }
+    });
+
     for (final c in _childrenForms) {
       ProfileFieldValidation.syncTextControllerToNormalizedPersonName(
         c.nameController,
       );
+      final nameErr = ProfileFieldValidation.childDisplayName(
+        c.nameController.text,
+      );
+      if (nameErr != null) {
+        if (mounted) {
+          setState(() {});
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(nameErr)),
+          );
+        }
+        return;
+      }
       final dateErr = _validateChildDateOfBirth(c);
       if (dateErr != null) {
         if (mounted) {
@@ -253,6 +354,8 @@ class _CaregiverAccountCreationStep2State
 
       // 3) Go to verify email screen
       if (mounted) {
+        _submittedSuccessfully = true;
+        RegistrationFlowCache.clearCaregiver();
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const VerifyEmailView()),
           (route) => false,
@@ -300,19 +403,25 @@ class _CaregiverAccountCreationStep2State
   Widget build(BuildContext context) {
     final isCreateEnabled = _allChildrenComplete() && !_isSubmitting;
 
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        backgroundColor: BColors.white,
-        body: SafeArea(
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              SingleChildScrollView(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, Object? result) async {
+        if (didPop) return;
+        await _popStep2();
+      },
+      child: Directionality(
+        textDirection: TextDirection.rtl,
+        child: Scaffold(
+          backgroundColor: BColors.white,
+          body: SafeArea(
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                SingleChildScrollView(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(22, 30, 22, 40),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Padding(
                         padding: const EdgeInsets.only(top: 6),
@@ -325,12 +434,12 @@ class _CaregiverAccountCreationStep2State
                                 size: 20,
                                 color: BColors.textDarkestBlue,
                               ),
-                              onPressed: () => Navigator.pop(context),
+                              onPressed: _popStep2,
                             ),
                             const SizedBox(width: 6),
                             const Expanded(
                               child: Text(
-                                ' أضف طفلاً واحداً للمتابعة',
+                                ' أضف طفلًا واحدًا للمتابعة',
                                 textAlign: TextAlign.right,
                                 style: TextStyle(
                                   fontSize: 16,
@@ -350,6 +459,29 @@ class _CaregiverAccountCreationStep2State
                       ),
                       const SizedBox(height: 28),
 
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: BColors.secondary,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Text(
+                          'لتجربة ممتعة داخل بوح، يجب تسجيل طفل واحد كحدّ أدنى.\n'
+                          'الحد الأدنى لعمر الطفل هو 6 سنوات، و الحد الأقصى للطفل 13 سنة، ويمكنك إضافة حتى 5 أطفال.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 14,
+                            height: 1.4,
+                            color: BColors.textDarkestBlue
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+
                       ListView.builder(
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
@@ -357,6 +489,11 @@ class _CaregiverAccountCreationStep2State
                         itemBuilder: (context, index) {
                           final child = _childrenForms[index];
                           final canDelete = _childrenForms.length > 1;
+                          final nameError = child.nameTouched
+                              ? ProfileFieldValidation.childDisplayName(
+                                  child.nameController.text,
+                                )
+                              : null;
                           final dateOfBirthError =
                               _validateChildDateOfBirth(child);
 
@@ -389,15 +526,35 @@ class _CaregiverAccountCreationStep2State
                                   focusNode: child.nameFocusNode,
                                   keyboardType: TextInputType.name,
                                   textAlign: TextAlign.right,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    color: BColors.textDarkestBlue,
+                                  ),
                                   decoration: _inputDecoration(),
                                   inputFormatters: [
                                     LengthLimitingTextInputFormatter(
                                       ProfileFieldValidation
-                                          .personDisplayNameMaxLength,
+                                          .childDisplayNameMaxLength,
                                     ),
                                   ],
-                                  onChanged: (_) => setState(() {}),
+                                  onChanged: (_) => setState(() {
+                                    child.nameTouched = true;
+                                  }),
                                 ),
+                                if (nameError != null) ...[
+                                  const SizedBox(height: 6),
+                                  Align(
+                                    alignment: Alignment.centerRight,
+                                    child: Text(
+                                      nameError,
+                                      style: const TextStyle(
+                                        color: BColors.validationError,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                                 const SizedBox(height: 14),
 
                                 Align(
@@ -506,14 +663,14 @@ class _CaregiverAccountCreationStep2State
                             onPressed: _addAnotherChild,
                             icon: const Icon(
                               Icons.add_circle_outline_rounded,
-                              color: BColors.textDarkestBlue,
+                              color: BColors.primary,
                             ),
                             label: const Text(
                               'إضافة طفل آخر',
                               style: TextStyle(
-                                fontSize: 13,
+                                fontSize: 14,
                                 fontWeight: FontWeight.w800,
-                                color: BColors.textDarkestBlue,
+                                color: BColors.primary,
                               ),
                             ),
                           ),
@@ -523,30 +680,28 @@ class _CaregiverAccountCreationStep2State
 
                       const SizedBox(height: 10),
 
-                      Center(
-                        child: SizedBox(
-                          width: 220,
-                          height: 46,
-                          child: ElevatedButton(
-                            onPressed: isCreateEnabled ? _submitAll : null,
-                            style: ElevatedButton.styleFrom(
-                              elevation: 0,
-                              backgroundColor: BColors.secondary,
-                              foregroundColor: BColors.textDarkestBlue,
-                              disabledBackgroundColor: BColors.secondary
-                                  .withOpacity(0.4),
-                              disabledForegroundColor: BColors.textDarkestBlue
-                                  .withOpacity(0.5),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton(
+                          onPressed: isCreateEnabled ? _submitAll : null,
+                          style: ElevatedButton.styleFrom(
+                            elevation: 0,
+                            backgroundColor: BColors.primary,
+                            foregroundColor: BColors.white,
+                            disabledBackgroundColor: BColors.primary
+                                .withOpacity(0.4),
+                            disabledForegroundColor: BColors.white
+                                .withOpacity(0.7),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
                             ),
-                            child: const Text(
-                              'إنشاء حساب',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w800,
-                              ),
+                          ),
+                          child: const Text(
+                            'إنشاء حساب',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
                             ),
                           ),
                         ),
@@ -563,20 +718,6 @@ class _CaregiverAccountCreationStep2State
                           ),
                         ),
                       ],
-                      if (_childrenForms.length == 1) ...[
-                        const SizedBox(height: 24),
-                        const Text(
-                          'لتجربة ممتعة داخل بوح، يجب تسجيل طفل واحد كحدّ أدنى.\n'
-                          'الحد الأدنى لعمر الطفل هو 6 سنوات , و الحد الأقصى للطفل 13 سنة، ويمكنك إضافة حتى 5 أطفال.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 12,
-                            height: 1.4,
-                            color: BColors.darkGrey,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
                     ],
                   ),
                 ),
@@ -586,6 +727,7 @@ class _CaregiverAccountCreationStep2State
             ],
           ),
         ),
+      ),
       ),
     );
   }
@@ -634,8 +776,8 @@ Widget _requiredFieldLabel(String label) {
   return RichText(
     text: TextSpan(
       style: const TextStyle(
-        fontSize: 13,
-        color: BColors.darkGrey,
+        fontSize: 14,
+        color: BColors.textDarkestBlue,
       ),
       children: [
         TextSpan(text: label),
@@ -673,7 +815,7 @@ class _SegButton extends StatelessWidget {
         child: Text(
           text,
           style: TextStyle(
-            fontSize: 13,
+            fontSize: 14,
             fontWeight: FontWeight.w700,
             color: selected ? Colors.white : BColors.darkGrey,
           ),
@@ -724,7 +866,7 @@ class _DropdownBox extends StatelessWidget {
             hint: Text(
               hint,
               textAlign: TextAlign.right,
-              style: const TextStyle(fontSize: 13, color: BColors.darkGrey),
+              style: const TextStyle(fontSize: 14, color: BColors.darkGrey),
             ),
             icon: const Icon(Icons.keyboard_arrow_down_rounded),
             items: items
@@ -736,7 +878,7 @@ class _DropdownBox extends StatelessWidget {
                       child: Text(
                         e,
                         style: const TextStyle(
-                          fontSize: 13,
+                          fontSize: 16,
                           color: BColors.textDarkestBlue,
                         ),
                       ),

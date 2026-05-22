@@ -323,19 +323,20 @@ class _SmallStatCard extends StatelessWidget {
           Text(
             value,
             style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w900,
-              color: Colors.black.withOpacity(0.75),
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              color: BColors.textDarkestBlue,
             ),
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: 4),
           Text(
             label,
             textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              color: Colors.black.withOpacity(0.55),
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: BColors.textDarkestBlue,
+              height: 1.2,
             ),
           ),
         ],

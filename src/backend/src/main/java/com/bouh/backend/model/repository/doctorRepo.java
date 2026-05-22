@@ -474,6 +474,20 @@ public Map<String, Boolean> getDoctorMonthAvailability(
     }
 
     /*
+     * Clears FCM tocken
+     */
+    public void clearFcmToken(String uid) {
+        try {
+            firestore.collection("doctors")
+                    .document(uid)
+                    .update("fcmToken", FieldValue.delete())
+                    .get();
+        } catch (Exception e) {
+            log.error("Failed to clear doctor FCM token for uid={}", uid, e);
+            throw new RuntimeException("Failed to clear doctor FCM token", e);
+        }
+    }
+    /*
      * Sets a new rate from a caregiver and updates the average
      */
     public void addRating(String doctorId, int rating) throws Exception {

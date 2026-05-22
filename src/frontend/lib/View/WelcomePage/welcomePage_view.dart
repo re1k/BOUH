@@ -140,7 +140,8 @@ class AccountTypeView extends StatelessWidget {
                           const Text(
                             'هل لديك حساب؟',
                             style: TextStyle(
-                              fontSize: 13,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
                               color: BColors.darkGrey,
                             ),
                           ),
@@ -150,9 +151,11 @@ class AccountTypeView extends StatelessWidget {
                             child: const Text(
                               'تسجيل دخول',
                               style: TextStyle(
-                                fontSize: 13,
+                                fontSize: 15,
                                 fontWeight: FontWeight.w700,
                                 color: BColors.primary,
+                                decoration: TextDecoration.underline,
+                                decorationColor: BColors.primary,
                               ),
                             ),
                           ),

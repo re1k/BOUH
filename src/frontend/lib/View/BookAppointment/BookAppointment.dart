@@ -636,7 +636,7 @@ class _BookingViewState extends State<BookingView> {
 
         SizedBox(
           width: 220,
-          height: 52,
+          height: 46,
           child: ElevatedButton(
             onPressed:
                 selectedTimeIndex == -1 ||
@@ -706,7 +706,7 @@ class _BookingViewState extends State<BookingView> {
                 : const Text(
                     "حجز",
                     style: TextStyle(
-                      fontSize: 20.44,
+                      fontSize: 18,
                       fontWeight: FontWeight.w600,
                       color: Colors.white,
                     ),

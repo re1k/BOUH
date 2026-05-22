@@ -138,7 +138,8 @@ class AppointmentCard extends StatelessWidget {
                         specialty,
                         style: TextStyle(
                           fontFamily: 'Markazi Text',
-                          fontSize: 13,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
                           color: BColors.darkGrey,
                         ),
                       ),
@@ -161,7 +162,7 @@ class AppointmentCard extends StatelessWidget {
                             Icon(
                               Icons.calendar_today,
                               size: 14,
-                              color: BColors.darkGrey,
+                              color: BColors.primary,
                             ),
                             const SizedBox(width: 6),
                             Transform.translate(
@@ -179,7 +180,7 @@ class AppointmentCard extends StatelessWidget {
                             Icon(
                               Icons.access_time,
                               size: 14,
-                              color: BColors.darkGrey,
+                              color: BColors.primary,
                             ),
                             const SizedBox(width: 6),
                             Transform.translate(
@@ -228,8 +229,8 @@ class AppointmentCard extends StatelessWidget {
           childName,
           style: TextStyle(
             fontFamily: 'Markazi Text',
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
             color: BColors.white,
           ),
           softWrap: true,

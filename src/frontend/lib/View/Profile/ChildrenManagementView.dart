@@ -6,6 +6,19 @@ import 'package:bouh/theme/base_themes/colors.dart';
 import 'package:bouh/services/childrenService.dart';
 import 'package:bouh/dto/childDto.dart';
 
+/// Field titles — matches caregiver account creation / AddChildern labels.
+const TextStyle _kChildFieldLabelStyle = TextStyle(
+  fontSize: 16,
+  color: BColors.textDarkestBlue,
+  fontWeight: FontWeight.w700,
+);
+
+/// Field values — matches account creation input text (not bold).
+const TextStyle _kChildFieldValueStyle = TextStyle(
+  fontSize: 16,
+  color: BColors.textDarkestBlue,
+);
+
 class ChildrenManagementView extends StatefulWidget {
   const ChildrenManagementView({super.key});
 
@@ -203,17 +216,21 @@ class _ChildrenManagementViewState extends State<ChildrenManagementView> {
   void _showSnack(String text, {bool isSuccess = false}) {
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: isSuccess ? BColors.primary : BColors.validationError,
-        content: Text(
-          text,
-          textDirection: TextDirection.rtl,
-          textAlign: TextAlign.right,
-          style: const TextStyle(color: Colors.white),
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          backgroundColor: isSuccess
+              ? BColors.primary
+              : BColors.validationError,
+          content: Text(
+            text,
+            textDirection: TextDirection.rtl,
+            textAlign: TextAlign.right,
+            style: const TextStyle(color: Colors.white),
+          ),
         ),
-      ),
-    );
+      );
   }
 
   @override
@@ -252,19 +269,46 @@ class _ChildrenManagementViewState extends State<ChildrenManagementView> {
                         size: 24,
                       ),
                     ),
-                    const SizedBox(width: 80),
-                    Text(
-                      "ادارة الاطفال",
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.black.withOpacity(0.75),
+                    Expanded(
+                      child: Text(
+                        "ادارة الاطفال",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.black.withOpacity(0.75),
+                        ),
                       ),
                     ),
+                    const SizedBox(width: 24),
                   ],
                 ),
 
-                const SizedBox(height: 18),
+                const SizedBox(height: 24),
+
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 16,
+                  ),
+                  decoration: BoxDecoration(
+                    color: BColors.secondary,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Text(
+                    'لتجربة ممتعة داخل بوح، يجب وجود طفل واحد كحدّ أدنى.\n'
+                    'الحد الأدنى لعمر الطفل هو 6 سنوات، و الحد الأقصى للطفل 13 سنة، ويمكنك إضافة حتى 5 أطفال.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      height: 1.4,
+                      color: BColors.textDarkestBlue,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 28),
 
                 Expanded(
                   child: isLoading
@@ -272,7 +316,7 @@ class _ChildrenManagementViewState extends State<ChildrenManagementView> {
                       : RefreshIndicator.noSpinner(
                           onRefresh: _loadChildren,
                           child: ListView(
-                            padding: const EdgeInsets.only(bottom: 90),
+                            padding: const EdgeInsets.only(top: 8, bottom: 90),
                             children: [
                               if (children.isEmpty)
                                 Padding(
@@ -352,7 +396,7 @@ class _ChildrenManagementViewState extends State<ChildrenManagementView> {
               const Spacer(),
               _circleIconButton(
                 icon: Icons.edit,
-                iconColor: Colors.grey,
+                iconColor: BColors.primary,
                 onTap: onEdit,
               ),
               const SizedBox(width: 10),
@@ -365,16 +409,9 @@ class _ChildrenManagementViewState extends State<ChildrenManagementView> {
           ),
           const SizedBox(height: 10),
 
-          Align(
+          const Align(
             alignment: Alignment.centerRight,
-            child: Text(
-              "الاسم",
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Colors.black.withOpacity(0.40),
-              ),
-            ),
+            child: Text('الاسم', style: _kChildFieldLabelStyle),
           ),
           const SizedBox(height: 6),
           _inputBox(value: name),
@@ -388,15 +425,11 @@ class _ChildrenManagementViewState extends State<ChildrenManagementView> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Align(
+                    const Align(
                       alignment: Alignment.centerRight,
                       child: Text(
-                        "تاريخ الميلاد",
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black.withOpacity(0.40),
-                        ),
+                        'تاريخ الميلاد',
+                        style: _kChildFieldLabelStyle,
                       ),
                     ),
                     const SizedBox(height: 6),
@@ -423,18 +456,11 @@ class _ChildrenManagementViewState extends State<ChildrenManagementView> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Align(
+                    const Align(
                       alignment: Alignment.centerRight,
-                      child: Text(
-                        "الجنس",
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black.withOpacity(0.40),
-                        ),
-                      ),
+                      child: Text('الجنس', style: _kChildFieldLabelStyle),
                     ),
-                    const SizedBox(height: 35),
+                    const SizedBox(height: 33),
                     _genderSegmented(isFemaleSelected: isFemaleSelected),
                   ],
                 ),
@@ -479,10 +505,7 @@ class _ChildrenManagementViewState extends State<ChildrenManagementView> {
         borderRadius: BorderRadius.circular(6.21),
         border: Border.all(color: Colors.black.withOpacity(0.10)),
       ),
-      child: Text(
-        value,
-        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-      ),
+      child: Text(value, style: _kChildFieldValueStyle),
     );
   }
 
@@ -493,14 +516,7 @@ class _ChildrenManagementViewState extends State<ChildrenManagementView> {
       children: [
         Align(
           alignment: Alignment.centerRight,
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 14.89,
-              fontWeight: FontWeight.w600,
-              color: Colors.black.withOpacity(0.35),
-            ),
-          ),
+          child: Text(label, style: _kChildFieldLabelStyle),
         ),
         const SizedBox(height: 6),
         Container(
@@ -511,10 +527,7 @@ class _ChildrenManagementViewState extends State<ChildrenManagementView> {
             border: Border.all(color: Colors.black.withOpacity(0.10)),
             color: Colors.white,
           ),
-          child: Text(
-            value,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-          ),
+          child: Text(value, style: _kChildFieldValueStyle),
         ),
       ],
     );
@@ -616,7 +629,7 @@ class _AddChildDialogState extends State<_AddChildDialog> {
   final TextEditingController dayCtrl = TextEditingController();
 
   bool isFemale = true;
-
+  String? validationError;
   @override
   void initState() {
     super.initState();
@@ -653,7 +666,7 @@ class _AddChildDialogState extends State<_AddChildDialog> {
   Widget _requiredLabel(String text) {
     return RichText(
       text: TextSpan(
-        style: const TextStyle(fontSize: 13, color: BColors.darkGrey),
+        style: _kChildFieldLabelStyle,
         children: [
           TextSpan(text: '$text '),
           const TextSpan(
@@ -661,6 +674,24 @@ class _AddChildDialogState extends State<_AddChildDialog> {
             style: TextStyle(color: BColors.validationError),
           ),
         ],
+      ),
+    );
+  }
+
+  InputDecoration _dialogFieldDecoration({required Widget label}) {
+    return InputDecoration(
+      label: label,
+      enabledBorder: const UnderlineInputBorder(
+        borderSide: BorderSide(color: BColors.grey),
+      ),
+      focusedBorder: const UnderlineInputBorder(
+        borderSide: BorderSide(color: BColors.primary, width: 2),
+      ),
+      errorBorder: const UnderlineInputBorder(
+        borderSide: BorderSide(color: BColors.validationError),
+      ),
+      focusedErrorBorder: const UnderlineInputBorder(
+        borderSide: BorderSide(color: BColors.validationError, width: 2),
       ),
     );
   }
@@ -771,19 +802,43 @@ class _AddChildDialogState extends State<_AddChildDialog> {
       textDirection: TextDirection.rtl,
       child: AlertDialog(
         backgroundColor: Colors.white,
-        title: Text(widget.isEdit ? "تعديل بيانات الطفل" : "إضافة طفل"),
+        title: Text(
+          widget.isEdit ? "تعديل بيانات الطفل" : "إضافة طفل",
+          textAlign: TextAlign.center,
+        ),
         content: SingleChildScrollView(
           child: Column(
             children: [
+              if (validationError != null) ...[
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      validationError!,
+                      textDirection: TextDirection.rtl,
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                        color: BColors.validationError,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
               TextField(
                 controller: nameCtrl,
+                style: _kChildFieldValueStyle,
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(
                     RegExp(r"[a-zA-Z0-9\u0600-\u06FF\s]"),
                   ),
                   LengthLimitingTextInputFormatter(10),
                 ],
-                decoration: InputDecoration(label: _requiredLabel("اسم الطفل")),
+                decoration: _dialogFieldDecoration(
+                  label: _requiredLabel("اسم الطفل"),
+                ),
               ),
               const SizedBox(height: 12),
               Row(
@@ -791,12 +846,13 @@ class _AddChildDialogState extends State<_AddChildDialog> {
                   Expanded(
                     child: TextField(
                       controller: yearCtrl,
+                      style: _kChildFieldValueStyle,
                       keyboardType: TextInputType.number,
                       inputFormatters: [
                         FilteringTextInputFormatter.digitsOnly,
                         LengthLimitingTextInputFormatter(4),
                       ],
-                      decoration: InputDecoration(
+                      decoration: _dialogFieldDecoration(
                         label: _requiredLabel("السنة"),
                       ),
                     ),
@@ -805,12 +861,13 @@ class _AddChildDialogState extends State<_AddChildDialog> {
                   Expanded(
                     child: TextField(
                       controller: monthCtrl,
+                      style: _kChildFieldValueStyle,
                       keyboardType: TextInputType.number,
                       inputFormatters: [
                         FilteringTextInputFormatter.digitsOnly,
                         LengthLimitingTextInputFormatter(2),
                       ],
-                      decoration: InputDecoration(
+                      decoration: _dialogFieldDecoration(
                         label: _requiredLabel("الشهر"),
                       ),
                     ),
@@ -819,12 +876,13 @@ class _AddChildDialogState extends State<_AddChildDialog> {
                   Expanded(
                     child: TextField(
                       controller: dayCtrl,
+                      style: _kChildFieldValueStyle,
                       keyboardType: TextInputType.number,
                       inputFormatters: [
                         FilteringTextInputFormatter.digitsOnly,
                         LengthLimitingTextInputFormatter(2),
                       ],
-                      decoration: InputDecoration(
+                      decoration: _dialogFieldDecoration(
                         label: _requiredLabel("اليوم"),
                       ),
                     ),
@@ -893,31 +951,32 @@ class _AddChildDialogState extends State<_AddChildDialog> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("إلغاء"),
+            child: const Text(
+              "إلغاء",
+              style: TextStyle(
+                color: BColors.darkGrey,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
+              elevation: 0,
               backgroundColor: _canSubmit
-                  ? BColors.accent
-                  : Colors.grey.shade400,
-              foregroundColor: Colors.white,
+                  ? BColors.primary
+                  : BColors.primary.withOpacity(0.4),
+              foregroundColor: BColors.white,
+              disabledBackgroundColor: BColors.primary.withOpacity(0.4),
+              disabledForegroundColor: BColors.white.withOpacity(0.7),
             ),
             onPressed: !_canSubmit
                 ? null
                 : () {
                     final err = _validate();
                     if (err != null) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          backgroundColor: BColors.validationError,
-                          content: Text(
-                            err,
-                            textDirection: TextDirection.rtl,
-                            textAlign: TextAlign.right,
-                            style: const TextStyle(color: Colors.white),
-                          ),
-                        ),
-                      );
+                      setState(() {
+                        validationError = err;
+                      });
                       return;
                     }
 

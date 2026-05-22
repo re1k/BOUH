@@ -53,8 +53,22 @@ class _RequestAnalysisPageState extends State<RequestAnalysisPage> {
       setState(() {
         _children = children;
         _loadingChildren = false;
-        if (children.isNotEmpty) {
+        // Only set default if nothing is selected yet
+        if (_selectedChild == null && children.isNotEmpty) {
           _selectedChild = children.first;
+        }
+
+        // If the previously selected child still exists, keep them selected
+        // (handles case where a child was removed)
+        if (_selectedChild != null) {
+          final match = children
+              .where((c) => c.id == _selectedChild!.id)
+              .firstOrNull;
+          if (match != null) {
+            _selectedChild = match; // refresh name (or any other field)
+          } else {
+            _selectedChild = children.isNotEmpty ? children.first : null;
+          }
         }
       });
     } catch (e) {

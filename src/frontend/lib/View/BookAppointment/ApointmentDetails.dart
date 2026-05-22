@@ -1,5 +1,4 @@
 import 'package:bouh/View/caregiverHomepage/caregivernavbar.dart';
-import 'package:bouh/theme/base_themes/typography.dart';
 import 'package:flutter/material.dart';
 import 'package:bouh/theme/base_themes/colors.dart';
 import 'payment_sheet.dart';
@@ -257,16 +256,18 @@ class _AppointmentDetailsViewState extends State<AppointmentDetailsView> {
                       onTap: () => Navigator.pop(context),
                       child: const Icon(Icons.chevron_left, size: 30),
                     ),
-                    const SizedBox(width: 63),
-                    Text(
-                      "تفاصيل الموعد",
-                      style: BTypography.pageTitle.copyWith(
-                        fontSize: 32,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black.withOpacity(0.78),
+                    Expanded(
+                      child: Text(
+                        "تفاصيل الموعد",
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: BColors.textDarkestBlue,
+                        ),
                       ),
                     ),
-                    const Spacer(),
+                    const SizedBox(width: 30),
                   ],
                 ),
 
@@ -368,7 +369,7 @@ class _AppointmentDetailsViewState extends State<AppointmentDetailsView> {
                 const SizedBox(height: 20),
                 SizedBox(
                   width: 240,
-                  height: 56,
+                  height: 46,
                   child: ElevatedButton(
                     onPressed: _isSubmitting ? null : _handlePaymentAndBooking,
                     style: ElevatedButton.styleFrom(
@@ -387,7 +388,7 @@ class _AppointmentDetailsViewState extends State<AppointmentDetailsView> {
                         : const Text(
                             "دفع",
                             style: TextStyle(
-                              fontSize: 20.44,
+                              fontSize: 18,
                               fontWeight: FontWeight.w600,
                               color: Colors.white,
                             ),
@@ -513,9 +514,9 @@ class _PriceRow extends StatelessWidget {
         Text(
           label,
           style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w600,
-            color: Colors.black.withOpacity(0.75),
+            fontSize: 18,
+            fontWeight: bold ? FontWeight.w800 : FontWeight.w700,
+            color: BColors.textDarkestBlue,
           ),
         ),
         Expanded(

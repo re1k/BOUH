@@ -499,8 +499,8 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
                         maxLines: 2,
                         style: const TextStyle(
                           color: BColors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
                     ),

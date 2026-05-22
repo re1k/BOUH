@@ -240,12 +240,16 @@ class AnalysisResultsPage extends StatelessWidget {
             doctorId,
           );
 
-          // Map DoctorDto → DoctorSummaryDto which DoctorDetailsView expects
+          final resolvedPhotoUrl = await _resolveImageUrl(
+            fullDoctor.profilePhotoURL,
+          );
+
           final DoctorSummaryDto summary = DoctorSummaryDto(
             doctorId: fullDoctor.doctorId,
             name: fullDoctor.name,
             areaOfKnowledge: fullDoctor.areaOfKnowledge,
             rating: fullDoctor.averageRating ?? 0.0,
+            profilePhotoURL: resolvedPhotoUrl,
           );
 
           if (!context.mounted) return;

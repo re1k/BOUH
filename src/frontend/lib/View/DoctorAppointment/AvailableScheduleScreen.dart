@@ -246,45 +246,7 @@ class _AvailableScheduleScreenState extends State<AvailableScheduleScreen> {
               child: SingleChildScrollView(
                 child: Column(
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Align(
-                          alignment:
-                              Alignment.centerLeft, // forces left even in RTL
-                          child: _circleIconButton(
-                            icon: isEditMode ? Icons.close : Icons.edit,
-                            iconColor: BColors.textDarkestBlue,
-                            onTap: () async {
-                              if (isEditMode) {
-                                if (draftByDate.isNotEmpty) {
-                                  final confirmed = await _confirmDiscard();
-                                  if (!confirmed) return;
-                                }
-                                _cancelEdit();
-                                return;
-                              }
-
-                              setState(() {
-                                isEditMode = true;
-
-                                _syncDraftFromLoadedData(); // fills offeredIndexesDraft from backend
-
-                                final key = _iso(selectedDay!);
-                                originalByDate[key] = {
-                                  ...offeredIndexesDraft,
-                                }; // remember original
-                                draftByDate.remove(
-                                  key,
-                                ); // ensure NOT treated as changed
-                              });
-                            },
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        _calendarCard(),
-                      ],
-                    ),
+                    _calendarCard(),
                     const SizedBox(height: 10),
                     Directionality(
                       textDirection: TextDirection.rtl,
@@ -347,7 +309,7 @@ class _AvailableScheduleScreenState extends State<AvailableScheduleScreen> {
               ),
             ),
 
-            _saveButton(),
+            _scheduleActionButtons(),
           ],
         ),
       ),
@@ -692,25 +654,104 @@ class _AvailableScheduleScreenState extends State<AvailableScheduleScreen> {
     });
   }
 
-  Widget _saveButton() {
+  Future<void> _enterEditMode() async {
+    setState(() {
+      isEditMode = true;
+      _syncDraftFromLoadedData();
+      final key = _iso(selectedDay!);
+      originalByDate[key] = {...offeredIndexesDraft};
+      draftByDate.remove(key);
+    });
+  }
+
+  Future<void> _exitEditMode() async {
+    if (isEditMode) {
+      if (draftByDate.isNotEmpty) {
+        final confirmed = await _confirmDiscard();
+        if (!confirmed) return;
+      }
+      _cancelEdit();
+    }
+  }
+
+  Widget _scheduleActionButtons() {
     final day = selectedDay;
     if (day == null) return const SizedBox.shrink();
     final editable = _isEditableDay(day);
     if (!editable) return const SizedBox.shrink();
-    final canSave =
-        isEditMode && draftByDate.isNotEmpty && !isLoading && loadError == null;
 
+    if (!isEditMode) {
+      return SizedBox(
+        width: double.infinity,
+        child: ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            elevation: 0,
+            backgroundColor: BColors.primary,
+            foregroundColor: BColors.white,
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(30),
+            ),
+          ),
+          onPressed: _enterEditMode,
+          child: const Text(
+            'تعديل',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          ),
+        ),
+      );
+    }
+
+    final canSave =
+        draftByDate.isNotEmpty && !isLoading && loadError == null;
+
+    return Row(
+      textDirection: TextDirection.ltr,
+      children: [
+        Expanded(
+          flex: 3,
+          child: _saveButton(canSave: canSave, day: day),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          flex: 2,
+          child: SizedBox(
+            height: 48,
+            child: OutlinedButton(
+              onPressed: isLoading ? null : () => _exitEditMode(),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: BColors.textDarkestBlue,
+                side: const BorderSide(color: BColors.grey),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(30),
+                ),
+              ),
+              child: const Text(
+                'إلغاء',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _saveButton({required bool canSave, required DateTime day}) {
     return SizedBox(
-      width: double.infinity,
+      height: 48,
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
+          elevation: 0,
           backgroundColor: canSave ? BColors.primary : Colors.grey.shade400,
+          foregroundColor: BColors.white,
+          disabledBackgroundColor: Colors.grey.shade400,
+          disabledForegroundColor: BColors.white,
           padding: const EdgeInsets.symmetric(vertical: 14),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(30),
           ),
         ),
-        // Disabled unless edit mode + editable day
         onPressed: !canSave
             ? null
             : () async {
@@ -794,7 +835,11 @@ class _AvailableScheduleScreenState extends State<AvailableScheduleScreen> {
               },
         child: const Text(
           'حفظ',
-          style: TextStyle(color: BColors.white, fontSize: 16),
+          style: TextStyle(
+            color: BColors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
     );
@@ -825,24 +870,4 @@ class _AvailableScheduleScreenState extends State<AvailableScheduleScreen> {
     return confirmed;
   }
 
-  Widget _circleIconButton({
-    required IconData icon,
-    required Color iconColor,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(999),
-      child: Container(
-        width: 34,
-        height: 34,
-        decoration: BoxDecoration(
-          color: const Color(0xFFE9EEF3),
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.black.withOpacity(0.08)),
-        ),
-        child: Icon(icon, color: iconColor, size: 20),
-      ),
-    );
-  }
 }

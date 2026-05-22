@@ -69,6 +69,9 @@ class AuthService {
   //Logout
   Future<void> signOut() async {
     final uid = _session.userId;
+    try {
+      await updateFcmTokenOnBackend('');
+    } catch (_) {}
     await _auth.signOut();
     await _session.clearSession(uid);
   }

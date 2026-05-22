@@ -67,6 +67,14 @@ class _LoginViewState extends State<LoginView> {
     return null;
   }
 
+  bool get _isLoginEnabled {
+    if (_isLoggingIn) return false;
+    if (ProfileFieldValidation.accountEmail(_emailCtrl.text) != null) {
+      return false;
+    }
+    return _passwordCtrl.text.isNotEmpty;
+  }
+
   void _onEmailFocusChange() {
     if (_emailFocusNode.hasFocus) {
       if (_emailError != null) setState(() => _emailError = null);
@@ -444,26 +452,31 @@ class _LoginViewState extends State<LoginView> {
                           const SizedBox(height: 24),
                         ],
                         /// Login button.
-                        SizedBox(
-                          width: 237,
-                          height: 53,
-                          child: ElevatedButton(
-                            onPressed: _isLoggingIn ? null : _handleLogin,
-                            style: ElevatedButton.styleFrom(
-                              elevation: 0,
-                              backgroundColor: BColors.secondary,
-                              foregroundColor: BColors.textDarkestBlue,
-                              disabledBackgroundColor: BColors.secondary,
-                              disabledForegroundColor: BColors.textDarkestBlue,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 16),
+                          child: SizedBox(
+                            width: 237,
+                            height: 53,
+                            child: ElevatedButton(
+                              onPressed: _isLoginEnabled ? _handleLogin : null,
+                              style: ElevatedButton.styleFrom(
+                                elevation: 0,
+                                backgroundColor: BColors.primary,
+                                foregroundColor: BColors.white,
+                                disabledBackgroundColor:
+                                    BColors.primary.withOpacity(0.4),
+                                disabledForegroundColor:
+                                    BColors.white.withOpacity(0.7),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
                               ),
-                            ),
-                            child: const Text(
-                              'تسجيل الدخول',
-                              style: TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.w800,
+                              child: const Text(
+                                'تسجيل الدخول',
+                                style: TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w800,
+                                ),
                               ),
                             ),
                           ),
@@ -479,7 +492,8 @@ class _LoginViewState extends State<LoginView> {
                                 const Text(
                                   'نسيت كلمة المرور؟',
                                   style: TextStyle(
-                                    fontSize: 13,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
                                     color: BColors.darkGrey,
                                   ),
                                 ),
@@ -495,9 +509,11 @@ class _LoginViewState extends State<LoginView> {
                                   child: const Text(
                                     'اضغط هنا',
                                     style: TextStyle(
-                                      fontSize: 13,
+                                      fontSize: 14,
                                       fontWeight: FontWeight.w700,
                                       color: BColors.primary,
+                                      decoration: TextDecoration.underline,
+                                      decorationColor: BColors.primary,
                                     ),
                                   ),
                                 ),
@@ -510,7 +526,8 @@ class _LoginViewState extends State<LoginView> {
                                 const Text(
                                   'لا تمتلك حساب؟',
                                   style: TextStyle(
-                                    fontSize: 13,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
                                     color: BColors.darkGrey,
                                   ),
                                 ),
@@ -521,16 +538,17 @@ class _LoginViewState extends State<LoginView> {
                                     minimumSize: Size.zero,
                                     tapTargetSize:
                                         MaterialTapTargetSize.shrinkWrap,
-                                  ),
-                                  onPressed: _handleCreateAccount,
-                                  child: const Text(
-                                    'سجّل الآن',
-                                    style: TextStyle(
-                                      fontSize: 13,
+                                    foregroundColor: BColors.primary,
+                                    textStyle: const TextStyle(
+                                      fontSize: 14,
                                       fontWeight: FontWeight.w700,
-                                      color: BColors.primary,
+                                      decoration: TextDecoration.underline,
+                                      decorationColor: BColors.primary,
+                                      decorationThickness: 1.2,
                                     ),
                                   ),
+                                  onPressed: _handleCreateAccount,
+                                  child: const Text('سجّل الآن'),
                                 ),
                               ],
                             ),
@@ -607,7 +625,7 @@ class _LabeledField extends StatelessWidget {
       children: [
         Text(
           label,
-          style: const TextStyle(fontSize: 13, color: BColors.darkGrey),
+          style: const TextStyle(fontSize: 16, color: BColors.textDarkestBlue),
         ),
         const SizedBox(height: 8),
         TextFormField(
@@ -616,6 +634,11 @@ class _LabeledField extends StatelessWidget {
           focusNode: focusNode,
           keyboardType: keyboardType,
           obscureText: obscure,
+          style: const TextStyle(
+            fontSize: 18,
+            color: BColors.textDarkestBlue,
+            fontWeight: FontWeight.w500,
+          ),
           textAlign: TextAlign.right,
           validator: validator,
           textInputAction: textInputAction,

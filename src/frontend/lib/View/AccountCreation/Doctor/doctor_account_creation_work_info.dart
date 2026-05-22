@@ -5,17 +5,27 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:bouh/theme/base_themes/colors.dart';
 import 'package:bouh/dto/doctorSignupData.dart';
+import 'package:bouh/dto/doctor_work_info_draft.dart';
 import 'package:bouh/dto/doctorDto.dart';
 import 'package:bouh/authentication/AuthService.dart';
 import 'package:bouh/widgets/profile_field_validation.dart';
 import 'package:bouh/View/AccountCreation/verify_email_view.dart';
 import 'package:bouh/widgets/loading_overlay.dart';
+import 'package:bouh/View/AccountCreation/Doctor/doctor_account_creation_step_progress.dart';
+import 'package:bouh/widgets/registration_flow_cache.dart';
 
 class DoctorAccountCreationStep2 extends StatefulWidget {
-  const DoctorAccountCreationStep2({super.key, this.signupData});
+  const DoctorAccountCreationStep2({
+    super.key,
+    this.signupData,
+    this.initialDraft,
+  });
 
   /// Step-1 data (email, password, name, gender, profileImage)
   final DoctorSignupData? signupData;
+
+  /// Restored when the user returns from step 2 via back navigation.
+  final DoctorWorkInfoDraft? initialDraft;
 
   @override
   State<DoctorAccountCreationStep2> createState() =>
@@ -47,12 +57,13 @@ class _DoctorAccountCreationStep2State
   /// Inline qualification errors only after the user starts typing in a qualification field.
   bool _qualificationsTyped = false;
 
-  bool _classificationTyped = false;
+  bool _scfhsNumberTyped = false;
   bool _ibanTyped = false;
 
   String? _specialty;
   String? _years;
   bool _isSubmitting = false;
+  bool _submittedSuccessfully = false;
   String? _submitError;
 
   void _trimQualificationsInPlace() {
@@ -69,19 +80,33 @@ class _DoctorAccountCreationStep2State
     }
   }
 
-  String? _validateQualificationsList() {
-    final all = _qualificationCtrls
+  String? _qualificationFieldErrorAt(
+    int index, {
+    bool onlyWhenShowingErrors = true,
+  }) {
+    if (onlyWhenShowingErrors && !_qualificationsTyped) return null;
+
+    final normalized = _qualificationCtrls
         .map((c) => ProfileFieldValidation.normalizeQualificationLine(c.text))
         .toList();
-    final nonEmpty = all.where((s) => s.isNotEmpty).toList();
+    final nonEmpty = normalized.where((s) => s.isNotEmpty).toList();
+
     if (nonEmpty.isEmpty) {
-      return 'يرجى إدخال مؤهل واحد على الأقل';
+      return index == 0 ? 'يرجى إدخال مؤهل واحد على الأقل' : null;
     }
-    for (final s in nonEmpty) {
-      final lineError = ProfileFieldValidation.qualificationLine(s);
-      if (lineError != null) {
-        return lineError;
-      }
+
+    final line = normalized[index];
+    if (line.isEmpty) return null;
+    return ProfileFieldValidation.qualificationLine(line);
+  }
+
+  String? _validateQualificationsList() {
+    for (var i = 0; i < _qualificationCtrls.length; i++) {
+      final error = _qualificationFieldErrorAt(
+        i,
+        onlyWhenShowingErrors: false,
+      );
+      if (error != null) return error;
     }
     return null;
   }
@@ -116,9 +141,65 @@ class _DoctorAccountCreationStep2State
   @override
   void initState() {
     super.initState();
-    _addQualification(fromInitialSetup: true);
     _classificationFocusNode.addListener(_onClassificationFocusChange);
     _ibanFocusNode.addListener(_onIbanFocusChange);
+    final draft =
+        widget.initialDraft ?? RegistrationFlowCache.doctorWorkInfo;
+    if (draft != null) {
+      _applyDraft(draft);
+    } else {
+      _addQualification(fromInitialSetup: true);
+    }
+  }
+
+  DoctorWorkInfoDraft _captureDraft() {
+    _trimQualificationsInPlace();
+    return DoctorWorkInfoDraft(
+      qualifications: _qualificationCtrls.map((c) => c.text).toList(),
+      scfhsNumber: _classificationCtrl.text,
+      ibanSuffix: _ibanSuffixCtrl.text,
+      areaOfKnowledge: _specialty,
+      years: _years,
+      qualificationsTyped: _qualificationsTyped,
+      scfhsNumberTyped: _scfhsNumberTyped,
+      ibanTyped: _ibanTyped,
+    );
+  }
+
+  void _applyDraft(DoctorWorkInfoDraft draft) {
+    for (final c in _qualificationCtrls) {
+      c.dispose();
+    }
+    for (final f in _qualificationFocusNodes) {
+      f.dispose();
+    }
+    _qualificationCtrls.clear();
+    _qualificationFocusNodes.clear();
+
+    final lines = draft.qualifications.isEmpty ? const [''] : draft.qualifications;
+    for (var i = 0; i < lines.length; i++) {
+      _addQualification(fromInitialSetup: true);
+      _qualificationCtrls[i].text = lines[i];
+    }
+
+    _classificationCtrl.text = draft.scfhsNumber;
+    _ibanSuffixCtrl.text = draft.ibanSuffix;
+    _specialty = draft.areaOfKnowledge;
+    _years = draft.years;
+    _qualificationsTyped = draft.qualificationsTyped;
+    _scfhsNumberTyped = draft.scfhsNumberTyped;
+    _ibanTyped = draft.ibanTyped;
+    if (_qualificationsTyped) {
+      _qualificationsError = _validateQualificationsList();
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  void _persistDraftToCache() {
+    RegistrationFlowCache.doctorWorkInfo = _captureDraft();
   }
 
   void _addQualification({bool fromInitialSetup = false}) {
@@ -169,6 +250,14 @@ class _DoctorAccountCreationStep2State
   }
 
   @override
+  void deactivate() {
+    if (!_submittedSuccessfully) {
+      _persistDraftToCache();
+    }
+    super.deactivate();
+  }
+
+  @override
   void dispose() {
     for (final c in _qualificationCtrls) c.dispose();
     for (final f in _qualificationFocusNodes) f.dispose();
@@ -190,7 +279,7 @@ class _DoctorAccountCreationStep2State
     _trimQualificationsInPlace();
     setState(() {
       _qualificationsTyped = true;
-      _classificationTyped = true;
+      _scfhsNumberTyped = true;
       _ibanTyped = true;
       _qualificationsError = _validateQualificationsList();
     });
@@ -215,10 +304,10 @@ class _DoctorAccountCreationStep2State
       areaOfKnowledge: _specialty!,
       qualifications: qualificationsList,
       yearsOfExperience: _parseYears(_years!),
-      scfhsNumber: _classificationCtrl.text.trim().replaceAll(
-        RegExp(r'\s'),
-        '',
-      ),
+      scfhsNumber: _classificationCtrl.text
+          .trim()
+          .replaceAll(RegExp(r'\s'), '')
+          .toUpperCase(),
       iban: 'SA${_ibanSuffixCtrl.text.trim().replaceAll(RegExp(r'\s'), '')}',
       profilePhotoURL: signupData.profileImagePath,
       registrationStatus: 'PENDING',
@@ -237,6 +326,8 @@ class _DoctorAccountCreationStep2State
         '[DoctorReg Step2] _submitCreateAccount: createDoctorAccount returned',
       );
       if (!mounted) return;
+      _submittedSuccessfully = true;
+      RegistrationFlowCache.clearDoctor();
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const VerifyEmailView()),
         (route) => false,
@@ -274,7 +365,7 @@ class _DoctorAccountCreationStep2State
       ),
       errorStyle: const TextStyle(
         color: BColors.validationError,
-        fontSize: 12,
+        fontSize: 13,
         fontWeight: FontWeight.w500,
       ),
       errorBorder: OutlineInputBorder(
@@ -307,12 +398,38 @@ class _DoctorAccountCreationStep2State
     );
   }
 
+  InputDecoration _qualificationFieldDecoration(
+    TextEditingController ctrl,
+    int maxLength, {
+    required bool hasError,
+  }) {
+    const errorBorder = OutlineInputBorder(
+      borderRadius: BorderRadius.all(Radius.circular(10)),
+      borderSide: BorderSide(color: BColors.validationError),
+    );
+    const focusedErrorBorder = OutlineInputBorder(
+      borderRadius: BorderRadius.all(Radius.circular(10)),
+      borderSide: BorderSide(color: BColors.validationError, width: 1.5),
+    );
+
+    final base = _inputDecorationWithCounter(ctrl, maxLength);
+    return base.copyWith(
+      hintText: 'مثال: بكالوريوس علم نفس',
+      hintStyle: const TextStyle(color: BColors.darkGrey, fontSize: 15),
+      enabledBorder: hasError ? errorBorder : base.enabledBorder,
+      focusedBorder: hasError ? focusedErrorBorder : base.focusedBorder,
+      border: hasError ? errorBorder : base.border,
+    );
+  }
+
   Future<void> _popStep2() async {
     FocusManager.instance.primaryFocus?.unfocus();
     await SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
     await Future<void>.delayed(const Duration(milliseconds: 180));
     if (!mounted) return;
-    Navigator.of(context).pop();
+    final draft = _captureDraft();
+    RegistrationFlowCache.doctorWorkInfo = draft;
+    Navigator.of(context).pop(draft);
   }
 
   @override
@@ -390,8 +507,9 @@ class _DoctorAccountCreationStep2State
 
                           const SizedBox(height: 14),
 
-                          // ================= PROGRESS =================
-                          const _DoctorProgressStep2(),
+                          const DoctorAccountCreationStepProgress(
+                            activePersonalInfo: false,
+                          ),
 
                           const SizedBox(height: 18),
 
@@ -401,8 +519,8 @@ class _DoctorAccountCreationStep2State
                             child: RichText(
                               text: const TextSpan(
                                 style: TextStyle(
-                                  fontSize: 13,
-                                  color: BColors.darkGrey,
+                                  fontSize: 14,
+                                  color: BColors.textDarkestBlue,
                                 ),
                                 children: [
                                   TextSpan(text: 'المؤهلات '),
@@ -418,56 +536,78 @@ class _DoctorAccountCreationStep2State
                           ),
                           const SizedBox(height: 8),
                           ...List.generate(_qualificationCtrls.length, (i) {
+                            final fieldError = _qualificationFieldErrorAt(i);
                             return Padding(
                               padding: const EdgeInsets.only(bottom: 10),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                textDirection: TextDirection.rtl,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
-                                  Expanded(
-                                    child: TextField(
-                                      controller: _qualificationCtrls[i],
-                                      focusNode: _qualificationFocusNodes[i],
-                                      keyboardType: TextInputType.text,
-                                      decoration:
-                                          _inputDecorationWithCounter(
+                                  Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    textDirection: TextDirection.rtl,
+                                    children: [
+                                      Expanded(
+                                        child: TextField(
+                                          controller: _qualificationCtrls[i],
+                                          focusNode:
+                                              _qualificationFocusNodes[i],
+                                          keyboardType: TextInputType.text,
+                                          style: const TextStyle(
+                                            fontSize: 16,
+                                            color: BColors.textDarkestBlue,
+                                          ),
+                                          decoration:
+                                              _qualificationFieldDecoration(
                                             _qualificationCtrls[i],
                                             70,
-                                          ).copyWith(
-                                            hintText: 'مثال: بكالوريوس علم نفس',
-                                            hintStyle: const TextStyle(
-                                              color: BColors.darkGrey,
-                                              fontSize: 13,
-                                            ),
+                                            hasError: fieldError != null,
                                           ),
-                                      textAlign: TextAlign.right,
-                                      textDirection: TextDirection.rtl,
-                                      maxLength: 70,
-                                      inputFormatters: [
-                                        LengthLimitingTextInputFormatter(70),
-                                      ],
-                                      onChanged: (_) {
-                                        _qualificationsTyped = true;
-                                        _qualificationsError =
-                                            _validateQualificationsList();
-                                        setState(() {});
-                                      },
-                                    ),
-                                  ),
-                                  if (_qualificationCtrls.length >
-                                      _minQualifications) ...[
-                                    const SizedBox(width: 8),
-                                    IconButton(
-                                      onPressed: () => _removeQualification(i),
-                                      icon: const Icon(
-                                        Icons.remove_circle_outline,
-                                        color: BColors.validationError,
-                                        size: 20,
+                                          textAlign: TextAlign.right,
+                                          textDirection: TextDirection.rtl,
+                                          maxLength: 70,
+                                          inputFormatters: [
+                                            LengthLimitingTextInputFormatter(70),
+                                          ],
+                                          onChanged: (_) {
+                                            _qualificationsTyped = true;
+                                            _qualificationsError =
+                                                _validateQualificationsList();
+                                            setState(() {});
+                                          },
+                                        ),
                                       ),
-                                      padding: EdgeInsets.zero,
-                                      constraints: const BoxConstraints(
-                                        minWidth: 40,
-                                        minHeight: 46,
+                                      if (_qualificationCtrls.length >
+                                          _minQualifications) ...[
+                                        const SizedBox(width: 8),
+                                        IconButton(
+                                          onPressed: () =>
+                                              _removeQualification(i),
+                                          icon: const Icon(
+                                            Icons.remove_circle_outline,
+                                            color: BColors.validationError,
+                                            size: 20,
+                                          ),
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(
+                                            minWidth: 40,
+                                            minHeight: 46,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                  if (fieldError != null) ...[
+                                    const SizedBox(height: 4),
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: Text(
+                                        fieldError,
+                                        style: const TextStyle(
+                                          color: BColors.validationError,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -490,7 +630,7 @@ class _DoctorAccountCreationStep2State
                                   label: const Text(
                                     'إضافة مؤهل',
                                     style: TextStyle(
-                                      fontSize: 13,
+                                      fontSize: 14,
                                       fontWeight: FontWeight.w600,
                                       color: BColors.primary,
                                     ),
@@ -498,44 +638,33 @@ class _DoctorAccountCreationStep2State
                                 ),
                               ),
                             ),
-                          if (_qualificationsTyped &&
-                              _qualificationsError != null) ...[
-                            const SizedBox(height: 4),
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: Text(
-                                _qualificationsError!,
-                                style: const TextStyle(
-                                  color: BColors.validationError,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          ],
                           const SizedBox(height: 14),
 
                           _LabeledFormField(
                             fieldKey: _classificationFieldKey,
                             label: 'رقم التخصص *',
-                            placeholder: 'أدخل رقم التخصص (10 أرقام)',
+                            placeholder: 'مثال: 08RM1',
                             controller: _classificationCtrl,
-                            keyboardType: TextInputType.number,
+                            keyboardType: TextInputType.text,
                             decoration: _inputDecorationWithCounter(
                               _classificationCtrl,
-                              10,
+                              ProfileFieldValidation.scfhsMaxLength,
                             ),
                             focusNode: _classificationFocusNode,
                             onChanged: (_) {
-                              setState(() => _classificationTyped = true);
+                              setState(() => _scfhsNumberTyped = true);
                               _classificationFieldKey.currentState?.validate();
                             },
-                            validator: (v) => _classificationTyped
+                            validator: (v) => _scfhsNumberTyped
                                 ? _validateSpecNumber(v)
                                 : null,
                             inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly,
-                              LengthLimitingTextInputFormatter(10),
+                              FilteringTextInputFormatter.allow(
+                                RegExp(r'[a-zA-Z0-9]'),
+                              ),
+                              LengthLimitingTextInputFormatter(
+                                ProfileFieldValidation.scfhsMaxLength,
+                              ),
                             ],
                           ),
                           const SizedBox(height: 14),
@@ -589,20 +718,20 @@ class _DoctorAccountCreationStep2State
 
                           // ================= SUBMIT BUTTON =================
                           SizedBox(
-                            width: 220,
-                            height: 46,
+                            width: double.infinity,
+                            height: 50,
                             child: ElevatedButton(
                               onPressed: _isFormComplete && !_isSubmitting
                                   ? _submitCreateAccount
                                   : null,
                               style: ElevatedButton.styleFrom(
                                 elevation: 0,
-                                backgroundColor: BColors.secondary,
-                                foregroundColor: BColors.textDarkestBlue,
-                                disabledBackgroundColor: BColors.secondary
+                                backgroundColor: BColors.primary,
+                                foregroundColor: BColors.white,
+                                disabledBackgroundColor: BColors.primary
                                     .withOpacity(0.4),
-                                disabledForegroundColor: BColors.textDarkestBlue
-                                    .withOpacity(0.5),
+                                disabledForegroundColor: BColors.white
+                                    .withOpacity(0.7),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(16),
                                 ),
@@ -610,7 +739,7 @@ class _DoctorAccountCreationStep2State
                               child: const Text(
                                 'إنشاء حساب',
                                 style: TextStyle(
-                                  fontSize: 14,
+                                  fontSize: 16,
                                   fontWeight: FontWeight.w800,
                                 ),
                               ),
@@ -639,95 +768,6 @@ class _DoctorAccountCreationStep2State
           ),
         ),
       ),
-      ),
-    );
-  }
-}
-
-// ================= PROGRESS WIDGET =================
-class _DoctorProgressStep2 extends StatelessWidget {
-  const _DoctorProgressStep2();
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: const [
-        Text(
-          'المعلومات الشخصية',
-          style: TextStyle(fontSize: 12, color: BColors.darkGrey),
-        ),
-        SizedBox(width: 10),
-        _CircleDone(),
-        SizedBox(width: 10),
-        _MiniDots(),
-        SizedBox(width: 10),
-        _CircleActive(),
-        SizedBox(width: 10),
-        Text(
-          'معلومات العمل',
-          style: TextStyle(fontSize: 12, color: BColors.darkGrey),
-        ),
-      ],
-    );
-  }
-}
-
-class _CircleDone extends StatelessWidget {
-  const _CircleDone();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 16,
-      height: 16,
-      decoration: const BoxDecoration(
-        shape: BoxShape.circle,
-        color: BColors.primary,
-      ),
-      child: const Center(
-        child: Icon(Icons.check, size: 11, color: Colors.white),
-      ),
-    );
-  }
-}
-
-class _CircleActive extends StatelessWidget {
-  const _CircleActive();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 16,
-      height: 16,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: BColors.primary, width: 2),
-      ),
-      child: const Center(
-        child: CircleAvatar(radius: 3, backgroundColor: BColors.primary),
-      ),
-    );
-  }
-}
-
-class _MiniDots extends StatelessWidget {
-  const _MiniDots();
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: List.generate(
-        3,
-        (i) => Container(
-          width: 4,
-          height: 4,
-          margin: const EdgeInsets.symmetric(horizontal: 2),
-          decoration: const BoxDecoration(
-            shape: BoxShape.circle,
-            color: BColors.grey,
-          ),
-        ),
       ),
     );
   }
@@ -771,9 +811,13 @@ class _LabeledFormField extends StatelessWidget {
           controller: controller,
           focusNode: focusNode,
           keyboardType: keyboardType,
+          style: const TextStyle(
+            fontSize: 16,
+            color: BColors.textDarkestBlue,
+          ),
           decoration: decoration.copyWith(
             hintText: placeholder,
-            hintStyle: const TextStyle(color: BColors.darkGrey, fontSize: 13),
+            hintStyle: const TextStyle(color: BColors.darkGrey, fontSize: 15),
           ),
           textAlign: TextAlign.right,
           textDirection: TextDirection.rtl,
@@ -791,13 +835,13 @@ class _LabeledFormField extends StatelessWidget {
     if (!hasRequiredStar) {
       return Text(
         label,
-        style: const TextStyle(fontSize: 13, color: BColors.darkGrey),
+        style: const TextStyle(fontSize: 14, color: BColors.textDarkestBlue),
       );
     }
     final base = trimmed.substring(0, trimmed.length - 1).trimRight();
     return RichText(
       text: TextSpan(
-        style: const TextStyle(fontSize: 13, color: BColors.darkGrey),
+        style: const TextStyle(fontSize: 14, color: BColors.textDarkestBlue),
         children: [
           TextSpan(text: '$base '),
           const TextSpan(
@@ -837,7 +881,7 @@ class _IbanField extends StatelessWidget {
       children: [
         RichText(
           text: const TextSpan(
-            style: TextStyle(fontSize: 13, color: BColors.darkGrey),
+            style: TextStyle(fontSize: 14, color: BColors.textDarkestBlue),
             children: [
               TextSpan(text: 'رقم الايبان '),
               TextSpan(
@@ -858,11 +902,15 @@ class _IbanField extends StatelessWidget {
                 controller: controller,
                 focusNode: focusNode,
                 keyboardType: TextInputType.number,
+                style: const TextStyle(
+                  fontSize: 16,
+                  color: BColors.textDarkestBlue,
+                ),
                 decoration: decoration.copyWith(
                   hintText: placeholder,
                   hintStyle: const TextStyle(
                     color: BColors.darkGrey,
-                    fontSize: 13,
+                    fontSize: 15,
                   ),
                 ),
                 textAlign: TextAlign.right,
@@ -950,7 +998,7 @@ class _LabeledDropdown extends StatelessWidget {
                 hint: Text(
                   hint,
                   textAlign: TextAlign.right,
-                  style: const TextStyle(fontSize: 13, color: BColors.darkGrey),
+                  style: const TextStyle(fontSize: 14, color: BColors.darkGrey),
                 ),
                 icon: const Icon(Icons.keyboard_arrow_down_rounded),
                 items: items
@@ -962,7 +1010,7 @@ class _LabeledDropdown extends StatelessWidget {
                           child: Text(
                             e,
                             style: const TextStyle(
-                              fontSize: 13,
+                              fontSize: 16,
                               color: BColors.textDarkestBlue,
                             ),
                           ),
@@ -985,13 +1033,13 @@ class _LabeledDropdown extends StatelessWidget {
     if (!hasRequiredStar) {
       return Text(
         label,
-        style: const TextStyle(fontSize: 13, color: BColors.darkGrey),
+        style: const TextStyle(fontSize: 14, color: BColors.textDarkestBlue),
       );
     }
     final base = trimmed.substring(0, trimmed.length - 1).trimRight();
     return RichText(
       text: TextSpan(
-        style: const TextStyle(fontSize: 13, color: BColors.darkGrey),
+        style: const TextStyle(fontSize: 14, color: BColors.textDarkestBlue),
         children: [
           TextSpan(text: '$base '),
           const TextSpan(

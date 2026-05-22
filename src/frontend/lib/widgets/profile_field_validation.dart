@@ -45,12 +45,23 @@ class ProfileFieldValidation {
     r'^[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF0-9\s\.,]+$',
   );
 
-  /// Unified max length for caregiver name, doctor name (after honorific), and child name.
+  /// Unified max length for caregiver name, doctor name (after honorific).
   static const int personDisplayNameMaxLength = 20;
+
+  /// Child name (signup + children management).
+  static const int childDisplayNameMinLength = 1;
+  static const int childDisplayNameMaxLength = 10;
 
   static const int caregiverOrDoctorNameMaxLength = personDisplayNameMaxLength;
   static const int ibanSuffixDigitCount = 22;
-  static const int scfhsDigitCount = 10;
+  /// SCFHS-style registration: 2-digit year + 2-letter code + employee id (e.g. 08RM1).
+  static const int scfhsMinLength = 5;
+  static const int scfhsMaxLength = 13;
+
+  /// Year (2 digits) + specialty code (2 letters) + alphanumeric employee sequence (1–9).
+  static final RegExp scfhsRegistrationPattern = RegExp(
+    r'^[0-9]{2}[A-Za-z]{2}[A-Za-z0-9]{1,9}$',
+  );
 
   static const Set<String> _allowedEmailDomains = {
     'gmail.com',
@@ -148,11 +159,14 @@ class ProfileFieldValidation {
   static const String _doctorNameInvalidCharsMessage =
       'لا يُسمح بإدخال أرقام أو رموز خاصة';
 
-  /// Child name (signup / manage children): non-empty. Length is enforced in the UI.
+  /// Child name (signup / manage children): 1–10 characters after trim.
   static String? childDisplayName(String? value) {
     final normalized = normalizePersonName(value);
-    if (normalized.isEmpty) {
+    if (normalized.length < childDisplayNameMinLength) {
       return 'يرجى إدخال اسم الطفل';
+    }
+    if (normalized.length > childDisplayNameMaxLength) {
+      return 'يجب ألا يزيد اسم الطفل عن $childDisplayNameMaxLength أحرف';
     }
     return null;
   }
@@ -206,15 +220,18 @@ class ProfileFieldValidation {
     return null;
   }
 
-  /// SCFHS / classification registration number (10 digits).
+  /// SCFHS / classification registration (alphanumeric, 5–13 chars).
   static String? scfhsRegistrationNumber(String? value) {
     if (value == null || value.trim().isEmpty) {
       return 'يرجى إدخال رقم التخصص';
     }
-    final digits = value.trim().replaceAll(RegExp(r'\s'), '');
-    if (digits.length != scfhsDigitCount ||
-        !RegExp(r'^[0-9]{10}$').hasMatch(digits)) {
-      return 'رقم التخصص يجب أن يكون $scfhsDigitCount أرقام';
+    final normalized = value.trim().replaceAll(RegExp(r'\s'), '');
+    if (normalized.length < scfhsMinLength ||
+        normalized.length > scfhsMaxLength) {
+      return 'رقم التخصص يجب أن يكون بين $scfhsMinLength و $scfhsMaxLength حرفًا';
+    }
+    if (!scfhsRegistrationPattern.hasMatch(normalized)) {
+      return 'الصيغة: رقمان للسنة ثم حرفان (مثل RM) ثم رقم الموظف (مثال: 08RM1)';
     }
     return null;
   }
